@@ -21,8 +21,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements-dev.txt
       - run: npm ci
-      - run: python -m pip install numpy playwright
+      - run: python -m pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
       - run: npm run release:check
       - run: python scripts/test_math.py
@@ -49,8 +50,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements-dev.txt
       - run: npm ci
-      - run: python -m pip install numpy
+      - run: python -m pip install -r requirements-dev.txt
       - run: npm run build:web
       - run: python scripts/test_math.py
       - run: node scripts/test_state_modules.mjs

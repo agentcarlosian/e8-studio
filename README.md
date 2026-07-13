@@ -136,7 +136,7 @@ Generated output is written to ignored `dist/` or `dist-app/` directories.
 Install the browser-test dependencies once:
 
 ```bash
-python -m pip install numpy playwright
+python -m pip install -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
