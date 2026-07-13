@@ -224,6 +224,36 @@ def main() -> int:
             }, removed_sdf_effects
             print("ok ACES Tone and Cool Shadow are removed from UI and SDF runtime")
 
+            sdf_quality = page.evaluate("""() => {
+              const full = { ...window.__app.currentView.object3d.material.userData.sdfQuality };
+              window.__forceSdfSafeMode = true;
+              window.__app.switchView('e8coxeter');
+              window.__app.switchView('raymarched');
+              const safeMaterial = window.__app.currentView.object3d.material;
+              const safe = { ...safeMaterial.userData.sdfQuality };
+              const shader = safeMaterial.fragmentShader;
+              delete window.__forceSdfSafeMode;
+              return {
+                full,
+                safe,
+                safeDefines: shader.includes('#define MAX_ROOTS 240')
+                  && shader.includes('#define MAX_EDGES 24')
+                  && shader.includes('#define MARCH_STEPS 48'),
+              };
+            }""")
+            assert sdf_quality["full"] == {
+                "safe": False, "maxRoots": 240, "maxEdges": 64,
+                "marchSteps": 72, "shadowSteps": 16, "aoSteps": 3,
+                "rootCount": 240, "edgeCount": 64,
+            }, sdf_quality
+            assert sdf_quality["safe"] == {
+                "safe": True, "maxRoots": 240, "maxEdges": 24,
+                "marchSteps": 48, "shadowSteps": 6, "aoSteps": 1,
+                "rootCount": 240, "edgeCount": 24,
+            }, sdf_quality
+            assert sdf_quality["safeDefines"], sdf_quality
+            print("ok SDF compiles full and constrained-GPU shader budgets")
+
             services = page.evaluate("""() => {
               const learning = window.__app.getLearningState();
               return {

@@ -11,12 +11,14 @@ import { colorAt, buildPalette } from '../ui/palettes.js';
 
 // ── Fragment shader ──
 // Uses cameraPosition (three.js built-in) + uCameraMatrix (basis vectors).
-const FRAG = `
+const FRAG_TEMPLATE = `
 precision highp float;
 
-#define MAX_ROOTS 240
-#define MAX_EDGES 64
-#define MARCH_STEPS 96
+#define MAX_ROOTS __MAX_ROOTS__
+#define MAX_EDGES __MAX_EDGES__
+#define MARCH_STEPS __MARCH_STEPS__
+#define SHADOW_STEPS __SHADOW_STEPS__
+#define AO_STEPS __AO_STEPS__
 #define MAX_DIST 20.0
 #define SURF_DIST 0.0008
 
@@ -110,7 +112,7 @@ vec3 calcNormal(vec3 p) {
 float softShadow(vec3 ro, vec3 rd, float mint, float maxt) {
   float res = 1.0;
   float t = mint;
-  for (int i = 0; i < 24; i++) {
+  for (int i = 0; i < SHADOW_STEPS; i++) {
     float h = sdf(ro + rd * t);
     if (h < 0.001) return 0.0;
     res = min(res, 16.0 * h / t);
@@ -123,7 +125,7 @@ float softShadow(vec3 ro, vec3 rd, float mint, float maxt) {
 float calcAO(vec3 p, vec3 n) {
   float occ = 0.0;
   float sca = 1.0;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < AO_STEPS; i++) {
     float hr = 0.02 + 0.12 * float(i);
     float dd = sdf(p + n * hr);
     occ += (hr - dd) * sca;
@@ -233,6 +235,32 @@ void main() {
 }
 `;
 
+function sdfQualityProfile(context = {}) {
+  const params = context.params || {};
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const forced = typeof window !== 'undefined' && window.__forceSdfSafeMode === true;
+  const brave = !!nav.brave;
+  const constrained = (Number(nav.deviceMemory) > 0 && Number(nav.deviceMemory) <= 4)
+    || (Number(nav.hardwareConcurrency) > 0 && Number(nav.hardwareConcurrency) <= 4);
+  const lowQuality = params.reducedMode || params.mobileQuality === 'low';
+  const safe = forced || brave || constrained || lowQuality;
+  return safe
+    // Every E8 root participates in the distance field. Dropping roots changes
+    // the form rather than merely lowering detail, so safe mode preserves the
+    // complete geometry and saves GPU work in secondary sampling instead.
+    ? { safe: true, maxRoots: 240, maxEdges: 24, marchSteps: 48, shadowSteps: 6, aoSteps: 1 }
+    : { safe: false, maxRoots: 240, maxEdges: 64, marchSteps: 72, shadowSteps: 16, aoSteps: 3 };
+}
+
+function fragmentShaderFor(profile) {
+  return FRAG_TEMPLATE
+    .replaceAll('__MAX_ROOTS__', String(profile.maxRoots))
+    .replaceAll('__MAX_EDGES__', String(profile.maxEdges))
+    .replaceAll('__MARCH_STEPS__', String(profile.marchSteps))
+    .replaceAll('__SHADOW_STEPS__', String(profile.shadowSteps))
+    .replaceAll('__AO_STEPS__', String(profile.aoSteps));
+}
+
 const VERT = `
 attribute vec3 position;
 void main() {
@@ -244,26 +272,32 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
   const e8 = data.e8 || data;
   const proj2d = e8.proj2d || [];
   const SCALE = baseScale || 1.6;
+  const quality = sdfQualityProfile(context);
 
   // Build uniform array of vec4: xyz position + normalized ring index in w.
   const ringCount = Math.max(1, e8.ring_radii?.length || 8);
   const ringDenominator = Math.max(1, ringCount - 1);
   const rootUniforms = [];
-  for (let i = 0; i < 240 && i < proj2d.length; i++) {
-    const r = proj2d[i];
+  const sourceRootCount = Math.min(240, proj2d.length);
+  const selectedRootIndices = Array.from(
+    { length: Math.min(quality.maxRoots, sourceRootCount) },
+    (_, i) => i
+  );
+  for (const sourceIndex of selectedRootIndices) {
+    const r = proj2d[sourceIndex];
     rootUniforms.push(new THREE.Vector4(
       (r.x || 0) * SCALE,
       (r.y || 0) * SCALE,
       0,
-      (r.ring !== undefined ? r.ring : (i % ringCount)) / ringDenominator
+      (r.ring !== undefined ? r.ring : (sourceIndex % ringCount)) / ringDenominator
     ));
   }
-  // Pad to 240 if fewer roots
-  while (rootUniforms.length < 240) {
+  // Pad to the compiled shader budget if fewer roots are available.
+  while (rootUniforms.length < quality.maxRoots) {
     rootUniforms.push(new THREE.Vector4(0, 0, 0, 0));
   }
 
-  const rootCount = Math.min(240, proj2d.length);
+  const rootCount = selectedRootIndices.length;
   const pal = buildPalette(palette);
 
   // Precompute the 64 shortest 2D root-pair edges. These are the
@@ -274,8 +308,10 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
   const pairs = [];
   for (let i = 0; i < rootCount; i++) {
     for (let j = i + 1; j < rootCount; j++) {
-      const dx = proj2d[i].x - proj2d[j].x;
-      const dy = proj2d[i].y - proj2d[j].y;
+      const a = proj2d[selectedRootIndices[i]];
+      const b = proj2d[selectedRootIndices[j]];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
       const d2 = dx * dx + dy * dy;
       pairs.push({ i, j, d2 });
     }
@@ -283,14 +319,14 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
   pairs.sort((a, b) => a.d2 - b.d2);
   // Flat Float32Array for vec4[] uniform (three.js + RawShaderMaterial
   // require a flat array, not a JS array of Vector4s).
-  const MAX_EDGES = 64;
+  const MAX_EDGES = quality.maxEdges;
   const edgeAArr = new Float32Array(MAX_EDGES * 4);
   const edgeBArr = new Float32Array(MAX_EDGES * 4);
   const edgeCount = Math.min(MAX_EDGES, pairs.length);
   for (let k = 0; k < edgeCount; k++) {
     const { i, j } = pairs[k];
-    const ri = proj2d[i];
-    const rj = proj2d[j];
+    const ri = proj2d[selectedRootIndices[i]];
+    const rj = proj2d[selectedRootIndices[j]];
     edgeAArr[k*4]     = ri.x * SCALE;
     edgeAArr[k*4 + 1] = ri.y * SCALE;
     edgeAArr[k*4 + 2] = 0;
@@ -330,11 +366,12 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
   const mat = new THREE.RawShaderMaterial({
     uniforms,
     vertexShader: VERT,
-    fragmentShader: FRAG,
+    fragmentShader: fragmentShaderFor(quality),
     depthTest: false,
     depthWrite: false,
   });
   const mesh = new THREE.Mesh(geo, mat);
+  mat.userData.sdfQuality = { ...quality, rootCount, edgeCount };
   mesh.frustumCulled = false;
   // Draw first so nothing else covers it
   mesh.renderOrder = -999;
@@ -399,9 +436,9 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
       const sR = params.sdfSphereR ?? 0.08;
       uniforms.uSphereR.value = sR * SCALE;
       uniforms.uBlend.value = (params.sdfBlend ?? 0.03) * SCALE + Math.sin(time * 0.5) * 0.008 * SCALE;
-      uniforms.uBloomStrength.value = params.sdfBloom ?? 0.5;
+      uniforms.uBloomStrength.value = quality.safe ? Math.min(params.sdfBloom ?? 0.5, 0.35) : (params.sdfBloom ?? 0.5);
       uniforms.uAnisoStrength.value = params.sdfAniso ?? 0.6;
-      uniforms.uEdgeCylStrength.value = params.sdfEdges ?? 0.3;
+      uniforms.uEdgeCylStrength.value = quality.safe ? Math.min(params.sdfEdges ?? 0.3, 0.2) : (params.sdfEdges ?? 0.3);
     },
     onPaletteChange(palName) {
       const newPal = buildPalette(palName);
