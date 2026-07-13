@@ -137,10 +137,12 @@
 
 /* View switcher segment */
 .ps-view-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-bottom: 8px;
 }
 .ps-view-switch button {
-  flex: 1;
+  min-width: 0;
   font-size: 10px;
 }
 

@@ -34,6 +34,18 @@ def main() -> int:
                 raise
             page.evaluate("() => document.getElementById('welcome-card')?.classList.add('hidden')")
 
+            view_switch = page.evaluate("""() => [...document.querySelectorAll('.ps-view-switch [data-act="switchView"]')]
+              .map(button => ({ view: button.dataset.arg, label: button.textContent.trim() }))""")
+            assert view_switch == [
+                {"view": "bloom", "label": "bloom"},
+                {"view": "platonic", "label": "platonic"},
+                {"view": "e8coxeter", "label": "E₈"},
+                {"view": "sixhundred", "label": "600"},
+                {"view": "polytope", "label": "4D"},
+                {"view": "raymarched", "label": "SDF"},
+            ], view_switch
+            print("ok compact View selector exposes all six core views")
+
             zoom = page.evaluate("""() => {
               window.__app.switchView('platonic');
               window.__app.setParam('autoSliders', ['cameraDistance']);

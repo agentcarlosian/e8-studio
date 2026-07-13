@@ -109,8 +109,8 @@ function renderViewSection(params, data) {
 
   // View switcher (always visible)
   html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v;
     html += `<button class="${params.view === v ? 'on' : ''}" data-act="switchView" data-arg="${v}">${label}</button>`;
   }
   html += '</div>';
