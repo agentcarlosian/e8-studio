@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="e8_bg">#07070C</color>
+    <color name="e8_panel">#11131A</color>
+    <color name="e8_gold">#F4D27A</color>
+    <color name="e8_gold_dark">#C98A2A</color>
+    <color name="e8_cyan">#6AFFE8</color>
+    <color name="colorPrimary">#07070C</color>
+    <color name="colorPrimaryDark">#07070C</color>
+    <color name="colorAccent">#F4D27A</color>
+</resources>

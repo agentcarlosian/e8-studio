@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0, viewport-fit=cover">
+<title>E8 Studio</title>
+<meta name="description" content="An interactive WebGL studio for exploring the E8 root system, Platonic solids, the 600-cell, and regular four-dimensional polytopes.">
+<meta name="theme-color" content="#07070c">
+<meta property="og:type" content="website">
+<meta property="og:title" content="E8 Studio">
+<meta property="og:description" content="Explore E8, Platonic solids, the 600-cell, and regular 4D polytopes in six interactive views.">
+<meta property="og:url" content="https://agentcarlosian.github.io/e8-studio/">
+<meta property="og:image" content="https://agentcarlosian.github.io/e8-studio/media/social-preview.jpg">
+<meta property="og:image:alt" content="A colorful generative E8 Studio visualization">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- Content-Security-Policy. script-src has NO 'unsafe-inline': every inline
+     script element is pinned by SHA-256 hash instead, and all event handlers
+     are delegated (no inline on*= attributes). The two hashes below are the dev
+     importmap + error-handler scripts; if you edit either, recompute the hashes
+     with scripts/build.py:csp_script_hashes(). The dist build regenerates this
+     directive automatically (build.py/build_offline.py harden_csp). style-src
+     keeps 'unsafe-inline' (the app uses inline style= attributes heavily;
+     CSS-injection risk is low). Works for dev (http), dist, and Electron. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'sha256-PJiBqUz33LsW+0UrCJ2xZwOyoPiuooGc4pkcgyKnK2E=' 'sha256-R9G1c3kieaWHYV5kOMM3cXvcboJRePgNQR2Ife/QnkM=' 'sha256-DZTUBQlKlzoatWsJFKg/A9VV3gqwjdaNvwoiyB8tLhE=' https://cdn.jsdelivr.net file:;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com data: file:;
+  img-src 'self' data: blob: file:;
+  connect-src 'self' https://cdn.jsdelivr.net file:;
+  worker-src 'self' blob: file:;
+  manifest-src 'self' file:;
+  object-src 'none';
+  base-uri 'none';
+">
+<script>if (location.protocol === 'file:' && !location.pathname.replaceAll('\\', '/').includes('/dist/')) location.replace(new URL('dist/e8-studio.html', location.href));</script>
+
+<!-- three.js (r170), chroma-js (2.4), simplex-noise (4.0). Versions are pinned
+     exactly; the committed offline build (scripts/build_offline.py → vendor/)
+     is the supply-chain-safe path that avoids CDN fetches entirely. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "chroma-js": "https://cdn.jsdelivr.net/npm/chroma-js@2.4.2/+esm",
+    "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm"
+  }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="src/assets/style.css">
+<link rel="stylesheet" href="src/assets/panel-extra.css">
+<link rel="stylesheet" href="src/assets/panel-v2.css">
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-title">E8 Studio</span>
+    </div>
+  </header>
+
+  <aside id="panel"></aside>
+
+  <main>
+    <canvas id="canvas"></canvas>
+    <div id="essays" class="essay-host"></div>
+    <div class="ov ov-tl" id="ov-tl"></div>
+    <div class="ov ov-tr" id="ov-tr"></div>
+    <div class="ov ov-bl" id="ov-bl"></div>
+    <div class="ov ov-br" id="ov-br"></div>
+    <div id="tooltip" class="tooltip"></div>
+    <div id="fs-exit-hint" class="fs-exit-hint" aria-hidden="true">
+      <span class="fs-exit-hint-keyboard">Press <kbd>Esc</kbd> to exit full screen</span>
+    </div>
+    <div id="welcome-card" class="welcome-card hidden">
+      <div class="wc-header">
+        <span class="wc-mark">E8 Studio</span>
+        <button class="wc-close" aria-label="Dismiss">×</button>
+      </div>
+      <div class="wc-body">
+        <p><b>What you're seeing</b></p>
+        <p>The 240 <b>root vectors</b> of the exceptional Lie algebra E<sub>8</sub>, projected onto the <b>Coxeter plane</b> — a 2D subspace invariant under a 30-fold rotation of E<sub>8</sub>'s symmetry group.</p>
+        <p>The roots fall onto <b>eight concentric rings</b>, with 30 projected roots on each ring: <span class="wc-mono">8 × 30 = 240</span>.</p>
+        <p>The highlighted Petrie path follows the outer 30-step Coxeter orbit. Toggle <b>PETRIE</b> in the panel to emphasize it.</p>
+        <p>The <b>bright glowing roots</b> are an illustrative source highlight chosen by the Studio, not a canonical vertex-by-vertex McKay map.</p>
+        <p class="wc-hint wc-hint-keyboard"><i>Click a root</i> to see its 56 Cartan neighbors + 8D coordinates. Open the <b>MATH</b> section for Weyl orbit, Petrie 30-cycle, and Lie brackets. Press <kbd>1</kbd>–<kbd>6</kbd> to switch views. Press <kbd>Esc</kbd> to dismiss this card.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div><span class="status-dot"></span><span id="status">loading…</span></div>
+    <div id="footer-right">240 roots · 8 dimensions · 1 symmetry group</div>
+  </footer>
+
+  <script type="module">
+    // Surface any module-load errors visibly. (Default: silent in console.)
+    // Module errors that matter will be re-thrown by the dev tools console
+    // anyway; we only show them in the status bar as a fallback.
+    window.addEventListener('error', (e) => {
+      const msg = e.message || e.error?.message || 'unknown';
+      const s = document.getElementById('status');
+      if (s) s.textContent = 'ERROR: ' + msg;
+      console.error('window error:', e);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const s = document.getElementById('status');
+      if (s) s.textContent = 'PROMISE ERROR: ' + (e.reason?.message || e.reason);
+      console.error('unhandled rejection:', e);
+    });
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

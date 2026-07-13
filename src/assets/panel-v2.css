@@ -1,0 +1,300 @@
+/* ── New context-sensitive panel styles ── */
+
+/* Scrollable panel body */
+.ps-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Facelift: refined scrollbar to match the new look */
+.ps-scroll::-webkit-scrollbar { width: 8px; }
+.ps-scroll::-webkit-scrollbar-track { background: transparent; }
+.ps-scroll::-webkit-scrollbar-thumb {
+  background: var(--bg-3);
+  border-radius: 4px;
+  border: 2px solid var(--bg-1);
+}
+.ps-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+/* Compact status bar */
+.ps-status {
+  padding: 8px 10px;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink-2);
+}
+.ps-status-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ps-status-key { color: var(--ink-1); text-transform: uppercase; letter-spacing: 0.04em; }
+.ps-status-sep { color: var(--ink-3); }
+
+/* Live motion-state pill (audit #21). Sits in the panel header and reflects
+   whether the scene is paused / on a camera path / auto-rotating / idle. */
+.ps-motion {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 9px;
+  line-height: 1.5;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  transition: color 200ms var(--ease, ease), border-color 200ms var(--ease, ease);
+  font-weight: 500;
+}
+.ps-motion.is-idle    { color: var(--ink-3); }
+.ps-motion.is-active  { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px rgba(244,210,122,0.25); }
+.ps-motion.is-paused  { color: var(--accent-2); border-color: var(--accent-2); }
+
+.ps-collapse-handle {
+  display: none;
+}
+
+/* ── Panel control-filter search box (nice-to-have #5) ── */
+.ps-search-wrap {
+  position: relative;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.ps-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 24px 5px 8px;
+  background: var(--bg-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 5px);
+  color: var(--ink-0);
+  min-height: var(--control-min);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease, ease);
+}
+.ps-search:focus { border-color: var(--accent); }
+.ps-search::placeholder { color: var(--ink-3); }
+.ps-search-kbd {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 4px;
+  pointer-events: none;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Hidden control rows / sections when a filter is active. */
+.ps-hidden { display: none !important; }
+
+/* Brief flash when a section is jumped to via the 'm'/'l' shortcuts. */
+@keyframes ps-flash {
+  0% { background: var(--bg-3); }
+  100% { background: transparent; }
+}
+.ps-flash { animation: ps-flash 0.8s ease-out; }
+
+/* Section spacing */
+.ps-section {
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.ps-section:last-child { border-bottom: none; }
+
+/* Section titles */
+.ps-title {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ps-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent);
+}
+
+/* Subsection labels */
+.ps-subtitle {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  margin: 12px 0 6px;
+  font-weight: 600;
+}
+
+/* View switcher segment */
+.ps-view-switch {
+  margin-bottom: 8px;
+}
+.ps-view-switch button {
+  flex: 1;
+  font-size: 10px;
+}
+
+/* Shape pills — compact horizontal row */
+.shape-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.shape-pill {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--ink-1);
+  padding: 7px 4px;
+  min-height: var(--control-min);
+  font-size: var(--text-xs);
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 5px);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+}
+.shape-pill:hover { border-color: var(--accent); background: var(--bg-3); transform: translateY(-1px); }
+.shape-pill.active {
+  background: var(--accent);
+  color: var(--bg-0);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* Bloom phase indicator */
+.ps-phase {
+  font-size: 10px;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  padding: 2px 0 6px;
+}
+
+/* Override control-row to be tighter in new panel */
+.ps-section .control-row { margin-bottom: 5px; }
+.ps-section .control-label { flex: 0 0 58px; font-size: 10px; }
+.ps-section .control-value { font-size: 10px; flex: 0 0 36px; }
+.ps-section .seg { margin-bottom: 4px; }
+
+/* Swatch grid in new panel — 6 columns */
+.ps-section .swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.ps-section .swatch-grid .swatch {
+  width: 100%;
+  height: 20px;
+  border-radius: 3px;
+}
+.palette-groups { display: grid; gap: var(--space-2); }
+.palette-group-label {
+  margin-bottom: var(--space-1);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.palette-active-preview {
+  min-height: 40px;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: inset 0 -22px 22px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+}
+.palette-active-preview span {
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.palette-active-preview small { font-size: 9px; opacity: 0.82; }
+
+.gallery-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.gallery-nav {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
+  gap: 4px;
+  align-items: stretch;
+  margin-bottom: 5px;
+}
+.gallery-nav > button {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--ink-0);
+  cursor: pointer;
+  font-size: 15px;
+}
+.gallery-nav > button:hover { border-color: var(--accent); color: var(--accent); }
+.gallery-nav-current {
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  text-align: center;
+}
+.gallery-nav-current span,
+.gallery-nav-current small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gallery-nav-current span { color: var(--ink-0); font-size: 9px; }
+.gallery-nav-current small { color: var(--ink-2); font: 8px 'JetBrains Mono', monospace; }
+.gallery-preview {
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--ink-1);
+  cursor: pointer;
+  text-align: left;
+  font: 9px/1.2 inherit;
+}
+.gallery-preview:hover,
+.gallery-preview.on { border-color: var(--accent); color: var(--ink-0); }
+.gallery-preview-swatch {
+  display: block;
+  height: 17px;
+  margin-bottom: 3px;
+  border-radius: 2px;
+}
+.gallery-browse {
+  width: 100%;
+  margin-top: 4px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-1);
+  cursor: pointer;
+  font: 9px inherit;
+}
+.gallery-browse:hover { border-color: var(--accent); color: var(--ink-0); }

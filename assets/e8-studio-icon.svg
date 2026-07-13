@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="E8 Studio icon">
+  <rect width="512" height="512" rx="96" fill="#07070c"/>
+  <g fill="none" stroke="#f4d27a" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="256" cy="256" r="176" opacity=".42" stroke-width="8"/>
+    <circle cx="256" cy="256" r="116" opacity=".52" stroke-width="6"/>
+    <circle cx="256" cy="256" r="58" opacity=".68" stroke-width="5"/>
+    <path d="M256 80 344 104 408 168 432 256 408 344 344 408 256 432 168 408 104 344 80 256 104 168 168 104Z" stroke-width="10"/>
+  </g>
+  <g stroke="#6affe8" stroke-width="5" stroke-linecap="round" opacity=".7">
+    <path d="M256 80v352M80 256h352M132 132l248 248M380 132 132 380"/>
+  </g>
+  <g fill="#f4d27a">
+    <circle cx="256" cy="56" r="16"/><circle cx="256" cy="456" r="16"/>
+    <circle cx="56" cy="256" r="16"/><circle cx="456" cy="256" r="16"/>
+    <circle cx="114.6" cy="114.6" r="13"/><circle cx="397.4" cy="114.6" r="13"/>
+    <circle cx="397.4" cy="397.4" r="13"/><circle cx="114.6" cy="397.4" r="13"/>
+  </g>
+  <circle cx="256" cy="256" r="24" fill="#fff"/>
+</svg>

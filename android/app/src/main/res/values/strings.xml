@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">E8 Studio</string>
+    <string name="title_activity_main">E8 Studio</string>
+    <string name="package_name">com.e8studio.app</string>
+    <string name="custom_url_scheme">com.e8studio.app</string>
+</resources>

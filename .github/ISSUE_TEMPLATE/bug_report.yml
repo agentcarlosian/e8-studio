@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible problem in E8 Studio
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve E8 Studio. Please avoid including private information.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - GitHub Pages website
+        - Local web development
+        - Standalone HTML
+        - Electron
+        - Android / mobile
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 130 on Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: Tell us exactly what you selected and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or diagnostics
+      description: Drag files here. Remove any private information first.

@@ -1,0 +1,64 @@
+# electron-builder config — packages the studio into a standalone desktop app.
+#
+# Run: npm run electron:dist
+# Output: dist-app/<E8 Studio-Setup-...> (installer) + dist-app/win-unpacked/
+#
+# What gets packaged: electron/main.js + electron/preload.js + the offline dist
+# (dist/index.html + dist/vendor/). The standard dist build is regenerated
+# (offline variant) before packaging so no CDN calls remain.
+#
+# This scaffolding is enough to produce a real installer; the actual build step
+# (downloading Electron binaries for the target platform) is left to whoever
+# runs electron:dist on their machine, since the binaries are large + platform-
+# specific and shouldn't be committed.
+
+appId: studio.e8.platonics
+productName: E8 Studio
+copyright: Copyright © 2026
+
+directories:
+  output: dist-app
+  buildResources: electron
+
+# The app's runtime files. dist/ is the offline build (self-contained), and
+# electron/ holds the main + preload scripts.
+files:
+  - electron/main.js
+  - electron/preload.js
+  - dist/index.html
+  - dist/vendor/**
+  - package.json
+  - "!**/*.map"
+
+# BrowserWindow loads dist/index.html via loadFile, so the dist must travel
+# with the app. The extraResources entry isn't needed because dist/ is included
+# via `files` and main.js resolves it with path.resolve(__dirname, '..', 'dist').
+extraMetadata:
+  main: electron/main.js
+
+# Per-platform installers. NSIS for Windows (one-click installer + portable),
+# dmg for macOS, AppImage for Linux. Uncomment mac.target lines if you need
+# notarization; it requires Apple Developer credentials.
+win:
+  icon: assets/e8-studio-icon.svg
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: E8-Studio-${version}-Setup.${ext}
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.education
+
+linux:
+  target:
+    - AppImage
+  category: Education
+
+# Don't bundle devDeps into the packaged app — keeps it small.
+nodeGypRebuild: false
+buildDependenciesFromSource: false

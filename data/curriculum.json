@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "paths": [
+    {
+      "id": "solid-foundations",
+      "title": "Solid Foundations",
+      "description": "Build intuition from regular solids, duality, and four-dimensional analogues.",
+      "lessonIds": [
+        "why-five-solids",
+        "into-four-dimensions"
+      ]
+    },
+    {
+      "id": "coxeter-geometry",
+      "title": "Coxeter Geometry",
+      "description": "Move from the 600-cell to projections, reflections, and E8 roots.",
+      "lessonIds": [
+        "six-hundred-cell",
+        "coxeter-plane",
+        "roots-reflections"
+      ]
+    },
+    {
+      "id": "exceptional-bridges",
+      "title": "Exceptional Bridges",
+      "description": "Explore the qualified relationships connecting E8 to McKay and H4 imagery.",
+      "lessonIds": [
+        "mckay-bridge",
+        "designed-bloom"
+      ]
+    },
+    {
+      "id": "rendering-mathematics",
+      "title": "Rendering Mathematics",
+      "description": "Separate mathematical data from the visual techniques used to reveal it.",
+      "lessonIds": [
+        "distance-fields"
+      ]
+    }
+  ],
+  "lessons": [
+    {
+      "id": "why-five-solids",
+      "title": "Why only five?",
+      "view": "platonic",
+      "pathId": "solid-foundations",
+      "lessonIndex": 0,
+      "claimType": "established-mathematics",
+      "claimNote": "The five-solid classification and dual pairs are standard results for convex regular polyhedra.",
+      "readings": [
+        {
+          "id": "platonic_why_five",
+          "title": "Why exactly five?"
+        },
+        {
+          "id": "platonic_duals",
+          "title": "Platonic duals"
+        }
+      ],
+      "quiz": {
+        "id": "platonic-foundations",
+        "title": "Platonic Foundations"
+      },
+      "sources": [
+        {
+          "id": "mathworld-platonic-solids",
+          "title": "Platonic Solid",
+          "author": "Wolfram MathWorld",
+          "url": "https://mathworld.wolfram.com/PlatonicSolid.html",
+          "scope": "definition, enumeration, and historical attribution of the five convex regular polyhedra",
+          "tier": "reference"
+        }
+      ]
+    },
+    {
+      "id": "into-four-dimensions",
+      "title": "Into four dimensions",
+      "view": "polytope",
+      "pathId": "solid-foundations",
+      "lessonIndex": 1,
+      "claimType": "established-mathematics",
+      "claimNote": "Polytope counts and Schläfli notation are mathematical facts; the animated projection is an explanatory display choice.",
+      "readings": [
+        {
+          "id": "rotation_planes_4d",
+          "title": "Rotations in four dimensions"
+        },
+        {
+          "id": "schlafli_symbols",
+          "title": "Schläfli symbols"
+        },
+        {
+          "id": "the_120cell",
+          "title": "The 120-cell"
+        }
+      ],
+      "quiz": {
+        "id": "4d-polytopes",
+        "title": "4D Polytopes"
+      },
+      "sources": [
+        {
+          "id": "mathworld-600-cell",
+          "title": "600-Cell",
+          "author": "Wolfram MathWorld",
+          "url": "https://mathworld.wolfram.com/600-Cell.html",
+          "scope": "600-cell element counts and duality with the 120-cell",
+          "tier": "reference"
+        }
+      ]
+    },
+    {
+      "id": "six-hundred-cell",
+      "title": "The 600-cell",
+      "view": "sixhundred",
+      "pathId": "coxeter-geometry",
+      "lessonIndex": 0,
+      "claimType": "established-mathematics",
+      "claimNote": "Element counts, duality, and the quaternion model are established; screen depth and motion are projection choices.",
+      "readings": [
+        {
+          "id": "sixhundred_overview",
+          "title": "The 600-cell"
+        },
+        {
+          "id": "quaternions_600cell",
+          "title": "Quaternions and the 600-cell"
+        }
+      ],
+      "quiz": {
+        "id": "sixhundred-basics",
+        "title": "600-cell Basics"
+      },
+      "sources": [
+        {
+          "id": "mathworld-600-cell",
+          "title": "600-Cell",
+          "author": "Wolfram MathWorld",
+          "url": "https://mathworld.wolfram.com/600-Cell.html",
+          "scope": "600-cell element counts and duality with the 120-cell",
+          "tier": "reference"
+        }
+      ]
+    },
+    {
+      "id": "coxeter-plane",
+      "title": "The Coxeter plane",
+      "view": "e8coxeter",
+      "pathId": "coxeter-geometry",
+      "lessonIndex": 1,
+      "claimType": "established-mathematics",
+      "claimNote": "The Coxeter projection and root orbits are canonical up to orientation and scale; glow and color are display choices.",
+      "readings": [
+        {
+          "id": "coxeter",
+          "title": "Coxeter plane"
+        },
+        {
+          "id": "petrie_polygon",
+          "title": "The Petrie polygon"
+        }
+      ],
+      "quiz": {
+        "id": "coxeter-plane",
+        "title": "Coxeter Plane"
+      },
+      "sources": [
+        {
+          "id": "mit-e8-plane",
+          "title": "The E8 root system",
+          "author": "David Vogan, MIT Mathematics",
+          "url": "https://math.mit.edu/~dav/e8plane.html",
+          "scope": "240 roots; eight projected circles with 30 roots at each radius",
+          "tier": "university"
+        },
+        {
+          "id": "stembridge-coxeter-planes",
+          "title": "Coxeter Planes",
+          "author": "John R. Stembridge, University of Michigan",
+          "url": "https://websites.umich.edu/~jrs/coxplane.html",
+          "scope": "definition of a Coxeter plane and order-h rotational action",
+          "tier": "university"
+        }
+      ]
+    },
+    {
+      "id": "roots-reflections",
+      "title": "Roots and reflections",
+      "view": "e8coxeter",
+      "pathId": "coxeter-geometry",
+      "lessonIndex": 2,
+      "claimType": "established-mathematics",
+      "claimNote": "Root counts, inner products, and Weyl reflections come from the canonical E8 data; the interface highlighting is explanatory.",
+      "readings": [
+        {
+          "id": "e8_overview",
+          "title": "Why E₈ matters"
+        },
+        {
+          "id": "simple_roots",
+          "title": "Simple roots"
+        },
+        {
+          "id": "weyl",
+          "title": "The Weyl group"
+        }
+      ],
+      "quiz": {
+        "id": "e8-roots",
+        "title": "E8 Roots"
+      },
+      "sources": [
+        {
+          "id": "aim-e8-technical",
+          "title": "The Character Table for E8 — Technical Details",
+          "author": "American Institute of Mathematics",
+          "url": "https://aimath.org/E8/technicaldetails.html",
+          "scope": "E8 rank, dimension, root count, and Weyl-group order",
+          "tier": "research-institute"
+        }
+      ]
+    },
+    {
+      "id": "mckay-bridge",
+      "title": "McKay correspondence",
+      "view": "e8coxeter",
+      "pathId": "exceptional-bridges",
+      "lessonIndex": 0,
+      "claimType": "interpretation",
+      "claimNote": "The McKay correspondence is established; transitions among solids, the 600-cell, and E8 are a qualified visual analogy, not a literal construction.",
+      "readings": [
+        {
+          "id": "e8_mckay",
+          "title": "The McKay correspondence"
+        },
+        {
+          "id": "affine_e8",
+          "title": "Affine E₈"
+        }
+      ],
+      "quiz": {
+        "id": "mckay-correspondence",
+        "title": "McKay Correspondence"
+      },
+      "sources": [
+        {
+          "id": "mckay-michigan-notes",
+          "title": "McKay correspondence lecture notes",
+          "author": "University of Michigan",
+          "url": "https://dept.math.lsa.umich.edu/~idolga/McKaybook.pdf",
+          "scope": "binary polyhedral groups, irreducible representations, and affine ADE McKay graphs",
+          "tier": "university-notes"
+        },
+        {
+          "id": "kostant-gosset-circles",
+          "title": "Experimental evidence for the occurrence of E8 in nature and the radii of the Gosset circles",
+          "author": "Bertram Kostant",
+          "url": "https://arxiv.org/abs/1003.0046",
+          "scope": "eight Gosset circles; Coxeter-element orbits; McKay dimension labels",
+          "tier": "primary-paper"
+        }
+      ]
+    },
+    {
+      "id": "designed-bloom",
+      "title": "The designed Bloom morph",
+      "view": "bloom",
+      "pathId": "exceptional-bridges",
+      "lessonIndex": 1,
+      "claimType": "app-designed-visualization",
+      "claimNote": "Bloom is an artistic interpolation created for this app. It is not a canonical deformation or mathematical map into E8.",
+      "readings": [
+        {
+          "id": "bloom_morph",
+          "title": "The morph"
+        },
+        {
+          "id": "mandelbox_intro",
+          "title": "The mandelbox — fractal folds"
+        }
+      ],
+      "quiz": {
+        "id": "bloom-morph",
+        "title": "Bloom Morph"
+      },
+      "sources": [
+        {
+          "id": "mit-e8-plane",
+          "title": "The E8 root system",
+          "author": "David Vogan, MIT Mathematics",
+          "url": "https://math.mit.edu/~dav/e8plane.html",
+          "scope": "240 roots; eight projected circles with 30 roots at each radius",
+          "tier": "university"
+        },
+        {
+          "id": "hart-sphere-tracing",
+          "title": "Sphere tracing: A geometric method for the antialiased ray tracing of implicit surfaces",
+          "author": "John C. Hart",
+          "url": "https://doi.org/10.1007/s003710050084",
+          "scope": "sphere tracing, signed distance bounds, implicit-surface rendering, and distance operations",
+          "tier": "primary-paper"
+        }
+      ]
+    },
+    {
+      "id": "distance-fields",
+      "title": "Signed-distance rendering",
+      "view": "raymarched",
+      "pathId": "rendering-mathematics",
+      "lessonIndex": 0,
+      "claimType": "rendering-technique",
+      "claimNote": "Sphere tracing and distance fields are established rendering techniques; this scene’s shapes and composition are app-designed.",
+      "readings": [
+        {
+          "id": "sdf_raymarching",
+          "title": "Raymarching E₈"
+        },
+        {
+          "id": "sdf_smooth_union",
+          "title": "Smooth union and the 240 spheres"
+        }
+      ],
+      "quiz": {
+        "id": "e8-sdf",
+        "title": "E8 SDF"
+      },
+      "sources": [
+        {
+          "id": "hart-sphere-tracing",
+          "title": "Sphere tracing: A geometric method for the antialiased ray tracing of implicit surfaces",
+          "author": "John C. Hart",
+          "url": "https://doi.org/10.1007/s003710050084",
+          "scope": "sphere tracing, signed distance bounds, implicit-surface rendering, and distance operations",
+          "tier": "primary-paper"
+        }
+      ]
+    }
+  ]
+}

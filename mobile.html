@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#07070c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: file:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file:; connect-src 'self' file:; media-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
+<title>E8 Studio Mobile</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="src/mobile/style.css">
+</head>
+<body>
+  <main class="mobile-shell">
+    <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots and 12 rings"></canvas>
+
+    <div class="topbar" aria-label="E8 Coxeter, 240 roots, 12 rings">
+      <button id="scene-chip" class="scene-chip" type="button" aria-label="Scene: E8 Coxeter, tap to switch">
+        <strong>E8</strong>
+        <small>240 / 12 rings</small>
+      </button>
+      <button id="quality-chip" class="quality-chip" type="button">Smooth</button>
+    </div>
+
+    <button id="settings-button" class="settings-button" type="button" aria-label="Settings" aria-haspopup="dialog" aria-controls="settings-sheet">
+      <span class="settings-glyph" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+    </button>
+
+    <div id="status-toast" class="status-toast hidden" role="status" aria-live="polite"></div>
+
+    <aside id="root-drawer" class="root-drawer hidden" aria-live="polite"></aside>
+
+    <section id="settings-sheet" class="settings-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="sheet-chrome">
+        <div>
+          <span class="eyebrow">Mobile V2</span>
+          <h1 id="settings-title">Settings</h1>
+        </div>
+        <button id="settings-close" class="icon-button" type="button" aria-label="Close settings">Close</button>
+      </div>
+
+      <nav class="sheet-tabs" aria-label="Settings sections">
+        <button class="active" type="button" data-section-tab="view">View</button>
+        <button type="button" data-section-tab="style">Style</button>
+        <button type="button" data-section-tab="motion">Motion</button>
+        <button type="button" data-section-tab="quality">Quality</button>
+        <button type="button" data-section-tab="info">Info</button>
+      </nav>
+
+      <div class="sheet-body">
+        <section class="settings-section active" data-section="view">
+          <h2>View</h2>
+          <div class="control-stack">
+            <div class="view-actions" aria-label="View framing">
+              <button class="wide-action" type="button" data-action="reset-view">Reset</button>
+              <button class="wide-action" type="button" data-view-action="fit-all">Fit all</button>
+            </div>
+            <div class="scene-preset-panel" aria-label="Scene presets">
+              <div class="browse-head">
+                <strong>Scenes</strong>
+                <output id="scene-preset-output">E8</output>
+              </div>
+              <div id="scene-preset-grid" class="scene-preset-grid"></div>
+            </div>
+            <div class="model-shortcut-panel" aria-label="Model shortcuts">
+              <div class="browse-head">
+                <strong>Models</strong>
+                <output id="model-shortcut-output">E8 Coxeter</output>
+              </div>
+              <div id="model-shortcut-groups" class="model-shortcut-groups"></div>
+            </div>
+            <label class="field">
+              <span>Model</span>
+              <select id="model-select">
+                <option value="e8_2d">E8 Coxeter</option>
+                <option value="e8_3d">E8 3D roots</option>
+                <option value="platonic">Platonic solid</option>
+                <option value="poly4d">4D polytope</option>
+                <option value="dynkin">Dynkin diagram</option>
+              </select>
+            </label>
+            <label id="shape-field" class="field hidden">
+              <span>Shape</span>
+              <select id="shape-select">
+                <option value="tetrahedron">Tetrahedron</option>
+                <option value="cube">Cube</option>
+                <option value="octahedron">Octahedron</option>
+                <option value="dodecahedron">Dodecahedron</option>
+                <option value="icosahedron">Icosahedron</option>
+              </select>
+            </label>
+            <label id="polytope4d-field" class="field hidden">
+              <span>4D polytope</span>
+              <select id="polytope4d-select">
+                <option value="5cell">5-cell</option>
+                <option value="tesseract">Tesseract</option>
+                <option value="16cell">16-cell</option>
+                <option value="24cell">24-cell</option>
+                <option value="600cell">600-cell</option>
+              </select>
+            </label>
+            <label id="dynkin-field" class="field hidden">
+              <span>Dynkin diagram</span>
+              <select id="dynkin-select">
+                <option value="E8">E8</option>
+                <option value="E7">E7</option>
+                <option value="E6">E6</option>
+                <option value="D6">D6</option>
+                <option value="D5">D5</option>
+                <option value="D4">D4</option>
+                <option value="A7">A7</option>
+                <option value="A5">A5</option>
+                <option value="A4">A4</option>
+                <option value="A3">A3</option>
+              </select>
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>McKay highlight</strong>
+                <small>Show the selected Platonic subset.</small>
+              </span>
+              <input id="highlight-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Context rays</strong>
+                <small>Show selected-root neighbors and opposite root.</small>
+              </span>
+              <input id="context-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Petrie cycle</strong>
+                <small>Trace the desktop 30-root Coxeter cycle.</small>
+              </span>
+              <input id="petrie-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Weyl mirrors</strong>
+                <small>Show the eight simple-reflection mirror lines.</small>
+              </span>
+              <input id="mirrors-toggle" type="checkbox">
+            </label>
+            <label class="field">
+              <span>Subset</span>
+              <select id="subset-select">
+                <option value="icosahedron">Icosahedron</option>
+                <option value="dodecahedron">Dodecahedron</option>
+                <option value="simple_roots">Simple roots</option>
+              </select>
+            </label>
+            <div class="subset-panel" aria-label="Subset root browser">
+              <div class="browse-head">
+                <strong>Subset roots</strong>
+                <output id="subset-output">0 roots</output>
+              </div>
+              <div id="subset-chip-grid" class="subset-chip-grid" aria-label="Subset choices"></div>
+              <div class="browse-actions subset-actions">
+                <button type="button" data-subset-action="first" aria-label="Subset first">First</button>
+                <button type="button" data-subset-action="prev" aria-label="Subset previous">Prev</button>
+                <button type="button" data-subset-action="next" aria-label="Subset next">Next</button>
+                <button type="button" data-subset-action="frame" aria-label="Frame subset">Frame</button>
+              </div>
+            </div>
+            <div class="browse-panel" aria-label="Root browser">
+              <div class="browse-head">
+                <strong>Root browser</strong>
+                <output id="root-output">None</output>
+              </div>
+              <input id="root-range" type="range" min="0" max="239" step="1" value="0" aria-label="Selected root">
+              <div class="browse-actions">
+                <button type="button" data-root-action="prev">Previous</button>
+                <button type="button" data-root-action="next">Next</button>
+                <button type="button" data-root-action="center">Center</button>
+              </div>
+              <div class="root-jump-strip" aria-label="Root jumps">
+                <div class="browse-head root-jump-head">
+                  <strong>Jumps</strong>
+                  <output id="root-jump-output">None</output>
+                </div>
+                <div id="root-jump-grid" class="root-jump-grid"></div>
+              </div>
+            </div>
+            <div class="zoom-panel" aria-label="Zoom controls">
+              <div class="browse-head">
+                <strong>Zoom</strong>
+                <output id="zoom-output">100%</output>
+              </div>
+              <div class="browse-actions">
+                <button type="button" data-view-action="zoom-out">Out</button>
+                <button type="button" data-view-action="zoom-reset">100%</button>
+                <button type="button" data-view-action="zoom-in">In</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" data-section="style">
+          <h2>Style</h2>
+          <div class="control-stack">
+            <div class="palette-panel" aria-label="Palette swatches">
+              <div class="browse-head">
+                <strong>Palette</strong>
+                <output id="palette-output">Gold</output>
+              </div>
+              <div id="palette-swatch-grid" class="palette-swatch-grid"></div>
+            </div>
+            <label class="field">
+              <span>Palette</span>
+              <select id="palette-select">
+                <option value="gold">Gold</option>
+                <option value="cyan">Cyan</option>
+                <option value="mono">Mono</option>
+                <option value="ember">Ember</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Point size</span>
+              <input id="point-size" type="range" min="0.7" max="1.8" step="0.1">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Rings</strong>
+                <small>Draw the Coxeter shell guides.</small>
+              </span>
+              <input id="rings-toggle" type="checkbox">
+            </label>
+            <div class="fx-preset-panel" aria-label="FX presets">
+              <div class="browse-head">
+                <strong>FX presets</strong>
+                <output id="fx-preset-output">Clean</output>
+              </div>
+              <div id="fx-preset-grid" class="fx-preset-grid"></div>
+            </div>
+            <label class="toggle-row">
+              <span>
+                <strong>Color cycle</strong>
+                <small>Auto-shift the palette while the canvas is idle.</small>
+              </span>
+              <input id="auto-color-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Soft FX</strong>
+                <small>Add a lightweight pulse to points and models.</small>
+              </span>
+              <input id="soft-fx-toggle" type="checkbox">
+            </label>
+            <div class="sheet-action" aria-label="Discovery">
+              <div>
+                <strong>Surprise</strong>
+                <small>Shuffle a safe mobile view.</small>
+              </div>
+              <button id="surprise-button" type="button" data-style-action="surprise">Surprise</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" data-section="motion">
+          <h2>Motion</h2>
+          <div class="control-stack">
+            <label class="toggle-row">
+              <span>
+                <strong>Auto-rotate</strong>
+                <small>Off by default for battery and speed.</small>
+              </span>
+              <input id="motion-toggle" type="checkbox">
+            </label>
+            <label class="field">
+              <span>Speed</span>
+              <input id="motion-speed" type="range" min="0.2" max="2" step="0.1">
+            </label>
+            <div class="motion-speed-panel" aria-label="Motion speed presets">
+              <div class="browse-head">
+                <strong>Speed presets</strong>
+                <output id="motion-speed-output">Medium</output>
+              </div>
+              <div id="motion-speed-grid" class="motion-speed-grid"></div>
+            </div>
+            <label class="toggle-row">
+              <span>
+                <strong>Auto model</strong>
+                <small>Cycle E8, solids, 4D, and Dynkin views while idle.</small>
+              </span>
+              <input id="auto-model-toggle" type="checkbox">
+            </label>
+            <div class="motion-preset-panel" aria-label="Motion presets">
+              <div class="browse-head">
+                <strong>Motion presets</strong>
+                <output id="motion-preset-output">Still</output>
+              </div>
+              <div id="motion-preset-grid" class="motion-preset-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" data-section="quality">
+          <h2>Quality</h2>
+          <div class="segmented" role="group" aria-label="Render quality">
+            <button type="button" data-quality="smooth">Smooth</button>
+            <button type="button" data-quality="balanced">Balanced</button>
+            <button type="button" data-quality="sharp">Sharp</button>
+          </div>
+          <div class="sheet-action" aria-label="Restore defaults">
+            <div>
+              <strong>Defaults</strong>
+              <small>Return to the safe mobile baseline.</small>
+            </div>
+            <button id="defaults-button" type="button" data-app-action="defaults">Restore</button>
+          </div>
+        </section>
+
+        <section class="settings-section" data-section="info">
+          <h2>Info</h2>
+          <p id="info-copy" class="info-copy">The 240 E8 root vectors are projected onto the Coxeter plane, forming 12 concentric shells. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.</p>
+          <div id="info-selection" class="selection-card">No root selected.</div>
+          <div id="mckay-card" class="selection-card mckay-card" aria-label="McKay bridge">McKay bridge loading.</div>
+          <div id="curiosity-card" class="selection-card curiosity-card" aria-label="Context note">
+            <div>
+              <strong>Context</strong>
+              <small>Loading note.</small>
+            </div>
+            <button id="curiosity-next" type="button" data-info-action="next-curiosity">Next</button>
+          </div>
+          <div id="learn-panel" class="selection-card learn-panel" aria-label="Learn topics">
+            <div class="learn-head">
+              <strong>Learn</strong>
+              <output id="learn-topic-output">Auto</output>
+            </div>
+            <div id="learn-topic-grid" class="learn-topic-grid"></div>
+            <div id="learn-topic-card" class="learn-topic-copy">
+              <strong>Loading topic.</strong>
+              <small>Mobile Learn adapts to the current model.</small>
+            </div>
+          </div>
+          <div id="mobile-tour-card" class="selection-card tour-card" aria-label="Guided tour">
+            <div class="tour-head">
+              <div>
+                <strong>Tour</strong>
+                <small id="mobile-tour-output">Ready</small>
+              </div>
+              <output id="mobile-tour-step-output">1/5</output>
+            </div>
+            <div id="mobile-tour-copy" class="tour-copy">
+              <strong>Mobile tour</strong>
+              <small>Step through the core E8 Studio scenes without adding canvas controls.</small>
+            </div>
+            <div class="tour-actions" aria-label="Tour controls">
+              <button id="mobile-tour-toggle" type="button" data-info-action="toggle-tour">Start</button>
+              <button id="mobile-tour-prev" type="button" data-info-action="prev-tour-step">Prev</button>
+              <button id="mobile-tour-next" type="button" data-info-action="next-tour-step">Next</button>
+            </div>
+          </div>
+          <div class="info-actions" aria-label="Export">
+            <div>
+              <strong>Snapshot</strong>
+              <small>Share the current canvas as a PNG.</small>
+            </div>
+            <button id="share-png" type="button" data-export-action="share-png">Share PNG</button>
+          </div>
+          <div class="info-actions" aria-label="Postcard">
+            <div>
+              <strong>Postcard</strong>
+              <small>Create a 9:16 share image with the active scene caption.</small>
+            </div>
+            <button id="share-postcard" type="button" data-export-action="share-postcard">Postcard</button>
+          </div>
+          <div class="info-actions" aria-label="Geometry data">
+            <div>
+              <strong>Data</strong>
+              <small>Copy the active model geometry as JSON.</small>
+            </div>
+            <button id="copy-data" type="button" data-export-action="copy-data">Copy JSON</button>
+          </div>
+          <div class="info-actions" aria-label="Model OBJ">
+            <div>
+              <strong>OBJ</strong>
+              <small>Copy the active model as a Wavefront OBJ.</small>
+            </div>
+            <button id="copy-obj" type="button" data-export-action="copy-obj">Copy OBJ</button>
+          </div>
+          <div class="info-actions" aria-label="Diagnostics">
+            <div>
+              <strong>Diagnostics</strong>
+              <small>Copy state, metrics, and device details.</small>
+            </div>
+            <button id="copy-diagnostics" type="button" data-export-action="copy-diagnostics">Copy</button>
+          </div>
+          <div id="cartan-matrix" class="cartan-matrix" aria-label="E8 simple-root Cartan matrix"></div>
+        </section>
+      </div>
+
+      <div class="sheet-footer">
+        <button id="settings-done" class="done-button" type="button">Done</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="src/mobile/main.js"></script>
+</body>
+</html>

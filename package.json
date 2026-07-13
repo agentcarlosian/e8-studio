@@ -1,0 +1,74 @@
+{
+  "name": "e8-studio",
+  "version": "0.2.0",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "description": "Interactive WebGL studio for E8, Platonic solids, the 600-cell, and regular 4D polytopes.",
+  "license": "MIT",
+  "author": {
+    "name": "Carlosian",
+    "email": "carlosian@agentmail.to",
+    "url": "https://github.com/agentcarlosian"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentcarlosian/e8-studio.git"
+  },
+  "homepage": "https://agentcarlosian.github.io/e8-studio/",
+  "bugs": {
+    "url": "https://github.com/agentcarlosian/e8-studio/issues"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "python scripts/build.py",
+    "build:legacy": "python scripts/build.py",
+    "build:web": "vite build",
+    "build:offline": "python scripts/build_offline.py",
+    "build:mobile": "npm run generate:curriculum && python scripts/build_mobile.py",
+    "build:single": "python scripts/build_singlefile.py",
+    "build:mobile:single": "npm run generate:curriculum && python scripts/build_mobile_singlefile.py",
+    "build:share": "npm run build:single && npm run build:mobile:single",
+    "release:artifacts": "python scripts/build_release_artifacts.py",
+    "verify": "python scripts/verify.py",
+    "test:lifecycle": "node scripts/test_resource_scope.mjs",
+    "test:animation": "node scripts/test_frame_health.mjs",
+    "test:recording": "node scripts/test_recording_recovery.mjs",
+    "test:exports": "node scripts/test_export_delivery.mjs",
+    "test:image-exports": "node scripts/test_image_export_recovery.mjs",
+    "test:visual-system": "node scripts/test_visual_system.mjs",
+    "test:curriculum": "node scripts/test_curriculum.mjs",
+    "test:progress": "node scripts/test_progress.mjs",
+    "test:content": "node scripts/test_content_integrity.mjs",
+    "generate:curriculum": "node scripts/generate_curriculum.mjs",
+    "serve": "python -m http.server 8771",
+    "preview:web": "vite preview --outDir dist/web",
+    "release:check": "python scripts/release_check.py",
+    "smoke:phone": "python scripts/smoke_phone_launch.py",
+    "smoke:mobile-v2": "python scripts/smoke_mobile_v2.py",
+    "electron:dev": "npm run build:offline && electron electron/main.js",
+    "electron:dist": "npm run build:offline && electron-builder --config electron-builder.yml",
+    "mobile:build": "npm run build:mobile && npx cap sync android",
+    "mobile:open:android": "npx cap open android",
+    "android:debug": "npm run mobile:build && npx cap run android",
+    "android:aab": "npm run mobile:build && cd android && gradlew.bat bundleRelease",
+    "pwa": "npm run build:offline && echo 'PWA dist ready in dist/ - serve with: python -m http.server 8771'"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.4.1",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "vite": "8.1.4"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.4.1",
+    "@capacitor/app": "8.1.0",
+    "@capacitor/core": "8.4.1",
+    "@capacitor/filesystem": "8.1.2",
+    "@capacitor/share": "8.0.1",
+    "chroma-js": "2.4.2",
+    "simplex-noise": "4.0.3",
+    "three": "0.170.0"
+  }
+}

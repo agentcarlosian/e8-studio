@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest a focused improvement to E8 Studio
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What would this improve for users?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+      description: Describe the behavior rather than only the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: math
+    attributes:
+      label: Mathematical sources
+      description: If the request introduces factual claims, link primary or authoritative references.

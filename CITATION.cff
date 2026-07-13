@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use E8 Studio in research, teaching, or published work, please cite the software."
+title: "E8 Studio"
+type: software
+authors:
+  - family-names: "Carlosian"
+version: 0.2.0
+date-released: 2026-07-12
+url: "https://agentcarlosian.github.io/e8-studio/"
+repository-code: "https://github.com/agentcarlosian/e8-studio"
+license: MIT
+abstract: >-
+  An interactive WebGL studio for exploring the E8 root system, Platonic
+  solids, the 600-cell, and regular four-dimensional polytopes.
