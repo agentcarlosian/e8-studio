@@ -67,7 +67,7 @@
     "@capacitor/core": "8.4.1",
     "@capacitor/filesystem": "8.1.2",
     "@capacitor/share": "8.0.1",
-    "chroma-js": "2.4.2",
+    "chroma-js": "3.2.0",
     "simplex-noise": "4.0.3",
     "three": "0.170.0"
   }
