@@ -5,7 +5,7 @@
 <h1 align="center">E8 Studio</h1>
 
 <p align="center">
-  An interactive WebGL studio with six interactive views for exploring the E8 root system,<br>
+  An interactive WebGL studio for exploring the E8 root system,<br>
   Platonic solids, the 600-cell, and regular four-dimensional polytopes.
 </p>
 
