@@ -9,6 +9,15 @@ import { CameraController } from '../src/state/camera.js';
 import { planViewTransition } from '../src/state/view-transition.js';
 import { LearningProgressService } from '../src/state/learning-service.js';
 import { ExportRecordingService, isCapacitorNative } from '../src/services/export-recording.js';
+import { buildSdfRingLayout, sdfQualityProfile } from '../src/views/raymarched-e8.view.js';
+import {
+  FX_EFFECTS,
+  coerceEffectMode,
+  effectAvailableForView,
+  effectsForView,
+  rememberEffectForView,
+  restoreEffectForView,
+} from '../src/fx/fx-catalog.js';
 
 assert.equal(GALLERY_PRESETS.length, 22);
 assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.id)).size, GALLERY_PRESETS.length);
@@ -71,4 +80,54 @@ assert.equal(exports.cancelRecording(), false);
 assert.equal(messages.at(-1), 'No active recording');
 assert.equal(isCapacitorNative(), false);
 
-console.log('ok gallery, camera, view-transition, learning, and export modules');
+const e8 = JSON.parse(await import('node:fs').then(
+  ({ readFileSync }) => readFileSync(new URL('../data/e8.json', import.meta.url), 'utf8')
+));
+const ringLayout = buildSdfRingLayout(e8, 1.6);
+assert.equal(ringLayout.rings.length, 8);
+assert.equal(ringLayout.rootCount, 240);
+assert.ok(ringLayout.rings.every(ring => ring.count === 30));
+let maxRingEncodingError = 0;
+for (const point of e8.proj2d) {
+  const ring = ringLayout.rings.find(item => item.id === point.ring);
+  const angle = Math.atan2(point.y, point.x);
+  const slot = Math.round((angle - ring.phase) / ring.step);
+  const reconstructedX = ring.radius * Math.cos(ring.phase + slot * ring.step);
+  const reconstructedY = ring.radius * Math.sin(ring.phase + slot * ring.step);
+  maxRingEncodingError = Math.max(
+    maxRingEncodingError,
+    Math.hypot(reconstructedX - point.x * 1.6, reconstructedY - point.y * 1.6)
+  );
+}
+assert.ok(maxRingEncodingError < 1e-10, `ring encoding error ${maxRingEncodingError}`);
+assert.equal(sdfQualityProfile({
+  params: { mobileQuality: 'high', reducedMode: false },
+  device: { deviceMemory: 16, hardwareConcurrency: 12, viewportWidth: 1400 },
+}).tier, 'high');
+assert.equal(sdfQualityProfile({
+  params: { mobileQuality: 'high', reducedMode: false },
+  device: { deviceMemory: 4, hardwareConcurrency: 4, viewportWidth: 390, maxTouchPoints: 5 },
+}).tier, 'balanced');
+assert.equal(sdfQualityProfile({ params: { mobileQuality: 'low' }, device: {} }).tier, 'low');
+
+assert.equal(FX_EFFECTS.length, 24);
+assert.deepEqual(
+  effectsForView('raymarched').map(item => item.id),
+  ['none', 'glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']
+);
+assert.equal(effectsForView('e8coxeter', 'high').length, 24);
+assert.equal(effectAvailableForView('raymarched', 'trail', 'high'), false);
+assert.equal(effectAvailableForView('e8coxeter', 'voronoi', 'low'), false);
+assert.equal(coerceEffectMode('raymarched', 'plasma', 'high'), 'none');
+const fxState = {
+  view: 'raymarched', fxMode: 'glow', fxByView: {}, mobileQuality: 'high', reducedMode: false,
+};
+rememberEffectForView(fxState);
+fxState.view = 'e8coxeter';
+fxState.fxMode = 'plasma';
+rememberEffectForView(fxState);
+fxState.view = 'raymarched';
+assert.equal(restoreEffectForView(fxState, 'raymarched'), 'glow');
+assert.equal(fxState.fxByView.e8coxeter, 'plasma');
+
+console.log('ok gallery, camera, SDF quality/effects, view-transition, learning, and export modules');

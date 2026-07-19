@@ -93,7 +93,7 @@ with sync_playwright() as p:
 
     # 3. Background moods
     print("\n=== 3. Cycle bg moods ===")
-    for m in ['void','starfield','milkyway','cosmos','aurora','mandala','grid','plasma']:
+    for m in ['void','starfield','cosmos','aurora','mandala','grid','plasma']:
         check(f"bg={m}", lambda m=m: (page.evaluate(f"() => window.__app.setBgMode('{m}')"), page.wait_for_timeout(300)))
 
     # 4. Themes

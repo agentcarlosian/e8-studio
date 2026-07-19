@@ -46,7 +46,8 @@ E8 Studio is both an explorer and a generative visual instrument. You can:
 
 - Choose from dozens of curated color palettes, including mathematically driven E8 color modes.
 - Place the geometry in star fields, nebulae, galactic dust, deep-space fields, aurorae, grids, and other procedural backgrounds.
-- Apply glow, trails, ripple, aura, iridescence, flow fields, plasma, hologram, x-ray, crystal, depth-of-field, and other shader effects.
+- Start with six outcome-oriented looks, then open **Advanced controls** for the complete effect, palette, background, lighting, and export catalogs.
+- Apply view-aware shader effects: point and mesh views expose the full compatible catalog, while E8 SDF provides native Glow, Pulse, Heat, Iridescent, Hologram, and X-ray surface treatments.
 - Animate individual sliders, extrusion, rotations, morphs, palette shifts, and camera movement.
 - Use Orbit, Dive, and Spiral camera paths or take direct control with drag, scroll, and touch gestures.
 - Start from gallery presets, move through them with previous/next controls, or use **Surprise** to discover unexpected combinations.
@@ -180,7 +181,7 @@ The hosted application is bundled with Vite. Standalone, Electron, and mobile ta
 - Electron on desktop platforms
 - Android through Capacitor
 
-Performance varies by device and GPU. Quality controls, adaptive rendering, reduced-motion handling, and animation recovery safeguards provide lower-cost fallbacks.
+Performance varies by device and GPU. The WebGL SDF automatically selects a High, Balanced, or Low shader budget from device constraints while preserving all 240 roots through the compact eight-ring representation. Changing the quality control recompiles that budget immediately. Effects declare their compatible views and approximate GPU cost, so unavailable or overly expensive combinations are not presented as active controls. Adaptive resolution, reduced-motion handling, and animation recovery provide additional fallbacks.
 
 ## Contributing
 
