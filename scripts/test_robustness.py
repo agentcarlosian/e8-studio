@@ -8,7 +8,7 @@ meets a specific view. This suite pins those down so they can't regress:
 
   1. FX material set stays bounded across many view switches (no leak).
   2. A hostile #config= link is clamped (but periodic accumulator angles are not).
-  3. Every FX mode loads in every view with no console error (shader sanity).
+  3. Every view-compatible FX mode activates with no console error (shader sanity).
   4. data-act / data-param delegation works under the strict (no-unsafe-inline) CSP.
   5. Adaptive pixel-ratio restores native DPR when toggled off.
   6. Persisted actions write their final state to localStorage.
@@ -26,13 +26,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from verify import start_server, find_chromium_executable  # noqa: E402
+from verify import chromium_webgl_args, start_server, find_chromium_executable  # noqa: E402
 
 FX_MODES = ['none', 'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripple',
             'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi', 'caustic',
             'iridescent', 'flowfield', 'plasma', 'kaleido6', 'dof', 'nebula',
             'wireframe', 'hologram', 'xray', 'crystal']
 VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']
+SDF_FX_MODES = ['none', 'glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']
 
 results: list[tuple[str, bool, str]] = []
 
@@ -52,8 +53,7 @@ def main() -> int:
     exe = find_chromium_executable()
     try:
         with sync_playwright() as p:
-            args = {"headless": True, "args": ["--no-sandbox", "--use-gl=angle",
-                    "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]}
+            args = {"headless": True, "args": chromium_webgl_args()}
             if exe:
                 args["executable_path"] = exe
             browser = p.chromium.launch(**args)
@@ -64,6 +64,7 @@ def main() -> int:
             code = (base64.b64encode(json.dumps(cfg).encode()).decode()
                     .replace('+', '-').replace('/', '_').rstrip('='))
             pg = browser.new_page()
+            pg.add_init_script("window.__forceSdfSafeMode = true")
             pg.goto(f"{base}/dist/index.html#config={code}", wait_until="commit", timeout=20000)
             pg.wait_for_function("() => !!(window.__app && window.__app.params)", timeout=20000)
             prm = pg.evaluate("() => window.__app.params")
@@ -75,6 +76,7 @@ def main() -> int:
 
             # ---- 1, 3, 4, 5 on a clean page ----
             pg = browser.new_page(viewport={"width": 1100, "height": 820})
+            pg.add_init_script("window.__forceSdfSafeMode = true")
             console_errs: list[str] = []
             pg.on("console", lambda m: console_errs.append(m.text) if m.type == "error" else None)
             pg.on("pageerror", lambda e: console_errs.append(str(e)))
@@ -94,7 +96,7 @@ def main() -> int:
             check(f"no FX leak across {SWITCHES} view switches",
                   leak_count <= max(4, base_count * 3), f"{base_count} -> {leak_count}")
 
-            # ---- 3. Every FX mode loads in every view (shader sanity) ----
+            # ---- 3. Every compatible FX mode loads in its view (shader sanity) ----
             # Switching the view recompiles (1 compile/view); cycling FX modes in
             # a view is just uniform updates (cheap, no recompile).
             shader_fail = []
@@ -105,13 +107,17 @@ def main() -> int:
                 if active_view != view:
                     shader_fail.append(f"{view}: switch landed on {active_view}")
                     continue
-                for mode in FX_MODES:
+                compatible_modes = SDF_FX_MODES if view == 'raymarched' else FX_MODES
+                for mode in compatible_modes:
                     before = len(console_errs)
                     pg.evaluate("(m) => window.__app.setFX(m)", mode)
                     pg.wait_for_timeout(15)
                     if len(console_errs) > before:
                         shader_fail.append(f"{view}/{mode}: {console_errs[-1][:80]}")
-            check(f"all {len(FX_MODES)} FX modes load in all {len(VIEWS)} views",
+                    active_mode = pg.evaluate("() => window.__app.params.fxMode")
+                    if active_mode != mode:
+                        shader_fail.append(f"{view}/{mode}: activated {active_mode}")
+            check("all view-compatible FX modes activate across all views",
                   not shader_fail, "; ".join(shader_fail[:4]))
 
             # ---- 4. Delegation works under strict CSP ----
@@ -326,19 +332,18 @@ def main() -> int:
             pg.wait_for_timeout(700)
             sdf_extrude = pg.evaluate("""() => {
               const view = window.__app.currentView;
-              const roots = view.object3d.material.uniforms.uRoots.value;
+              const rings = view.object3d.material.uniforms.uRings.value;
               window.__app.toggleSliderAuto('e8MorphT');
               window.__app.setParam('e8MorphT', 1);
               view.update(0.016, 1, window.__app.params);
-              const expandedMax = Math.max(...roots.map(root => Math.abs(root.z)));
-              const maxRing = Math.max(...roots.map(root => Math.abs(root.w)));
+              const expandedMax = Math.max(...rings.map(ring => Math.abs(ring.w)));
               const expanded = expandedMax > 0.001;
               window.__app.setParam('e8MorphT', 0);
               view.update(0.016, 2, window.__app.params);
               return {
                 count: document.querySelectorAll('input[data-param="e8MorphT"]').length,
-                expanded, expandedMax, maxRing, rootCount: roots.length,
-                reset: roots.every(root => Math.abs(root.z) < 1e-9),
+                expanded, expandedMax, ringCount: rings.length,
+                reset: rings.every(ring => Math.abs(ring.w) < 1e-9),
                 autoStopped: !window.__app.params.autoSliders.includes('e8MorphT'),
               };
             }""")
