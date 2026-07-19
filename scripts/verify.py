@@ -398,12 +398,19 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     page.mouse.click(700, 450)
     page.wait_for_timeout(500)
 
-    before = page.evaluate("window.__app.params.palette")
-    page.evaluate("window.__app.params.shiftMode = 'sunset'; window.__app.params.shiftSpeed = 60")
-    page.wait_for_timeout(1500)
-    after = page.evaluate("window.__app.params.palette")
-    if before == after:
-        fail("Color shift did not change palette")
+    # Start from a palette outside the sunset cycle and use the public setter,
+    # which resets the cycle clock. The old direct param write could land on a
+    # cycle position already matching the current palette and flake in CI.
+    page.evaluate("""() => {
+      window.__app.setPalette('mono');
+      window.__app.setParam('shiftSpeed', 4);
+      window.__app.setShiftMode('sunset');
+    }""")
+    try:
+        page.wait_for_function("() => window.__app.params.palette !== 'mono'", timeout=3000)
+    except Exception as exc:
+        fail(f"Color shift did not change palette: {exc}")
+    page.evaluate("window.__app.setShiftMode('static')")
 
     try:
         export_contracts = page.evaluate(
