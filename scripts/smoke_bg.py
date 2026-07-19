@@ -16,8 +16,9 @@ time.sleep(0.3)
 
 from playwright.sync_api import sync_playwright
 chrome_path = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
-BG_MODES = ['void', 'starfield', 'milkyway', 'cosmos', 'aurora', 'mandala', 'grid', 'plasma',
-            'vortex', 'ocean', 'ember', 'frost', 'quantum']
+BG_MODES = ['void', 'starfield', 'grid', 'aurora',
+            'cosmos', 'mandala', 'plasma',
+            'vortex', 'quantum', 'eclipse', 'synthwave', 'prism']
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, executable_path=chrome_path, args=['--no-sandbox', '--disable-gpu'])
