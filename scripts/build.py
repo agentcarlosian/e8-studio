@@ -31,6 +31,7 @@ JS_FILES    = [
     ROOT / 'src' / 'platform' / 'resource-scope.js',
     ROOT / 'src' / 'platform' / 'frame-health.js',
     ROOT / 'src' / 'fx' / 'fx-shader.js',
+    ROOT / 'src' / 'fx' / 'fx-catalog.js',
     ROOT / 'src' / 'fx' / 'fx-runtime.js',
     ROOT / 'src' / 'fx' / 'fx-branches.js',
     ROOT / 'src' / 'fx' / 'fx-line-shader.js',
@@ -167,7 +168,15 @@ def main():
             if not any(local == sym for imp_str, _ in imports for _, local in parse_named_imports(imp_str)):
                 pattern = r'(?<![.\w])' + re.escape(sym) + r'\b'
                 body = re.sub(pattern, f'window.__modules[{sym!r}]', body)
-        # Strip all import lines (CDN ones are replaced at the top; local ones are now lookups)
+        # Strip named imports as complete statements first. Some modules format
+        # long capability imports across several lines; removing only the first
+        # `import` line leaves a dangling `} from ...` and invalidates dist.
+        body = re.sub(
+            r"^import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+['\"];?",
+            '', body, flags=re.M,
+        )
+        # Strip remaining one-line imports (CDN ones are replaced at the top;
+        # local names have already become window.__modules lookups).
         body = re.sub(r'^import .*$', '', body, flags=re.M)
         # Identify exported symbols and register them in window.__modules
         exports = re.findall(r'^export\s+(?:function|const|class|let|var)\s+([A-Za-z_$][\w$]*)', body, re.M)

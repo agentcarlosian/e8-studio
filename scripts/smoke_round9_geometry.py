@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from verify import (start_server, find_chromium_executable,
-                    open_checked_page, assert_canvas_nonblank)
+                    chromium_webgl_args, open_checked_page, assert_canvas_nonblank)
 
 STELLATIONS = [
     'stellated_dodecahedron', 'great_dodecahedron',
@@ -31,7 +31,7 @@ def main() -> int:
     executable = find_chromium_executable()
     try:
         with sync_playwright() as p:
-            launch_args = {"headless": True, "args": ["--no-sandbox", "--disable-gpu"]}
+            launch_args = {"headless": True, "args": chromium_webgl_args()}
             if executable:
                 launch_args["executable_path"] = executable
             browser = p.chromium.launch(**launch_args)

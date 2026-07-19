@@ -7,7 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from verify import find_chromium_executable, start_server  # noqa: E402
+from verify import (assert_canvas_nonblank, chromium_webgl_args,
+                    find_chromium_executable, start_server)  # noqa: E402
 
 
 def main() -> int:
@@ -16,8 +17,7 @@ def main() -> int:
     httpd, base = start_server()
     try:
         with sync_playwright() as p:
-            launch = {"headless": True, "args": ["--no-sandbox", "--use-gl=angle",
-                      "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]}
+            launch = {"headless": True, "args": chromium_webgl_args()}
             executable = find_chromium_executable()
             if executable:
                 launch["executable_path"] = executable
@@ -33,6 +33,18 @@ def main() -> int:
                 print("startup errors:", errors)
                 raise
             page.evaluate("() => document.getElementById('welcome-card')?.classList.add('hidden')")
+
+            view_switch = page.evaluate("""() => [...document.querySelectorAll('.ps-view-switch [data-act="switchView"]')]
+              .map(button => ({ view: button.dataset.arg, label: button.textContent.trim() }))""")
+            assert view_switch == [
+                {"view": "bloom", "label": "bloom"},
+                {"view": "platonic", "label": "platonic"},
+                {"view": "e8coxeter", "label": "E₈"},
+                {"view": "sixhundred", "label": "600"},
+                {"view": "polytope", "label": "4D"},
+                {"view": "raymarched", "label": "SDF"},
+            ], view_switch
+            print("ok compact View selector exposes all six core views")
 
             zoom = page.evaluate("""() => {
               window.__app.switchView('platonic');
@@ -210,7 +222,41 @@ def main() -> int:
                 "toneUniform": False, "shadowUniform": False,
                 "toneShader": False, "shadowShader": False,
             }, removed_sdf_effects
+            page.wait_for_timeout(500)
+            assert_canvas_nonblank(page)
             print("ok ACES Tone and Cool Shadow are removed from UI and SDF runtime")
+
+            sdf_quality = page.evaluate("""() => {
+              const full = { ...window.__app.currentView.object3d.material.userData.sdfQuality };
+              window.__forceSdfSafeMode = true;
+              window.__app.switchView('e8coxeter');
+              window.__app.switchView('raymarched');
+              const safeMaterial = window.__app.currentView.object3d.material;
+              const safe = { ...safeMaterial.userData.sdfQuality };
+              const shader = safeMaterial.fragmentShader;
+              delete window.__forceSdfSafeMode;
+              return {
+                full,
+                safe,
+                safeDefines: shader.includes('#define MAX_RINGS 8')
+                  && shader.includes('#define ROOT_NEIGHBOR_SPAN 0')
+                  && shader.includes('#define MARCH_STEPS 36'),
+              };
+            }""")
+            assert sdf_quality["full"] == {
+                "tier": "high", "safe": False, "rootNeighborSpan": 2,
+                "maxEdges": 28, "edgeLimit": 28, "marchSteps": 64,
+                "shadowSteps": 8, "aoSteps": 2, "ringCount": 8,
+                "representedRoots": 240, "sampledRootsPerSdf": 40, "edgeCount": 28,
+            }, sdf_quality
+            assert sdf_quality["safe"] == {
+                "tier": "low", "safe": True, "rootNeighborSpan": 0,
+                "maxEdges": 1, "edgeLimit": 0, "marchSteps": 36,
+                "shadowSteps": 0, "aoSteps": 0, "ringCount": 8,
+                "representedRoots": 240, "sampledRootsPerSdf": 8, "edgeCount": 0,
+            }, sdf_quality
+            assert sdf_quality["safeDefines"], sdf_quality
+            print("ok SDF compiles full and constrained-GPU shader budgets")
 
             services = page.evaluate("""() => {
               const learning = window.__app.getLearningState();
