@@ -13,7 +13,7 @@ ACTIONS = [
     # Previously-uncovered FX modes (added so the fuzzer exercises all 24).
     ('fx', 'heat'), ('fx', 'edge-glow'), ('fx', 'caustic'), ('fx', 'iridescent'),
     ('fx', 'flowfield'), ('fx', 'hologram'), ('fx', 'xray'), ('fx', 'crystal'),
-    ('bg', 'void'), ('bg', 'starfield'), ('bg', 'milkyway'), ('bg', 'cosmos'),
+    ('bg', 'void'), ('bg', 'starfield'), ('bg', 'eclipse'), ('bg', 'cosmos'),
     ('bg', 'aurora'), ('bg', 'mandala'), ('bg', 'grid'), ('bg', 'plasma'),
     ('theme', 'dark-gold'), ('theme', 'paper-ink'), ('theme', 'neon-cyber'),
     ('theme', 'pure-dark'), ('theme', 'solarized'),

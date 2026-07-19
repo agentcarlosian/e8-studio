@@ -380,7 +380,9 @@ const VORTEX_FS = /* glsl */`
     // Bright core falloff
     float core = exp(-r * 5.0);
     vec3 dark = vec3(0.01, 0.008, 0.02);
-    vec3 col = dark + uArmColor * arms * uIntensity * 0.55 + uCoreColor * core * uIntensity * 0.8;
+    // Keep the negative space dark, but give the arms enough presence to read
+    // behind a dense SDF at the default Environment brightness.
+    vec3 col = dark + uArmColor * arms * uIntensity * 0.82 + uCoreColor * core * uIntensity * 1.05;
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -511,6 +513,88 @@ const QUANTUM_FS = /* glsl */`
   }
 `;
 
+const ECLIPSE_FS = /* glsl */`
+  // Eclipse: an unmistakable occluding lunar disk framed by a living corona.
+  uniform float uTime;
+  uniform float uIntensity;
+  uniform float uAspect;
+  uniform vec2 uTexSize;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  void main() {
+    vec2 uv = (gl_FragCoord.xy / uTexSize - 0.5) * vec2(uAspect, 1.0);
+    vec2 center = vec2(0.18 * sin(uTime * 0.08), 0.06 * cos(uTime * 0.06));
+    float r = length(uv - center);
+    float corona = exp(-pow((r - 0.27) * 12.0, 2.0));
+    float rays = 0.5 + 0.5 * sin(atan(uv.y - center.y, uv.x - center.x) * 12.0 + uTime * 0.35);
+    float glow = corona * (0.45 + rays * 0.55);
+    float halo = exp(-r * 2.8) * 0.16;
+    float disk = 1.0 - smoothstep(0.195, 0.215, r);
+    vec3 col = vec3(0.004, 0.005, 0.012) + uColorA * halo + uColorB * glow * uIntensity * 1.05;
+    col = mix(col, vec3(0.0), disk);
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const SYNTHWAVE_FS = /* glsl */`
+  // Synthwave: a sunset disk and perspective grid in a deliberately dark palette.
+  uniform float uTime;
+  uniform float uIntensity;
+  uniform float uAspect;
+  uniform vec2 uTexSize;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uLineColor;
+  void main() {
+    vec2 uv = (gl_FragCoord.xy / uTexSize - 0.5) * vec2(uAspect, 1.0);
+    float horizon = -0.12;
+    float sun = smoothstep(0.32, 0.0, length(uv - vec2(0.0, horizon + 0.20)));
+    float stripes = step(0.52, fract((uv.y - horizon) * 18.0));
+    sun *= mix(1.0, stripes, smoothstep(horizon - 0.02, horizon + 0.24, uv.y));
+    float ground = 1.0 - smoothstep(horizon - 0.02, horizon + 0.02, uv.y);
+    vec2 gp = vec2(uv.x / max(0.08, horizon - uv.y), 1.0 / max(0.08, horizon - uv.y));
+    float lines = 1.0 - smoothstep(0.0, 0.028, min(abs(fract(gp.x * 6.0) - 0.5), abs(fract(gp.y * 0.7 + uTime * 0.04) - 0.5)));
+    vec3 sky = uColorA * (0.025 + smoothstep(horizon, 0.75, uv.y) * 0.08);
+    vec3 col = sky + uColorB * sun * uIntensity * 0.78 + uLineColor * lines * ground * uIntensity * 0.45;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const PRISM_FS = /* glsl */`
+  // Prism: a glass triangle receiving one warm beam and splitting it to cyan,
+  // violet, and rose beams on the other side.
+  uniform float uTime;
+  uniform float uIntensity;
+  uniform float uAspect;
+  uniform vec2 uTexSize;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  void main() {
+    vec2 uv = (gl_FragCoord.xy / uTexSize - 0.5) * vec2(uAspect, 1.0);
+    vec2 p = uv - vec2(-0.04, 0.0);
+    // Signed distance to an equilateral triangle, point facing upward.
+    vec2 q = p;
+    q.x = abs(q.x) - 0.21;
+    q.y = q.y + 0.12;
+    if (q.x + 1.73205 * q.y > 0.0) q = vec2(q.x - 1.73205 * q.y, -1.73205 * q.x - q.y) * 0.5;
+    q.x -= clamp(q.x, -0.42, 0.0);
+    float triangle = -length(q) * sign(q.y);
+    float glassEdge = 1.0 - smoothstep(0.004, 0.014, abs(triangle));
+    float glass = smoothstep(0.018, -0.018, triangle);
+    float incoming = exp(-abs(uv.y + uv.x * 0.03) * 34.0) * smoothstep(-0.88, -0.19, uv.x);
+    float cyan = exp(-abs(uv.y - (uv.x - 0.13) * 0.42) * 35.0) * smoothstep(0.08, 0.85, uv.x);
+    float violet = exp(-abs(uv.y - (uv.x - 0.13) * 0.02) * 35.0) * smoothstep(0.08, 0.85, uv.x);
+    float rose = exp(-abs(uv.y + (uv.x - 0.13) * 0.37) * 35.0) * smoothstep(0.08, 0.85, uv.x);
+    vec3 beams = vec3(1.0, 0.72, 0.28) * incoming
+      + vec3(0.08, 0.92, 1.0) * cyan
+      + uColorA * violet
+      + vec3(1.0, 0.18, 0.58) * rose;
+    vec3 glassColor = mix(uColorA, uColorB, 0.5 + 0.5 * sin(uTime * 0.2));
+    vec3 col = beams * uIntensity * 0.72 + glassColor * (glass * 0.09 + glassEdge * 0.92) * uIntensity;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 const COMMON_VS = /* glsl */`
   // Full-screen triangle: position in clip space already.
   varying vec2 vUv;
@@ -524,43 +608,33 @@ const COMMON_VS = /* glsl */`
 const MOOD_FRAGMENTS = {
   void: VOID_FS,
   starfield: STARFIELD_FS,
-  milkyway: MILKYWAY_FS,
   cosmos: COSMOS_FS,
-  deepfield: STARFIELD_FS,
-  magellan: COSMOS_FS,
-  stardust: COSMOS_FS,
-  bluehour: STARFIELD_FS,
   aurora: AURORA_FS,
   mandala: MANDALA_FS,
   grid: GRID_FS,
   plasma: PLASMA_FS,
   // Round 11
   vortex: VORTEX_FS,
-  ocean: OCEAN_FS,
-  ember: EMBER_FS,
-  frost: FROST_FS,
   quantum: QUANTUM_FS,
+  eclipse: ECLIPSE_FS,
+  synthwave: SYNTHWAVE_FS,
+  prism: PRISM_FS,
 };
 
 const MOOD_COLORS = {
   void:      { color: [0.027, 0.027, 0.047] },                          // matches current --bg-0
   starfield: { tint:  [0.85, 0.9, 1.0] },
-  milkyway:  { core:  [0.85, 0.78, 0.6], dust: [0.45, 0.35, 0.65] },
   cosmos:    { warm:  [1.0, 0.55, 0.2],   cool: [0.3, 0.55, 1.0] },
-  deepfield: { tint:  [0.62, 0.76, 1.0] },
-  magellan:  { warm:  [1.0, 0.32, 0.52],  cool: [0.18, 0.42, 1.0] },
-  stardust:  { warm:  [1.0, 0.72, 0.25],  cool: [0.48, 0.22, 0.86] },
-  bluehour:  { tint:  [0.38, 0.58, 1.0] },
   aurora:    { a:     [0.2, 1.0, 0.5],    b:    [0.7, 0.3, 1.0] },
   mandala:   { a:     [0.8, 0.4, 1.0],    b:    [0.2, 0.8, 1.0] },
   grid:      { line:  [0.4, 0.95, 1.0],   hor:  [0.9, 0.7, 1.0] },
   plasma:    { a:     [1.0, 0.4, 0.7],    b:    [0.4, 0.7, 1.0] },
   // Round 11 — tuned to the dark-base + accent aesthetic.
   vortex:    { core:  [1.0, 0.85, 0.6],   arm:  [0.6, 0.4, 1.0] },
-  ocean:     { deep:  [0.05, 0.2, 0.3],   caustic: [0.3, 0.8, 0.9] },
-  ember:     { hot:   [1.0, 0.7, 0.2],    coal: [0.8, 0.2, 0.05] },
-  frost:     { frost: [0.6, 0.8, 1.0],    edge: [0.85, 0.95, 1.0] },
   quantum:   { node:  [0.3, 1.0, 0.85],   line: [0.2, 0.5, 0.8] },
+  eclipse:   { a:     [0.16, 0.04, 0.02], b:    [1.0, 0.52, 0.12] },
+  synthwave: { a:     [0.22, 0.03, 0.19], b:    [1.0, 0.25, 0.38], line: [0.28, 0.82, 1.0] },
+  prism:     { a:     [0.30, 0.20, 1.0],  b:    [0.08, 0.86, 1.0] },
 };
 
 export class BGRuntime {
@@ -572,6 +646,9 @@ export class BGRuntime {
     this.materials = {};   // mood name -> ShaderMaterial
     this.currentMesh = null;
     this._rendererSize = new THREE.Vector2();
+    this._lastWidth = 0;
+    this._lastHeight = 0;
+    this._lastDpr = 0;
     this._build();
     this.setMode('void');
   }
@@ -642,6 +719,11 @@ export class BGRuntime {
 
   setMode(mode) {
     if (!BG_MODES.includes(mode)) mode = 'void';
+    // Each mood owns its own material/uniforms, so a mode swap needs one
+    // fresh dimension upload even when the canvas itself did not resize.
+    this._lastWidth = 0;
+    this._lastHeight = 0;
+    this._lastDpr = 0;
     // Remove current mesh
     if (this.currentMesh) {
       this.scene.remove(this.currentMesh);
@@ -692,6 +774,10 @@ export class BGRuntime {
     if (mat && mat.uniforms.uAspect && renderer) {
       const size = renderer.getSize(this._rendererSize);
       const dpr = renderer.getPixelRatio();
+      if (size.x === this._lastWidth && size.y === this._lastHeight && dpr === this._lastDpr) return;
+      this._lastWidth = size.x;
+      this._lastHeight = size.y;
+      this._lastDpr = dpr;
       if (mat.uniforms.uTexSize) mat.uniforms.uTexSize.value.set(size.x * dpr, size.y * dpr);
       mat.uniforms.uAspect.value = (size.x * dpr) / Math.max(1, size.y * dpr);
     }

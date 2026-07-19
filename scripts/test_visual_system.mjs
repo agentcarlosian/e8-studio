@@ -74,7 +74,7 @@ for (const name of PALETTE_NAMES) {
 }
 
 assert.deepEqual(BG_MODES, Object.keys(BACKGROUND_PRESETS));
-assert.deepEqual(backgroundModesForQuality('low'), ['void', 'starfield', 'grid']);
+assert.deepEqual(backgroundModesForQuality('low'), ['void', 'starfield', 'grid', 'eclipse']);
 assert.ok(backgroundModesForQuality('medium').length > backgroundModesForQuality('low').length);
 assert.equal(backgroundModesForQuality('high').length, BG_MODES.length);
 assert.equal(coerceBackgroundForQuality('quantum', 'low'), 'void');

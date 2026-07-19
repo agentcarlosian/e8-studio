@@ -17,51 +17,16 @@ import { THEMES, THEME_LABELS } from './theme.js';
 import { CODE_ART_SHADERS, TOUR_STOPS } from '../content/essays.js';
 import { BADGE_INFO } from '../content/learning.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
+import {
+  CURATED_LOOKS,
+  FX_BY_ID,
+  effectAvailableForQuality,
+  effectAvailableForView,
+  effectsForView,
+} from '../fx/fx-catalog.js';
 
-// ── FX modes — ALL 21 shader-supported modes ──
-// Mode names match FX_MODE_NAME_TO_ID in src/fx/fx-shader.js. Each label
-// Canonical 21-mode FX map shared by all view shaders. The numeric IDs
-// MUST match FX_MODE_NAME_TO_ID in src/fx/fx-shader.js. Views that have
-// not yet implemented a mode will just not show the effect; the shader
-// will compile fine (we use `if (uFXMode == N)` guards).
-const FX_MODE_MAP = {
-  none: 0, glow: 1, trail: 2, kaleidoscope: 3,
-  ripple: 4, spiral: 5, pulse: 6, chromatic: 7,
-  fog: 8, heat: 9, 'edge-glow': 10,
-  aura: 11, voronoi: 12, caustic: 13, iridescent: 14,
-  flowfield: 15, plasma: 16, kaleido6: 17, dof: 18,
-  nebula: 19, wireframe: 20,
-  hologram: 21, xray: 22, crystal: 23,
-};
-
-// All modes shown in the panel (compact labels so 4-per-row fits)
-const FX_MODES = [
-  { id: 'none',         label: 'Off' },
-  { id: 'glow',         label: 'Glow' },
-  { id: 'pulse',        label: 'Pulse' },
-  { id: 'trail',        label: 'Trail' },
-  { id: 'chromatic',    label: 'Chrom' },
-  { id: 'kaleidoscope', label: 'Kaleid' },
-  { id: 'ripple',       label: 'Ripple' },
-  { id: 'spiral',       label: 'Spiral' },
-  { id: 'fog',          label: 'Fog' },
-  { id: 'heat',         label: 'Heat' },
-  { id: 'edge-glow',    label: 'Edge' },
-  { id: 'aura',         label: 'Aura' },
-  { id: 'voronoi',      label: 'Voronoi' },
-  { id: 'caustic',      label: 'Caustic' },
-  { id: 'iridescent',   label: 'Irides' },
-  { id: 'flowfield',    label: 'Flow' },
-  { id: 'plasma',       label: 'Plasma' },
-  { id: 'kaleido6',     label: 'K6' },
-  { id: 'dof',          label: 'DOF' },
-  { id: 'nebula',       label: 'Nebula' },
-  { id: 'wireframe',    label: 'Wire' },
-  // Round 9 additions
-  { id: 'hologram',     label: 'Holo' },
-  { id: 'xray',         label: 'X-ray' },
-  { id: 'crystal',      label: 'Crystal' },
-];
+const QUICK_PALETTES = Object.freeze(['gold', 'cosmic', 'prime', 'aurora', 'opal', 'mono']);
+const QUICK_BACKGROUNDS = Object.freeze(['void', 'starfield', 'eclipse', 'aurora', 'synthwave', 'prism']);
 
 const SHAPES = ['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron'];
 
@@ -102,36 +67,23 @@ const VIEW_CAPABILITIES = {
   raymarched: { shape: false, rotate: true,  lighting: false, bloom: false, e8: false, poly: false, sdf: true, extrude: true, math: false },
 };
 
-// ── Section 1: VIEW ──
-function renderViewSection(params, data) {
-  const caps = VIEW_CAPABILITIES[params.view] || {};
-  let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
-
-  // View switcher (always visible)
-  html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v;
-    html += `<button class="${params.view === v ? 'on' : ''}" data-act="switchView" data-arg="${v}">${label}</button>`;
-  }
-  html += '</div>';
-
-  // Keep the essential camera/motion controls near the top. The panel exposes
-  // three useful paths; custom mode and bookmark grids stay out of the way.
-  if (caps.rotate) html += renderCameraControls(params, caps);
-
+function renderGalleryControls(params) {
   const gallery = (typeof window !== 'undefined' && window.__app?.getGalleryPresets?.()) || [];
-  if (gallery.length) {
-    html += '<div class="ps-subtitle">Gallery</div>';
-    const activeIndex = gallery.findIndex(preset => preset.id === params.galleryPreset);
-    const activePreset = activeIndex >= 0 ? gallery[activeIndex] : null;
-    html += `<div class="gallery-nav">
-      <button data-act="stepGalleryPreset" data-arg="-1" title="Previous gallery preset" aria-label="Previous gallery preset">←</button>
-      <div class="gallery-nav-current" title="${activePreset?.description || 'Use the arrows to select a gallery preset'}">
-        <span>${activePreset?.name || 'Select preset'}</span>
-        <small>${activeIndex >= 0 ? `${activeIndex + 1} / ${gallery.length}` : `${gallery.length} presets`}</small>
-      </div>
-      <button data-act="stepGalleryPreset" data-arg="1" title="Next gallery preset" aria-label="Next gallery preset">→</button>
-    </div>`;
+  if (!gallery.length) return '';
+  let html = '<div class="ps-subtitle">Gallery</div>';
+  const activeIndex = gallery.findIndex(preset => preset.id === params.galleryPreset);
+  const activePreset = activeIndex >= 0 ? gallery[activeIndex] : null;
+  html += `<div class="gallery-nav">
+    <button data-act="stepGalleryPreset" data-arg="-1" title="Previous gallery preset" aria-label="Previous gallery preset">←</button>
+    <div class="gallery-nav-current" title="${activePreset?.description || 'Use the arrows to select a gallery preset'}">
+      <span>${activePreset?.name || 'Select preset'}</span>
+      <small>${activeIndex >= 0 ? `${activeIndex + 1} / ${gallery.length}` : `${gallery.length} presets`}</small>
+    </div>
+    <button data-act="stepGalleryPreset" data-arg="1" title="Next gallery preset" aria-label="Next gallery preset">→</button>
+  </div>`;
+  // Featured preview cards are useful for browsing, but not worth permanent
+  // space in the focused Create workspace. Advanced users can opt them in.
+  if (params.advancedStyle) {
     html += '<div class="gallery-preview-grid">';
     const featured = gallery.filter(preset => preset.featured).slice(0, 4);
     for (const preset of featured) {
@@ -142,8 +94,27 @@ function renderViewSection(params, data) {
       </button>`;
     }
     html += '</div>';
-    html += `<button class="gallery-browse" data-act="openPresets" title="Browse all presets with palette previews">Browse all ${gallery.length} presets</button>`;
   }
+  html += `<button class="gallery-browse" data-act="openPresets" title="Browse all presets with palette previews">Browse all ${gallery.length} presets</button>`;
+  return html;
+}
+
+// ── Section 1: VIEW ──
+function renderViewSection(params, data) {
+  const caps = VIEW_CAPABILITIES[params.view] || {};
+  let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
+
+  // View switcher (always visible)
+  html += `<div class="seg seg-wrap ps-view-switch">`;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v;
+    html += `<button class="${params.view === v ? 'on' : ''}" data-act="switchView" data-arg="${v}">${label}</button>`;
+  }
+  html += '</div>';
+
+  // Keep the essential camera/motion controls near the top. The panel exposes
+  // three useful paths; custom mode and bookmark grids stay out of the way.
+  if (caps.rotate) html += renderCameraControls(params, caps);
 
   // Shape selector — only if this view uses shapes
   if (caps.shape) {
@@ -213,6 +184,8 @@ function renderViewSection(params, data) {
   if (caps.poly) {
     html += renderPolytopeControls(params, data);
   }
+
+  html += renderGalleryControls(params);
 
   html += '</div>';
   return html;
@@ -308,14 +281,20 @@ function renderE8Controls(params, data) {
 }
 
 function renderSDFControls(params, data) {
-  let html = '<div class="ps-subtitle">SDF rendering</div>';
+  let html = '<div class="ps-subtitle">SDF shape &amp; quality</div>';
+  html += '<div class="seg" aria-label="SDF render quality">';
+  for (const [level, label] of [['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']]) {
+    html += `<button class="${params.mobileQuality === level ? 'on' : ''}" data-act="setMobileQuality" data-arg="${level}" title="${label} SDF shader budget">${label}</button>`;
+  }
+  html += '</div>';
+  html += '<div class="ps-help">Quality changes the raymarch budget. Native SDF looks are lightweight surface treatments.</div>';
   html += slider('Sphere radius', 'sdfSphereR', params.sdfSphereR ?? 0.08, 0.02, 0.15, 0.005, v => v.toFixed(3));
   html += slider('Blend (smin)', 'sdfBlend', params.sdfBlend ?? 0.03, 0.0, 0.12, 0.005, v => v.toFixed(3));
-  html += slider('Bloom', 'sdfBloom', params.sdfBloom ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-  html += slider('Aniso spec', 'sdfAniso', params.sdfAniso ?? 0.6, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-  html += slider('Edge cyls', 'sdfEdges', params.sdfEdges ?? 0.3, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-  html += '<div class="seg">';
-  html += '</div>';
+  if (params.advancedStyle) {
+    html += slider('Highlight bloom', 'sdfBloom', params.sdfBloom ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+    html += slider('Aniso spec', 'sdfAniso', params.sdfAniso ?? 0.6, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+    html += slider('Edge cylinders', 'sdfEdges', params.sdfEdges ?? 0.3, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  }
   return html;
 }
 
@@ -347,134 +326,142 @@ function renderPolytopeControls(params, data) {
 // ── Section 2: STYLE ──
 function renderStyleSection(params, data) {
   const caps = VIEW_CAPABILITIES[params.view] || {};
+  const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
   let html = '<div class="ps-section" data-section="style"><div class="ps-title">Style</div>';
 
-  // Palette grid
+  // The default workflow is intentionally small: pick a look, a palette, and
+  // an environment. The full implementation catalog remains one click away.
+  html += '<div class="ps-subtitle">Look</div>';
+  html += '<div class="look-grid">';
+  for (const look of CURATED_LOOKS) {
+    if (!effectAvailableForView(params.view, look.mode, quality)) continue;
+    const item = FX_BY_ID[look.mode];
+    html += `<button class="look-card ${params.fxMode === look.mode ? 'on' : ''}" data-act="setFX" data-arg="${look.mode}" title="${item.description}">
+      <span>${look.label}</span><small>${look.description}</small>
+    </button>`;
+  }
+  html += '</div>';
+  if (params.view === 'raymarched') {
+    html += '<div class="ps-help">These looks are implemented directly in the SDF raymarcher. Point-only effects stay hidden.</div>';
+  }
+  // Keep this visible even when Look is Off. Hiding it made the control feel
+  // like it had vanished; its stored value applies as soon as a Look is chosen.
+  html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+
+  // Quick palette row
   html += '<div class="ps-subtitle">Palette</div>';
   const activePalette = PALETTE_PRESETS[params.palette] || PALETTE_PRESETS.gold;
   html += `<div class="palette-active-preview" style="background:${palettePreviewCSS(params.palette, 'spectrum')}">
     <span>${params.palette.replaceAll('_', ' ')}</span>
     <small>${activePalette.description}</small>
   </div>`;
-  html += '<div class="palette-groups">';
-  for (const group of PALETTE_GROUPS) {
-    html += `<div class="palette-group"><div class="palette-group-label" title="${group.description}">${group.label}</div><div class="swatch-grid">`;
-    for (const k of group.palettes) {
-      html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
-        style="background:${palettePreviewCSS(k, 'spectrum')}"
-        data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
-        aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
-    }
-    html += '</div></div>';
+  html += '<div class="swatch-grid quick-swatches">';
+  for (const k of QUICK_PALETTES) {
+    html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
+      style="background:${palettePreviewCSS(k, 'spectrum')}"
+      data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
+      aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
   }
   html += '</div>';
 
-  // Color by — which mathematical invariant drives each element's colour
-  // (the project's own coloring concept; see COLORINGS in palettes.js). Only
-  // shown for views that actually implement structural colouring, so it isn't
-  // dead clutter elsewhere.
-  if (caps.coloring) {
-    html += '<div class="ps-subtitle">Color by</div>';
-    html += '<div class="seg seg-wrap">';
-    for (const k of Object.keys(COLORINGS)) {
-      html += `<button class="${(params.colorBy || 'shell') === k ? 'on' : ''}" data-act="setColorBy" data-arg="${k}" title="${COLORINGS[k]}">${k}</button>`;
-    }
-    html += '</div>';
-  }
-
-  // FX mode
-  html += '<div class="ps-subtitle">Effects</div>';
+  // Quick environment row
+  html += '<div class="ps-subtitle">Environment</div>';
   html += '<div class="seg seg-wrap">';
-  for (const m of FX_MODES) {
-    html += `<button class="${params.fxMode === m.id ? 'on' : ''}" data-act="setFX" data-arg="${m.id}">${m.label}</button>`;
-  }
-  html += '</div>';
-  html += slider('FX strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-
-  // Background mood — full-screen quad with shaders. View-agnostic.
-  // Bug fix (Round 11): BG_MODES is an array of strings, not objects, so the
-  // buttons were reading m.id (undefined) → every button showed "undefined"
-  // and onclick passed 'undefined'. Now iterates the strings directly.
-  html += '<div class="ps-subtitle">Background</div>';
-  html += '<div class="seg seg-wrap">';
-  const backgroundQuality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
-  for (const m of backgroundModesForQuality(backgroundQuality)) {
+  const availableBackgrounds = new Set(backgroundModesForQuality(quality));
+  for (const m of QUICK_BACKGROUNDS.filter(mode => availableBackgrounds.has(mode))) {
     const background = BACKGROUND_PRESETS[m];
     html += `<button class="${params.bgMode === m ? 'on' : ''}" data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
   }
   html += '</div>';
   html += slider('BG brightness', 'bgIntensity', params.bgIntensity ?? 0.7, 0, 1.5, 0.05, v => Math.round(v * 100) + '%');
 
-  // Theme — switches CSS variables on :root. Affects only chrome, not the 3D canvas.
-  // Bug fix 2026-06-25 (audit #10): buttons now show user-friendly labels
-  // ("Dark"/"Light"/"Neon"/"Mono"/"Solar") instead of the internal IDs.
-  html += '<div class="ps-subtitle">Theme</div>';
-  html += '<div class="seg seg-wrap">';
-  for (const tname of Object.keys(THEMES)) {
-    const label = THEME_LABELS[tname] || tname;
-    html += `<button class="${params.theme === tname ? 'on' : ''}" data-act="setTheme" data-arg="${tname}" title="${tname}">${label}</button>`;
-  }
-  html += '</div>';
+  html += `<button class="ps-advanced-toggle ${params.advancedStyle ? 'on' : ''}" data-act="toggleAdvancedStyle" aria-expanded="${params.advancedStyle ? 'true' : 'false'}">
+    ${params.advancedStyle ? 'Hide advanced controls' : 'Show advanced controls'}
+  </button>`;
 
-  // Layout picker removed (Part A, 2026-06-27): wide-canvas is now the default
-  // and only "out of chrome" experience lives behind the Full-screen button in
-  // the panel footer (togglePresentation). applyLayout() still honours any saved
-  // 'compact'/'default' config in the background, but there's no in-UI switch.
+  if (params.advancedStyle) {
+    html += '<div class="ps-advanced">';
 
-  // Opacity — for mesh/points views. Bug fix 2026-06-25 (audit #5):
-  // bloom view has caps.lighting=false but DOES use uOpacity on its points
-  // shader, so the slider was wrongly hidden there. Now also show for bloom.
-  if (caps.lighting !== false || params.view === 'e8coxeter' || params.view === 'bloom') {
-    // Bug fix 2026-06-25: fallback was 0.95 but the canonical default is 0.9.
-    // They should match so the slider never shows a value the user never set.
-    html += slider('Opacity', 'opacity', params.opacity ?? 0.9, 0.1, 1, 0.05, v => Math.round(v * 100) + '%');
-  }
+    html += '<div class="ps-subtitle">All palettes</div><div class="palette-groups">';
+    for (const group of PALETTE_GROUPS) {
+      html += `<div class="palette-group"><div class="palette-group-label" title="${group.description}">${group.label}</div><div class="swatch-grid">`;
+      for (const k of group.palettes) {
+        html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
+          style="background:${palettePreviewCSS(k, 'spectrum')}"
+          data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
+          aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
 
-  // Lighting — only for views with meshes (platonic, sixhundred, polytope).
-  // Bug fix 2026-06-25 (audit #8): in E₈ Coxeter / bloom / raymarched / dynkin
-  // views these sliders had no visible effect — light only affects lit
-  // materials. Wrap with an "applies to mesh views" hint so users understand
-  // why the slider might appear inert.
-  if (caps.lighting) {
-    html += '<div class="ps-subtitle">Lighting</div>';
-    html += slider('Ambient', 'lightAmbient', params.lightAmbient ?? 0.55, 0, 2, 0.05, v => v.toFixed(2));
-    html += slider('Key', 'lightKey', params.lightKey ?? 1.2, 0, 3, 0.05, v => v.toFixed(2));
-    html += slider('Fill', 'lightFill', params.lightFill ?? 0.6, 0, 2, 0.05, v => v.toFixed(2));
-    html += slider('Accent', 'lightAccent', params.lightAccent ?? 1.0, 0, 3, 0.05, v => v.toFixed(2));
-  }
+    if (caps.coloring) {
+      html += '<div class="ps-subtitle">Color by</div><div class="seg seg-wrap">';
+      for (const k of Object.keys(COLORINGS)) {
+        html += `<button class="${(params.colorBy || 'shell') === k ? 'on' : ''}" data-act="setColorBy" data-arg="${k}" title="${COLORINGS[k]}">${k}</button>`;
+      }
+      html += '</div>';
+    }
 
-  // Color shift animation
-  html += '<div class="ps-subtitle">Color shift</div>';
-  html += '<div class="seg seg-wrap">';
-  for (const k of Object.keys(SHIFT_PRESETS)) {
-    html += `<button class="${(params.shiftMode || 'static') === k ? 'on' : ''}" data-act="setShiftMode" data-arg="${k}">${k}</button>`;
-  }
-  html += '</div>';
-  if ((params.shiftMode || 'static') !== 'static') {
-    // Range 4-120 seconds per full cycle through the preset. The 4s floor is a
-    // photosafety minimum (faster cycling can strobe); the animate loop also
-    // enforces a hard 1.5s gap between palette changes regardless. Step is 1s.
-    // The formatter switches to minutes when ≥ 60s so the label stays readable.
-    html += slider('Cycle', 'shiftSpeed', Math.max(4, params.shiftSpeed || 12), 4, 120, 1, v => {
-      const n = Math.round(v);
-      if (n < 60) return n + 's';
-      const m = Math.floor(n / 60);
-      const s = n % 60;
-      return s === 0 ? m + 'm' : m + 'm ' + s + 's';
-    });
-  }
+    html += '<div class="ps-subtitle">Effect catalog</div><div class="ps-help">Only effects implemented by this view are listed. Cost badges show approximate GPU work.</div>';
+    html += '<div class="fx-catalog-grid">';
+    for (const item of effectsForView(params.view, quality, { includeUnavailable: true })) {
+      const available = effectAvailableForQuality(item.id, quality);
+      const unavailableTitle = available ? item.description : `${item.description} Requires a higher quality tier.`;
+      html += `<button class="fx-catalog-item ${params.fxMode === item.id ? 'on' : ''} ${available ? '' : 'unavailable'}"
+        data-act="setFX" data-arg="${item.id}" title="${unavailableTitle}" ${available ? '' : 'disabled'}>
+        <span>${item.label}</span><small class="fx-cost fx-cost-${item.cost}">${item.cost}</small>
+      </button>`;
+    }
+    html += '</div>';
 
-  // Export — make "save an asset for another project" a first-class, visible
-  // action (not just buried in the command palette). OBJ = 3-D model for
-  // Blender/Unity/3-D-printing the current solid; JSON = portable raw geometry
-  // for any language; PNG/SVG = raster/vector of the current render.
-  html += '<div class="ps-subtitle">Export</div>';
-  html += '<div class="seg seg-wrap">';
-  html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution PNG image">PNG</button>';
-  html += '<button data-act="exportSVG" title="Scalable vector diagram (E₈ Coxeter)">SVG</button>';
-  html += '<button data-act="exportOBJ" title="3D model of the current solid (Blender / Unity / 3D print)">OBJ</button>';
-  html += '<button data-act="exportGeometryJSON" title="Raw geometry as JSON — usable from any language">Data</button>';
-  html += '</div>';
+    html += '<div class="ps-subtitle">All backgrounds</div><div class="seg seg-wrap">';
+    for (const m of backgroundModesForQuality(quality)) {
+      const background = BACKGROUND_PRESETS[m];
+      html += `<button class="${params.bgMode === m ? 'on' : ''}" data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
+    }
+    html += '</div>';
+
+    html += '<div class="ps-subtitle">Theme</div><div class="seg seg-wrap">';
+    for (const tname of Object.keys(THEMES)) {
+      const label = THEME_LABELS[tname] || tname;
+      html += `<button class="${params.theme === tname ? 'on' : ''}" data-act="setTheme" data-arg="${tname}" title="Changes interface chrome only">${label}</button>`;
+    }
+    html += '</div>';
+
+    if (caps.lighting !== false || params.view === 'e8coxeter' || params.view === 'bloom') {
+      html += slider('Opacity', 'opacity', params.opacity ?? 0.9, 0.1, 1, 0.05, v => Math.round(v * 100) + '%');
+    }
+    if (caps.lighting) {
+      html += '<div class="ps-subtitle">Mesh lighting</div>';
+      html += slider('Ambient', 'lightAmbient', params.lightAmbient ?? 0.55, 0, 2, 0.05, v => v.toFixed(2));
+      html += slider('Key', 'lightKey', params.lightKey ?? 1.2, 0, 3, 0.05, v => v.toFixed(2));
+      html += slider('Fill', 'lightFill', params.lightFill ?? 0.6, 0, 2, 0.05, v => v.toFixed(2));
+      html += slider('Accent', 'lightAccent', params.lightAccent ?? 1.0, 0, 3, 0.05, v => v.toFixed(2));
+    }
+
+    html += '<div class="ps-subtitle">Color shift</div><div class="seg seg-wrap">';
+    for (const k of Object.keys(SHIFT_PRESETS)) {
+      html += `<button class="${(params.shiftMode || 'static') === k ? 'on' : ''}" data-act="setShiftMode" data-arg="${k}">${k}</button>`;
+    }
+    html += '</div>';
+    if ((params.shiftMode || 'static') !== 'static') {
+      html += slider('Cycle', 'shiftSpeed', Math.max(4, params.shiftSpeed || 12), 4, 120, 1, v => {
+        const n = Math.round(v);
+        if (n < 60) return n + 's';
+        const m = Math.floor(n / 60);
+        const s = n % 60;
+        return s === 0 ? m + 'm' : m + 'm ' + s + 's';
+      });
+    }
+
+    html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
+    html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution PNG image">PNG</button>';
+    html += '<button data-act="exportSVG" title="Scalable vector diagram (E₈ Coxeter)">SVG</button>';
+    html += '<button data-act="exportOBJ" title="3D model of the current solid">OBJ</button>';
+    html += '<button data-act="exportGeometryJSON" title="Raw geometry as JSON">Data</button>';
+    html += '</div></div>';
+  }
 
   html += '</div>';
   return html;
@@ -864,6 +851,10 @@ export class ControlPanel {
           <input class="ps-search" id="ps-search" type="search" placeholder="Filter controls…" autocomplete="off" aria-label="Filter panel controls">
           <span class="ps-search-kbd" title="Press / to focus">/</span>
         </div>
+        <div class="ps-mode-tabs" role="tablist" aria-label="Control workspace">
+          <button class="${this.params.panelMode !== 'learn' ? 'on' : ''}" data-act="setPanelMode" data-arg="create" role="tab" aria-selected="${this.params.panelMode !== 'learn' ? 'true' : 'false'}">Create</button>
+          <button class="${this.params.panelMode === 'learn' ? 'on' : ''}" data-act="setPanelMode" data-arg="learn" role="tab" aria-selected="${this.params.panelMode === 'learn' ? 'true' : 'false'}">Learn</button>
+        </div>
         <div class="ps-scroll" id="ps-body"></div>
         <div class="panel-footer">
           <button data-act="resetConfig" title="Reset all settings"><span style="font-size:13px">↺</span> Reset</button>
@@ -871,16 +862,18 @@ export class ControlPanel {
           <button data-act="sharePage" title="Copy the hosted E8 Studio link"><span style="font-size:13px">⎘</span> Share</button>
           <button data-act="shareSnapshot" title="Save a snapshot of the current render"><span style="font-size:13px">▣</span> Snapshot</button>
           <button data-act="openVideoExport" title="Record a video clip (720p+)"><span style="font-size:13px">⏺</span> Video</button>
-          <button data-act="togglePerf" title="Toggle performance overlay">Perf</button>
-          <button data-act="toggleCommandPalette" title="Open command palette">Cmd</button>
-          <button data-act="copyDiagnostics" title="Copy diagnostics">Diag</button>
           <button data-act="togglePresentationMode" title="Full screen: hide all chrome (press Esc to exit)"><span style="font-size:13px">⛶</span> Full</button>
-          <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keys</button>
-          <div class="panel-shortcuts" aria-label="Keyboard shortcuts">
-            <span><kbd>1–6</kbd> views</span><span><kbd>Space</kbd> pause</span><span><kbd>S</kbd> png</span>
-            <span><kbd>T</kbd> tour</span><span><kbd>G</kbd> glossary</span><span><kbd>H</kbd> zen</span>
-            <span><kbd>?</kbd> shortcuts</span><span><kbd>⌘K</kbd> commands</span>
-          </div>
+          ${this.params.advancedStyle ? `
+            <button data-act="togglePerf" title="Toggle performance overlay">Perf</button>
+            <button data-act="toggleCommandPalette" title="Open command palette">Cmd</button>
+            <button data-act="copyDiagnostics" title="Copy diagnostics">Diag</button>
+            <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keys</button>
+            <div class="panel-shortcuts" aria-label="Keyboard shortcuts">
+              <span><kbd>1–6</kbd> views</span><span><kbd>Space</kbd> pause</span><span><kbd>S</kbd> png</span>
+              <span><kbd>T</kbd> tour</span><span><kbd>G</kbd> glossary</span><span><kbd>H</kbd> zen</span>
+              <span><kbd>?</kbd> shortcuts</span><span><kbd>⌘K</kbd> commands</span>
+            </div>
+          ` : ''}
         </div>
       `;
       // Wire the control-filter search box (nice-to-have #5). We re-attach on
@@ -889,18 +882,16 @@ export class ControlPanel {
       const search = this.panelEl.querySelector('#ps-search');
       if (search) {
         search.value = _searchQuery;
-        applyPanelFilter(_searchQuery);
         search.addEventListener('input', (e) => {
           _searchQuery = e.target.value;
           applyPanelFilter(_searchQuery);
         });
       }
       const body = this.panelEl.querySelector('#ps-body');
-      body.innerHTML =
-        renderViewSection(this.params, this.data) +
-        renderStyleSection(this.params, this.data) +
-        renderMathSection(this.params, this.data) +
-        renderLearnSection(this.params);
+      body.innerHTML = this.params.panelMode === 'learn'
+        ? renderMathSection(this.params, this.data) + renderLearnSection(this.params)
+        : renderViewSection(this.params, this.data) + renderStyleSection(this.params, this.data);
+      applyPanelFilter(_searchQuery);
       // Restore scroll position
       body.scrollTop = oldScrollTop;
       this.renderStatus();

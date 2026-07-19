@@ -19,8 +19,16 @@ import { saveConfig, loadConfig, clearConfig, exportConfig, importConfig, readUr
 import { LearningProgressService } from './state/learning-service.js';
 import { ControlPanel, initPanelEvents, updateMotionStatus, focusPanelSearch, formatSliderValue, SLIDER_META, isPanelCollapsed, setPanelCollapsed } from './ui/panel.js';
 import { FXRuntime } from './fx/fx-runtime.js';
+import {
+  FX_MODE_NAMES,
+  coerceEffectMode,
+  effectAvailableForView,
+  effectsForView,
+  rememberEffectForView,
+  restoreEffectForView,
+} from './fx/fx-catalog.js';
 import { BGRuntime, BG_MODES } from './fx/bg-runtime.js';
-import { coerceBackgroundForQuality } from './ui/backgrounds.js';
+import { backgroundModesForQuality, coerceBackgroundForQuality } from './ui/backgrounds.js';
 import { PRESETS, applyPreset } from './state/presets.js';
 import { GALLERY_PRESETS, galleryPresetById, adjacentGalleryPreset, createGalleryBaseline } from './state/gallery.js';
 import { planViewTransition } from './state/view-transition.js';
@@ -207,6 +215,7 @@ const perfState = {
   fps: 0,
   frameMs: 0,
   samples: [],
+  sampleTotal: 0,
   lastOverlay: 0,
   lastAdjust: 0,
   targetPixelRatio: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1,
@@ -900,6 +909,10 @@ function switchView(id) {
   // Any user-initiated view switch cancels the intro animation
   params.intro = false;
   const previousView = params.view;
+  // FX implementations are renderer-specific. Remember the outgoing choice so
+  // SDF can keep Glow while a point view independently keeps (for example)
+  // Plasma, without carrying a dead mode across the view boundary.
+  rememberEffectForView(params, previousView);
   stabilizeViewTransition(previousView, id);
   // Tear down current view
   if (currentView) {
@@ -921,6 +934,8 @@ function switchView(id) {
   }
   // Update params
   params.view = id;
+  restoreEffectForView(params, id);
+  if (fxRuntime) fxRuntime.setMode(params.fxMode);
 
   // Track exploration: award the "Grand Tour" badge once all 6 primary views
   // have been visited. (Idempotent — recordExplorationBadge no-ops if held.)
@@ -1149,8 +1164,11 @@ function defaultParams() {
     // Bug fix 2026-06-25 (audit #16): removed fogDensity — declared but
     // never read since FX mode 8 ('fog') uses shader-based depth fade via
     // vWorldPos instead of three.js scene.fog. Dead param.
-    fxMode: 'none',       // 'none' | 'trail' | 'glow' | 'kaleidoscope' | 'ripple' | 'spiral' | 'pulse' | 'chromatic' | 'fog'
+    fxMode: 'none',       // active view's effect; capability-checked by fx-catalog
+    fxByView: {},         // remembers one compatible effect choice per renderer
     fxIntensity: 0.5,     // 0-1, controls how strong the FX is
+    advancedStyle: false, // keeps the default panel curated and approachable
+    panelMode: 'create',  // focused creative controls; learning has its own workspace
     // Lighting controls (rebuilt when these change)
     lightAmbient: 0.55,
     lightKey: 1.2,
@@ -1276,8 +1294,8 @@ function paramEnums() {
     shift: new Set(Object.keys(SHIFT_PRESETS)),
     blend: new Set(Object.keys(BLEND_MODES)),
     colorBy: new Set(COLORING_NAMES),
-    fx: new Set(['none','glow','pulse','trail','chromatic','kaleidoscope','ripple','spiral','fog','heat','edge-glow','aura','voronoi','caustic','iridescent','flowfield','plasma','kaleido6','dof','nebula','wireframe','hologram','xray','crystal']),
-    bg: new Set(['void','starfield','milkyway','cosmos','aurora','mandala','grid','plasma','vortex','ocean','ember','frost','quantum']),
+    fx: new Set(FX_MODE_NAMES),
+    bg: new Set(BG_MODES),
     theme: new Set(Object.keys(THEMES)),
     layout: new Set(LAYOUTS),
     cameraMode: new Set(['orbit', 'spiral', 'figure8', 'pullback']),
@@ -1318,6 +1336,22 @@ function normalizeParams(target) {
   if (!E.e8.has(target.e8ViewMode)) target.e8ViewMode = 'coxeter';
   if (!E.quality.has(target.mobileQuality)) target.mobileQuality = 'high';
   if (typeof target.reducedMode !== 'boolean') target.reducedMode = false;
+  if (typeof target.advancedStyle !== 'boolean') target.advancedStyle = false;
+  if (!['create', 'learn'].includes(target.panelMode)) target.panelMode = 'create';
+  if (!target.fxByView || typeof target.fxByView !== 'object' || Array.isArray(target.fxByView)) {
+    target.fxByView = {};
+  }
+  const effectQuality = target.reducedMode ? 'low' : target.mobileQuality;
+  const normalizedFxByView = {};
+  for (const view of E.view) {
+    const remembered = target.fxByView[view];
+    if (E.fx.has(remembered)) {
+      normalizedFxByView[view] = coerceEffectMode(view, remembered, effectQuality);
+    }
+  }
+  target.fxMode = coerceEffectMode(target.view, target.fxMode, effectQuality);
+  normalizedFxByView[target.view] = target.fxMode;
+  target.fxByView = normalizedFxByView;
   target.bgMode = coerceBackgroundForQuality(target.bgMode, target.reducedMode ? 'low' : target.mobileQuality);
   if (typeof target.cameraOrbit !== 'boolean') target.cameraOrbit = false;
   if (!['instant', 'standard'].includes(target.firstVisualMode)) target.firstVisualMode = 'standard';
@@ -2693,7 +2727,12 @@ window.__app = {
     if (!MOBILE_QUALITY[level]) return;
     params.mobileQuality = level;
     if (level !== 'low') params.reducedMode = false;
+    normalizeParams(params);
     applyQualityProfile();
+    // SDF quality controls compile different fixed shader budgets. Rebuild the
+    // active material immediately so changing the quality selector takes effect
+    // without requiring the user to leave and re-enter the view.
+    if (params.view === 'raymarched' && currentView) switchView('raymarched');
     saveConfig(params);
     refreshPanel();
     showSavedToast(`Quality: ${level}`);
@@ -2985,7 +3024,19 @@ window.__app = {
     updateParam('e8ViewMode', m, { overlay: true });
   },
   setFX(mode) {
+    const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
+    if (!effectAvailableForView(params.view, mode, quality)) {
+      showSavedToast(`Effect unavailable for ${params.view}`);
+      return;
+    }
     updateParam('fxMode', mode);
+  },
+  toggleAdvancedStyle() {
+    updateParam('advancedStyle', !params.advancedStyle);
+  },
+  setPanelMode(mode) {
+    if (!['create', 'learn'].includes(mode)) return;
+    updateParam('panelMode', mode, { save: false });
   },
   setCameraMode(mode) {
     updateParam('cameraMode', mode, { refresh: false });
@@ -3392,17 +3443,25 @@ window.__app = {
   surprise() {
     const PALETTES = Object.keys(PALETTE_PRESETS);
     const SHAPES = ['tetrahedron','cube','octahedron','dodecahedron','icosahedron'];
-    const VIEWS_ARR = ['e8coxeter','sixhundred','platonic','polytope','bloom'];
-    // Use ALL FX modes (was hardcoded 6, missing pulse/chromatic/fog/heat/edge + the 10 new ones)
-    const FX_MODES = ['none','glow','pulse','trail','chromatic','kaleidoscope','ripple','spiral','fog','heat','edge-glow','aura','voronoi','caustic','iridescent','flowfield','plasma','kaleido6','dof','nebula','wireframe','hologram','xray','crystal'];
+    const VIEWS_ARR = ['e8coxeter','sixhundred','platonic','polytope','bloom','raymarched'];
     // Filter out 'random' from shift presets — that mode is broken (changes
     // palette every frame) and never plays well with surprise. Bug fixed
     // 2026-06-25.
     const SHIFT_PRESETS_ARR = Object.keys(SHIFT_PRESETS).filter(k => k !== 'random');
     // Weighted random: skip "none" 70% of the time, skip "static" 70% of the time
-    const fxWeighted = () => Math.random() < 0.7 ? FX_MODES[Math.floor(Math.random()*FX_MODES.length)] : 'none';
     const shiftWeighted = () => Math.random() < 0.7 ? SHIFT_PRESETS_ARR[Math.floor(Math.random()*SHIFT_PRESETS_ARR.length)] : 'static';
 
+    // Pick the renderer first, then select from its real capability list. This
+    // prevents Surprise from landing on a visually dead effect.
+    if (Math.random() < 0.5) {
+      const newView = VIEWS_ARR[Math.floor(Math.random() * VIEWS_ARR.length)];
+      if (newView !== params.view) switchView(newView);
+    }
+    const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
+    const compatibleModes = effectsForView(params.view, quality).map(item => item.id);
+    const fxWeighted = () => Math.random() < 0.7
+      ? compatibleModes[Math.floor(Math.random() * compatibleModes.length)]
+      : 'none';
     params.shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
     params.palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
     params.fxMode = fxWeighted();
@@ -3420,11 +3479,8 @@ window.__app = {
     if (Math.random() < 0.3 && params.view !== 'bloom') {
       params.bloomAuto = true;
     }
-    // Maybe switch view
-    if (Math.random() < 0.5) {
-      const newView = VIEWS_ARR[Math.floor(Math.random() * VIEWS_ARR.length)];
-      if (newView !== params.view) switchView(newView);
-    }
+    normalizeParams(params);
+    if (fxRuntime) fxRuntime.setMode(params.fxMode);
     saveConfig(params);
     refreshPanel();
     updateOverlays(params.view);
@@ -3432,15 +3488,20 @@ window.__app = {
   },
 };
 
-// Scroll the panel body to a named section (nice-to-have #6: 'm'/'l' shortcuts).
-// Section order matches render(): view → style → math → learn. If a section
-// isn't present for the current view (e.g. Math is absent on Bloom), we fall
-// through to the next one so the shortcut never does nothing.
+// Scroll the focused Create/Learn workspace to a named section.
 function scrollToSection(name) {
+  const desiredMode = (name === 'math' || name === 'learn') ? 'learn' : 'create';
+  if (params.panelMode !== desiredMode) {
+    params.panelMode = desiredMode;
+    refreshPanel();
+    requestAnimationFrame(() => scrollToSection(name));
+    return;
+  }
   const body = document.getElementById('ps-body');
   if (!body) return;
   // Each section is a .ps-section with a data-section attribute set in render().
-  const target = body.querySelector(`[data-section="${name}"]`);
+  const target = body.querySelector(`[data-section="${name}"]`)
+    || (name === 'math' ? body.querySelector('[data-section="learn"]') : null);
   if (target) {
     // Android WebView was unreliable with scrollIntoView() inside the nested
     // panel scroller, so drive the panel body directly.
@@ -3473,7 +3534,10 @@ let _starMatUniformTime = null;
 let _starGroup = null;
 function updateStarfield(t) {
   if (_starMatUniformTime) _starMatUniformTime.value = t;
-  if (_starGroup && params) _starGroup.visible = !!params.showStarfield;
+  if (_starGroup && params) {
+    const visible = !!params.showStarfield;
+    if (_starGroup.visible !== visible) _starGroup.visible = visible;
+  }
 }
 // ── Per-slider auto-animation ────────────────────────────────────────────────
 // Each slider opted into params.autoSliders oscillates between its min and max.
@@ -3537,10 +3601,11 @@ function animate() {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   const t = now / 1000;
-  perfState.samples.push(dt * 1000);
-  if (perfState.samples.length > 60) perfState.samples.shift();
-  const totalFrameMs = perfState.samples.reduce((sum, v) => sum + v, 0);
-  perfState.frameMs = totalFrameMs / Math.max(1, perfState.samples.length);
+  const frameSample = dt * 1000;
+  perfState.samples.push(frameSample);
+  perfState.sampleTotal += frameSample;
+  if (perfState.samples.length > 60) perfState.sampleTotal -= perfState.samples.shift();
+  perfState.frameMs = perfState.sampleTotal / Math.max(1, perfState.samples.length);
   perfState.fps = perfState.frameMs > 0 ? 1000 / perfState.frameMs : 0;
   // Safety: don't run the body of animate() if main() hasn't initialized
   // params yet (the very first frame can race with main's setTimeout).
@@ -3563,10 +3628,13 @@ function animate() {
   // Apply lighting params to scene lights
   if (scene && scene.userData.lights) {
     const L = scene.userData.lights;
-    if (L.ambient)  L.ambient.intensity  = params.lightAmbient ?? 0.55;
-    if (L.keyLight) L.keyLight.intensity = params.lightKey ?? 1.2;
-    if (L.fillLight)L.fillLight.intensity = params.lightFill ?? 0.6;
-    if (L.accentLight) L.accentLight.intensity = params.lightAccent ?? 1.0;
+    const setLightIntensity = (light, value) => {
+      if (light && light.intensity !== value) light.intensity = value;
+    };
+    setLightIntensity(L.ambient, params.lightAmbient ?? 0.55);
+    setLightIntensity(L.keyLight, params.lightKey ?? 1.2);
+    setLightIntensity(L.fillLight, params.lightFill ?? 0.6);
+    setLightIntensity(L.accentLight, params.lightAccent ?? 1.0);
   }
 
   // Camera mode animation: spiral, figure-8, pullback, orbit. These modes
@@ -4076,8 +4144,8 @@ async function main() {
     if (e.key === 'l' || e.key === 'L') { window.__app.openLearningCenter(); setStatus('Learning Center'); }
     if (e.key === 'g' || e.key === 'G') { window.__app.openGlossary(); setStatus('Glossary'); }
     if (e.key === 'b' || e.key === 'B') {
-      // Cycle background mood forward through all 13 moods.
-      const modes = ['void','starfield','milkyway','cosmos','aurora','mandala','grid','plasma','vortex','ocean','ember','frost','quantum'];
+      // Cycle only the environments available at the active quality tier.
+      const modes = backgroundModesForQuality(params.reducedMode ? 'low' : params.mobileQuality);
       const cur = modes.indexOf(params.bgMode || 'void');
       window.__app.setBgMode(modes[(cur + 1) % modes.length]);
     }

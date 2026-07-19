@@ -82,7 +82,7 @@ export function setLessonComplete(progress, lessonId, complete = true, completed
 }
 
 export function loadProgress() {
-  if (typeof localStorage === 'undefined') return cloneDefault();
+  if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function') return cloneDefault();
   try {
     return normalizeProgress(JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null'));
   } catch (e) {
@@ -93,7 +93,7 @@ export function loadProgress() {
 
 export function saveProgress(progress) {
   const normalized = normalizeProgress(progress);
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
     try {
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(normalized));
     } catch (e) {
