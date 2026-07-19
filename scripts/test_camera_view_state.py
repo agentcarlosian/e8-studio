@@ -7,7 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from verify import find_chromium_executable, start_server  # noqa: E402
+from verify import (assert_canvas_nonblank, chromium_webgl_args,
+                    find_chromium_executable, start_server)  # noqa: E402
 
 
 def main() -> int:
@@ -16,8 +17,7 @@ def main() -> int:
     httpd, base = start_server()
     try:
         with sync_playwright() as p:
-            launch = {"headless": True, "args": ["--no-sandbox", "--use-gl=angle",
-                      "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]}
+            launch = {"headless": True, "args": chromium_webgl_args()}
             executable = find_chromium_executable()
             if executable:
                 launch["executable_path"] = executable
@@ -222,6 +222,8 @@ def main() -> int:
                 "toneUniform": False, "shadowUniform": False,
                 "toneShader": False, "shadowShader": False,
             }, removed_sdf_effects
+            page.wait_for_timeout(500)
+            assert_canvas_nonblank(page)
             print("ok ACES Tone and Cool Shadow are removed from UI and SDF runtime")
 
             sdf_quality = page.evaluate("""() => {
@@ -236,20 +238,22 @@ def main() -> int:
               return {
                 full,
                 safe,
-                safeDefines: shader.includes('#define MAX_ROOTS 240')
-                  && shader.includes('#define MAX_EDGES 24')
-                  && shader.includes('#define MARCH_STEPS 48'),
+                safeDefines: shader.includes('#define MAX_RINGS 8')
+                  && shader.includes('#define ROOT_NEIGHBOR_SPAN 0')
+                  && shader.includes('#define MARCH_STEPS 36'),
               };
             }""")
             assert sdf_quality["full"] == {
-                "safe": False, "maxRoots": 240, "maxEdges": 64,
-                "marchSteps": 72, "shadowSteps": 16, "aoSteps": 3,
-                "rootCount": 240, "edgeCount": 64,
+                "tier": "high", "safe": False, "rootNeighborSpan": 2,
+                "maxEdges": 28, "edgeLimit": 28, "marchSteps": 64,
+                "shadowSteps": 8, "aoSteps": 2, "ringCount": 8,
+                "representedRoots": 240, "sampledRootsPerSdf": 40, "edgeCount": 28,
             }, sdf_quality
             assert sdf_quality["safe"] == {
-                "safe": True, "maxRoots": 240, "maxEdges": 24,
-                "marchSteps": 48, "shadowSteps": 6, "aoSteps": 1,
-                "rootCount": 240, "edgeCount": 24,
+                "tier": "low", "safe": True, "rootNeighborSpan": 0,
+                "maxEdges": 1, "edgeLimit": 0, "marchSteps": 36,
+                "shadowSteps": 0, "aoSteps": 0, "ringCount": 8,
+                "representedRoots": 240, "sampledRootsPerSdf": 8, "edgeCount": 0,
             }, sdf_quality
             assert sdf_quality["safeDefines"], sdf_quality
             print("ok SDF compiles full and constrained-GPU shader budgets")

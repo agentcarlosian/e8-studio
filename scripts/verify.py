@@ -195,6 +195,16 @@ def find_chromium_executable() -> str | None:
     return None
 
 
+def chromium_webgl_args() -> list[str]:
+    """Use Chromium's deterministic software WebGL backend in headless tests."""
+    return [
+        "--no-sandbox",
+        "--use-gl=angle",
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader",
+    ]
+
+
 def start_server() -> tuple[ThreadingHTTPServer, str]:
     handler = partial(SimpleHTTPRequestHandler, directory=str(ROOT))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -238,7 +248,17 @@ def assert_canvas_nonblank(page) -> None:
           for (let i = 0; i < data.length; i += 4) {
             if (data[i] + data[i+1] + data[i+2] > 24 && data[i+3] > 0) lit++;
           }
-          return { ok: lit > 25, lit };
+          const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+          const debugInfo = gl?.getExtension('WEBGL_debug_renderer_info');
+          return {
+            ok: lit > 25,
+            lit,
+            width: canvas.width,
+            height: canvas.height,
+            renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : null,
+            startup: window.__app?.startupMetrics || null,
+            runtimeErrors: window.__app?.runtimeErrors?.slice(-3) || [],
+          };
         }"""
     )
     if not sample.get("ok"):
@@ -251,6 +271,10 @@ def open_checked_page(browser, url: str, *, label: str, viewport: dict[str, int]
         viewport=resolved_viewport,
         has_touch=resolved_viewport["width"] <= 760,
     )
+    # CI renders through a software WebGL backend. Exercise the complete SDF
+    # geometry with its low-cost shader tier so the smoke suite validates output
+    # instead of benchmarking SwiftShader for several minutes.
+    page.add_init_script("window.__forceSdfSafeMode = true")
     page_errors: list[str] = []
     console_errors: list[str] = []
     page.on("pageerror", lambda e: page_errors.append(str(e)))
@@ -265,13 +289,21 @@ def open_checked_page(browser, url: str, *, label: str, viewport: dict[str, int]
     page.on("console", on_console)
     page.goto(url, timeout=30000, wait_until="commit")
     try:
-        page.wait_for_function("() => !!(window.__app && window.__app.params && window.__app.currentView)", timeout=30000)
+        page.wait_for_function(
+            """() => !!(
+              window.__app
+              && window.__app.params
+              && window.__app.currentView
+              && window.__app.startupMetrics?.firstFrameMs !== null
+            )""",
+            timeout=30000,
+        )
     except Exception as exc:
         fail(f"{label} did not become ready: {exc}; page errors={page_errors[:5]} console={console_errors[:5]}")
     page.evaluate("document.getElementById('welcome-card')?.classList.add('hidden')")
-    page.wait_for_timeout(800)
-    assert_canvas_nonblank(page)
+    page.wait_for_timeout(250)
     assert_clean_browser_errors(page_errors, console_errors, label)
+    assert_canvas_nonblank(page)
     return page, page_errors, console_errors
 
 
@@ -443,6 +475,190 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     }""")
     if removed_sdf_effects != {"acesButton": 0, "shadowButton": 0, "toneUniform": False, "shadowUniform": False}:
         fail(f"Removed SDF effect contract failed: {removed_sdf_effects}")
+    sdf_quality = page.evaluate("""() => {
+      const before = window.__app.currentView.object3d.material;
+      const initial = { ...before.userData.sdfQuality };
+      window.__app.setMobileQuality('low');
+      const lowMaterial = window.__app.currentView.object3d.material;
+      const low = { ...lowMaterial.userData.sdfQuality };
+      window.__app.setMobileQuality('high');
+      const restoredMaterial = window.__app.currentView.object3d.material;
+      const restored = { ...restoredMaterial.userData.sdfQuality };
+      return {
+        initial,
+        low,
+        restored,
+        qualityButtons: document.querySelectorAll('[data-act="setMobileQuality"]').length,
+        rebuiltForLow: before.uuid !== lowMaterial.uuid,
+        rebuiltForRestore: lowMaterial.uuid !== restoredMaterial.uuid,
+      };
+    }""")
+    for name in ["initial", "low", "restored"]:
+        profile = sdf_quality[name]
+        if (profile["ringCount"] != 8
+                or profile["representedRoots"] != 240
+                or profile["sampledRootsPerSdf"] > 40):
+            fail(f"SDF compact-ring quality contract failed: {sdf_quality}")
+    if (sdf_quality["low"]["tier"] != "low"
+            or sdf_quality["low"]["sampledRootsPerSdf"] != 8):
+        fail(f"SDF low-quality budget failed: {sdf_quality}")
+    if not sdf_quality["rebuiltForLow"] or not sdf_quality["rebuiltForRestore"]:
+        fail(f"SDF quality change did not rebuild the fixed-budget shader: {sdf_quality}")
+    if sdf_quality["qualityButtons"] != 3:
+        fail(f"SDF quality controls are not available in the panel: {sdf_quality}")
+
+    sdf_environment_contract = page.evaluate("""async () => {
+      const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+      const sampleCorners = () => {
+        const canvas = document.querySelector('canvas');
+        const copy = document.createElement('canvas');
+        copy.width = 120;
+        copy.height = 80;
+        const ctx = copy.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(canvas, 0, 0, copy.width, copy.height);
+        const data = ctx.getImageData(0, 0, copy.width, copy.height).data;
+        const points = [[6, 6], [114, 6], [6, 74], [114, 74]];
+        return points.map(([x, y]) => {
+          const i = (y * copy.width + x) * 4;
+          return [data[i], data[i + 1], data[i + 2]];
+        });
+      };
+      window.__app.setMobileQuality('high');
+      window.__app.setParam('showAmbient', false);
+      window.__app.setBgMode('void');
+      await frame(); await frame();
+      const voidCorners = sampleCorners();
+      const result = {};
+      for (const mode of ['starfield', 'aurora', 'eclipse', 'synthwave', 'prism', 'vortex']) {
+        window.__app.setBgMode(mode);
+        await frame(); await frame();
+        result[mode] = {
+          selected: window.__app.params.bgMode,
+          mesh: window.__app.scene.getObjectByName(`bg-${mode}`)?.name || '',
+          corners: sampleCorners(),
+        };
+      }
+      window.__app.setBgMode('void');
+      return { transparent: window.__app.currentView.object3d.material.transparent, voidCorners, result };
+    }""")
+    if not sdf_environment_contract["transparent"]:
+        fail(f"SDF must leave missed rays transparent for environments: {sdf_environment_contract}")
+    for mode, environment in sdf_environment_contract["result"].items():
+        if environment["selected"] != mode or environment["mesh"] != f"bg-{mode}":
+            fail(f"SDF environment selection did not activate {mode}: {sdf_environment_contract}")
+        if environment["corners"] == sdf_environment_contract["voidCorners"]:
+            fail(f"SDF environment {mode} did not alter visible background pixels: {sdf_environment_contract}")
+
+    sdf_effect_contract = page.evaluate("""async () => {
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+      window.__app.setParam('showAmbient', false);
+      window.__app.setBgMode('void');
+      window.__app.setParam('fxIntensity', 1);
+      window.__app.setFX('glow');
+      await frame();
+      const material = window.__app.currentView.object3d.material;
+      const createWorkspace = {
+        tabs: document.querySelectorAll('.ps-mode-tabs button').length,
+        viewSections: document.querySelectorAll('[data-section="view"]').length,
+        learnSections: document.querySelectorAll('[data-section="learn"]').length,
+      };
+      window.__app.setPanelMode('learn');
+      const learnWorkspace = {
+        viewSections: document.querySelectorAll('[data-section="view"]').length,
+        learnSections: document.querySelectorAll('[data-section="learn"]').length,
+      };
+      window.__app.setPanelMode('create');
+      const basicModes = [...document.querySelectorAll('.look-card[data-act="setFX"]')]
+        .map(button => button.dataset.arg);
+      window.__app.toggleAdvancedStyle();
+      const catalogModes = [...document.querySelectorAll('.fx-catalog-item[data-act="setFX"]')]
+        .map(button => button.dataset.arg);
+      const catalogDisabled = [...document.querySelectorAll('.fx-catalog-item:disabled')]
+        .map(button => button.dataset.arg);
+
+      // Freeze view uniforms so a pixel delta can only come from changing the
+      // selected effect, not camera drift or the SDF's ambient animation.
+      window.__app.params.paused = true;
+      await frame();
+      const sample = () => {
+        const canvas = document.querySelector('canvas');
+        const copy = document.createElement('canvas');
+        copy.width = 96;
+        copy.height = 60;
+        const ctx = copy.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(canvas, 0, 0, copy.width, copy.height);
+        return ctx.getImageData(0, 0, copy.width, copy.height).data;
+      };
+      window.__app.setFX('none');
+      await frame(); await frame();
+      const baseline = sample();
+      const pixelCount = baseline.length / 4;
+      const visualDiffs = {};
+      const uniformModes = {};
+      for (const mode of ['glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']) {
+        window.__app.setFX(mode);
+        await frame(); await frame();
+        const pixels = sample();
+        let total = 0;
+        let changed = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          const delta = Math.abs(pixels[i] - baseline[i])
+            + Math.abs(pixels[i + 1] - baseline[i + 1])
+            + Math.abs(pixels[i + 2] - baseline[i + 2]);
+          total += delta;
+          if (delta >= 12) changed++;
+        }
+        visualDiffs[mode] = {
+          meanRgbDelta: total / pixelCount / 3,
+          changed,
+        };
+        uniformModes[mode] = material.uniforms.uFXMode.value;
+      }
+      window.__app.params.paused = false;
+
+      // Each renderer remembers its own compatible choice.
+      window.__app.setFX('glow');
+      window.__app.switchView('e8coxeter');
+      window.__app.setFX('plasma');
+      window.__app.switchView('raymarched');
+      const restoredSdf = window.__app.params.fxMode;
+      window.__app.switchView('e8coxeter');
+      const restoredPoints = window.__app.params.fxMode;
+      window.__app.switchView('raymarched');
+      return {
+        hasModeUniform: Object.hasOwn(material.uniforms, 'uFXMode'),
+        hasIntensityUniform: Object.hasOwn(material.uniforms, 'uFXIntensity'),
+        trackedMaterials: window.__app.fxRuntime.fxMaterials.size,
+        materialModes: material.userData.effectModes,
+        basicModes,
+        catalogModes,
+        catalogDisabled,
+        visualDiffs,
+        uniformModes,
+        restoredSdf,
+        restoredPoints,
+        createWorkspace,
+        learnWorkspace,
+      };
+    }""")
+    expected_sdf_modes = ["none", "glow", "pulse", "heat", "iridescent", "hologram", "xray"]
+    expected_basic_modes = ["none", "glow", "iridescent", "pulse", "xray", "hologram"]
+    if (not sdf_effect_contract["hasModeUniform"]
+            or not sdf_effect_contract["hasIntensityUniform"]
+            or sdf_effect_contract["trackedMaterials"] != 1
+            or sdf_effect_contract["materialModes"] != expected_sdf_modes
+            or sdf_effect_contract["basicModes"] != expected_basic_modes
+            or sdf_effect_contract["catalogModes"] != expected_sdf_modes
+            or sdf_effect_contract["catalogDisabled"]):
+        fail(f"SDF effect capability/UI contract failed: {sdf_effect_contract}")
+    if (sdf_effect_contract["createWorkspace"] != {"tabs": 2, "viewSections": 1, "learnSections": 0}
+            or sdf_effect_contract["learnWorkspace"] != {"viewSections": 0, "learnSections": 1}):
+        fail(f"Create/Learn workspace contract failed: {sdf_effect_contract}")
+    if sdf_effect_contract["restoredSdf"] != "glow" or sdf_effect_contract["restoredPoints"] != "plasma":
+        fail(f"Per-view effect memory failed: {sdf_effect_contract}")
+    for mode, visual in sdf_effect_contract["visualDiffs"].items():
+        if visual["meanRgbDelta"] < 0.35 or visual["changed"] < 20:
+            fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")
     page.evaluate("window.__app.switchView('e8coxeter')")
     page.wait_for_timeout(300)
 
@@ -636,7 +852,7 @@ def smoke_browser() -> None:
     executable = find_chromium_executable()
     try:
         with sync_playwright() as p:
-            launch_args = {"headless": True, "args": ["--no-sandbox", "--disable-gpu"]}
+            launch_args = {"headless": True, "args": chromium_webgl_args()}
             if executable:
                 launch_args["executable_path"] = executable
             browser = p.chromium.launch(**launch_args)
