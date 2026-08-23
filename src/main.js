@@ -17,21 +17,20 @@ if (typeof window !== 'undefined') {
 }
 import { saveConfig, loadConfig, clearConfig, exportConfig, importConfig, readUrlConfig, startAutoSave, applyConfig, showSavedToast } from './state/persistence.js';
 import { LearningProgressService } from './state/learning-service.js';
-import { ControlPanel, initPanelEvents, updateMotionStatus, focusPanelSearch, formatSliderValue, SLIDER_META, isPanelCollapsed, setPanelCollapsed } from './ui/panel.js';
+import { ControlPanel, initPanelEvents, updateMotionStatus, formatSliderValue, SLIDER_META, isPanelCollapsed, setPanelCollapsed } from './ui/panel.js';
 import { FXRuntime } from './fx/fx-runtime.js';
 import {
   FX_MODE_NAMES,
   coerceEffectMode,
   effectAvailableForView,
   effectsForView,
-  rememberEffectForView,
-  restoreEffectForView,
 } from './fx/fx-catalog.js';
 import { BGRuntime, BG_MODES } from './fx/bg-runtime.js';
 import { backgroundModesForQuality, coerceBackgroundForQuality } from './ui/backgrounds.js';
 import { PRESETS, applyPreset } from './state/presets.js';
 import { GALLERY_PRESETS, galleryPresetById, adjacentGalleryPreset, createGalleryBaseline } from './state/gallery.js';
 import { planViewTransition } from './state/view-transition.js';
+import { createViewModifierReset, createViewSelectionReset } from './state/selection-policy.js';
 import { CameraController, CAMERA_DEFAULT_DISTANCE, CAMERA_TOUCH_DEFAULT_DISTANCE } from './state/camera.js';
 import { ExportRecordingService, isCapacitorNative } from './services/export-recording.js';
 import { createResourceScope } from './platform/resource-scope.js';
@@ -274,15 +273,15 @@ function resetCameraPose() {
 // bloomAuto alive, leaving 4D can keep six-plane rotation alive, and a camera
 // path started in E8 continues to drive every later view. That combination is
 // the source of the "wig out until Reset" behaviour.
-function stabilizeViewTransition(fromView, toView) {
-  const transition = planViewTransition(params, fromView, toView);
+function stabilizeViewTransition(fromView, toView, options = {}) {
+  const transition = planViewTransition(params, fromView, toView, options);
   if (!transition.changed) return;
   Object.assign(params, transition.patch);
   cameraController.autoZoomFactor = 1;
   cameraController.lastPath = 'manual';
 
-  // A cinematic path can leave the camera at an extreme angle/distance. Reset
-  // only in that case; ordinary manual camera framing survives view switches.
+  // Each renderer starts with a deterministic frame. Manual framing remains
+  // stable during same-view rebuilds (palette, blend mode, etc.).
   if (transition.resetCamera) {
     resetCameraPose();
     params.cameraDistance = cameraController.distance;
@@ -290,6 +289,19 @@ function stabilizeViewTransition(fromView, toView) {
     cameraController.distance = clampCameraDistance(params.cameraDistance, cameraController.distance);
     syncCameraTargets();
     updateCameraFromSpherical();
+  }
+}
+
+function resetSelectionModifiers(view = params.view) {
+  Object.assign(params, createViewModifierReset(view, params));
+  projectionAutoStartedAt = 0;
+  projectionAutoIndex = 0;
+  cameraController.autoZoomFactor = 1;
+  cameraController.lastPath = 'manual';
+  normalizeParams(params);
+  if (fxRuntime) {
+    fxRuntime.setMode(params.fxMode || 'none');
+    fxRuntime.setIntensity(params.fxIntensity ?? 0.5);
   }
 }
 
@@ -905,15 +917,16 @@ function initThree() {
 }
 
 // ---------- View router ----------
-function switchView(id) {
+function switchView(id, options = {}) {
   // Any user-initiated view switch cancels the intro animation
   params.intro = false;
+  const def = VIEWS.find(v => v.id === id);
+  if (!def || !def.factory) {
+    console.warn('View not yet implemented:', id);
+    return;
+  }
   const previousView = params.view;
-  // FX implementations are renderer-specific. Remember the outgoing choice so
-  // SDF can keep Glow while a point view independently keeps (for example)
-  // Plasma, without carrying a dead mode across the view boundary.
-  rememberEffectForView(params, previousView);
-  stabilizeViewTransition(previousView, id);
+  stabilizeViewTransition(previousView, id, options);
   // Tear down current view
   if (currentView) {
     try {
@@ -926,15 +939,9 @@ function switchView(id) {
     currentView = null;
     activeViewScope = null;
   }
-  // Find factory
-  const def = VIEWS.find(v => v.id === id);
-  if (!def || !def.factory) {
-    console.warn('View not yet implemented:', id);
-    return;
-  }
   // Update params
   params.view = id;
-  restoreEffectForView(params, id);
+  normalizeParams(params);
   if (fxRuntime) fxRuntime.setMode(params.fxMode);
 
   // Track exploration: award the "Grand Tour" badge once all 6 primary views
@@ -989,6 +996,7 @@ function switchView(id) {
   refreshPanel();
   updateOverlays(id);
   if (window.essayPanel) window.essayPanel.setView(id);
+  if (options.save !== false) saveConfig(params);
 }
 
 function updateOverlays(viewId) {
@@ -1167,8 +1175,7 @@ function defaultParams() {
     fxMode: 'none',       // active view's effect; capability-checked by fx-catalog
     fxByView: {},         // remembers one compatible effect choice per renderer
     fxIntensity: 0.5,     // 0-1, controls how strong the FX is
-    advancedStyle: false, // keeps the default panel curated and approachable
-    panelMode: 'create',  // focused creative controls; learning has its own workspace
+    panelMode: 'scene',   // focused View / Visuals / Learn workspaces
     // Lighting controls (rebuilt when these change)
     lightAmbient: 0.55,
     lightKey: 1.2,
@@ -1336,8 +1343,9 @@ function normalizeParams(target) {
   if (!E.e8.has(target.e8ViewMode)) target.e8ViewMode = 'coxeter';
   if (!E.quality.has(target.mobileQuality)) target.mobileQuality = 'high';
   if (typeof target.reducedMode !== 'boolean') target.reducedMode = false;
-  if (typeof target.advancedStyle !== 'boolean') target.advancedStyle = false;
-  if (!['create', 'learn'].includes(target.panelMode)) target.panelMode = 'create';
+  // Migrate the original combined Create workspace to the focused View tab.
+  if (target.panelMode === 'create') target.panelMode = 'scene';
+  if (!['scene', 'style', 'learn'].includes(target.panelMode)) target.panelMode = 'scene';
   if (!target.fxByView || typeof target.fxByView !== 'object' || Array.isArray(target.fxByView)) {
     target.fxByView = {};
   }
@@ -1794,7 +1802,9 @@ function updateProjectionAtlas(now) {
 
 function applyGallerySettings(preset) {
   if (!preset) return;
+  const previousView = params.view;
   Object.assign(params, createGalleryBaseline(), preset.settings);
+  const targetView = params.view;
   params.galleryPreset = preset.id;
   projectionAutoStartedAt = 0;
   projectionAutoIndex = 0;
@@ -1808,7 +1818,6 @@ function applyGallerySettings(preset) {
   cameraController.autoZoomFactor = 1;
   syncCameraTargets();
   updateCameraFromSpherical();
-  saveConfig(params);
   if (fxRuntime) {
     fxRuntime.setMode(params.fxMode || 'none');
     fxRuntime.setIntensity(params.fxIntensity ?? 0.5);
@@ -1821,8 +1830,11 @@ function applyGallerySettings(preset) {
     bgRuntime.setMode(params.bgMode || 'void');
     bgRuntime.setIntensity(params.bgIntensity ?? 0.7);
   }
-  switchView(params.view);
-  updateOverlays(params.view);
+  // Gallery settings are already complete snapshots, so do not apply the
+  // ordinary view-selection reset over the top of them.
+  params.view = previousView;
+  switchView(targetView, { resetSelection: false });
+  updateOverlays(targetView);
   refreshPanel();
   showSavedToast('Gallery: ' + preset.name);
 }
@@ -2193,7 +2205,6 @@ const SHORTCUTS = [
     { k: '⌘K / Ctrl+K', d: 'Command palette' },
   ]},
   { group: 'Other',   items: [
-    { k: '/',   d: 'Focus control filter' },
     { k: '?',   d: 'This cheatsheet' },
     { k: 'Esc', d: 'Close top layer / exit tour or zen' },
   ]},
@@ -2706,6 +2717,10 @@ window.__app = {
   },
   getLearningState() { return learningState(); },
   openLearningCenter(lessonId = null) { openLearningCenter(lessonId); },
+  openE8Explorer() {
+    if (params.view !== 'e8coxeter') switchView('e8coxeter');
+    updateParam('panelMode', 'scene', { save: false });
+  },
   getCuriosityCard(view) { return CURIOUS_CARDS[view || params.view] || CURIOUS_CARDS.e8coxeter; },
   startQuiz(moduleId) { startQuizModule(moduleId); },
   completeQuiz(moduleId, score, total) {
@@ -2797,6 +2812,7 @@ window.__app = {
     showSavedToast('Renderer: WebGL2 (WebGPU not yet implemented)');
   },
   setShape(s) {
+    resetSelectionModifiers(params.view);
     updateParam('shape', s, { refresh: false });
     // Rebuild the 3D view so the new shape is reflected (Platonic wireframe,
     // E8 McKay highlight subset, Bloom source shape, etc.)
@@ -2872,12 +2888,11 @@ window.__app = {
   },
   setDynkin(d) { updateParam('dynkin', d, { overlay: true }); },
   setPoly4d(p) {
+    resetSelectionModifiers(params.view);
     updateParam('poly4d', p, { refresh: false });
     // The iconic tesseract projection is a cube within a cube. At W-depth 0,
     // opposite-W vertices coincide and only one cube is visible.
-    if (p === 'tesseract' && Math.abs(params.morph4d || 0) < 1e-9) {
-      updateParam('morph4d', 0.65, { refresh: false });
-    }
+    updateParam('morph4d', p === 'tesseract' ? 0.65 : 0, { refresh: false });
     refreshPanel();
     updateOverlays(params.view);
   },
@@ -2895,6 +2910,24 @@ window.__app = {
   toggleRings() { updateParam('showRings', !params.showRings); },
   toggleEdges() { updateParam('showEdges', !params.showEdges); },
   togglePetrie() { updateParam('showPetrie', !params.showPetrie); },
+  resetE8Overlays() {
+    Object.assign(params, {
+      showRings: true,
+      showEdges: false,
+      showPetrie: false,
+      rootDiffusion: false,
+      showWeylMirrors: false,
+      e8Twin600: false,
+      e8ProjectionAuto: false,
+      rootHaloDepth: 3,
+      rootDiffusionSpeed: 1.25,
+    });
+    projectionAutoStartedAt = 0;
+    saveConfig(params);
+    refreshPanel();
+    updateOverlays(params.view);
+    showSavedToast('Overlays reset');
+  },
   toggleRootDiffusion() {
     const enabled = !params.rootDiffusion;
     if (enabled && params.pickedRoot == null) {
@@ -3021,7 +3054,16 @@ window.__app = {
     showSavedToast(`Weyl path: ${params.weylWordStr} (${params.weylWord.length} steps)`);
   },
   setE8Mode(m) {
+    resetSelectionModifiers(params.view);
     updateParam('e8ViewMode', m, { overlay: true });
+  },
+  clearViewModifiers() {
+    resetSelectionModifiers(params.view);
+    if (currentView) switchView(params.view, { resetSelection: false, save: false });
+    saveConfig(params);
+    refreshPanel();
+    updateOverlays(params.view);
+    showSavedToast('Modifiers cleared');
   },
   setFX(mode) {
     const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
@@ -3031,11 +3073,9 @@ window.__app = {
     }
     updateParam('fxMode', mode);
   },
-  toggleAdvancedStyle() {
-    updateParam('advancedStyle', !params.advancedStyle);
-  },
   setPanelMode(mode) {
-    if (!['create', 'learn'].includes(mode)) return;
+    if (mode === 'create') mode = 'scene';
+    if (!['scene', 'style', 'learn'].includes(mode)) return;
     updateParam('panelMode', mode, { save: false });
   },
   setCameraMode(mode) {
@@ -3238,13 +3278,33 @@ window.__app = {
   setPreset(id) {
     const preset = PRESETS.find(p => p.id === id);
     if (!preset) return;
+    const previousView = params.view;
     applyPreset(preset, params);
+    const targetView = params.view;
     normalizeParams(params);
-    saveConfig(params);
-    // Sync FX runtime with the new fxMode
-    if (fxRuntime) fxRuntime.setMode(params.fxMode || 'none');
-    // Rebuild view in case view/stack changed
-    if (currentView) switchView(params.view);
+    // Complete presets own their transition state. Preserve the outgoing id so
+    // the router still tears down the correct renderer, then rebuild without
+    // applying the normal view reset over the preset.
+    params.view = previousView;
+    if (fxRuntime) {
+      fxRuntime.setMode(params.fxMode || 'none');
+      fxRuntime.setIntensity(params.fxIntensity ?? 0.5);
+    }
+    if (bgRuntime) {
+      bgRuntime.setMode(params.bgMode || 'void');
+      bgRuntime.setIntensity(params.bgIntensity ?? 0.7);
+    }
+    cameraController.theta = params.cameraRotation;
+    cameraController.phi = Math.PI / 3;
+    cameraController.distance = params.cameraDistance;
+    cameraController.autoZoomFactor = 1;
+    syncCameraTargets();
+    updateCameraFromSpherical();
+    if (currentView) switchView(targetView, { resetSelection: false });
+    else {
+      params.view = targetView;
+      saveConfig(params);
+    }
     refreshPanel();
     showSavedToast('✦ ' + preset.name);
   },
@@ -3354,15 +3414,6 @@ window.__app = {
     showSavedToast('View reset');
   },
   refreshPanel: buildPanel,
-  // Focus the panel control-filter search box (nice-to-have #5, '/' shortcut).
-  // NOTE: the method name is deliberately distinct from the imported
-  // `focusPanelSearch` symbol. build.py rewrites imported names to
-  // window.__modules['X'] lookups via a regex that fires on ANY occurrence —
-  // including inside object-literal method shorthand. Naming this method
-  // `focusPanelSearch` would compile to `window.__modules['focusPanelSearch']()
-  // { ... }` (invalid syntax). Same trap as tourStart/startTour; build.py now
-  // guards against this and fails loudly if it ever recurs.
-  panelSearchFocus() { focusPanelSearch(); },
   toggleEssay() { if (window.essayPanel) window.essayPanel.toggle(); },
   toggleTour() { isTourActive() ? stopTour() : startTour(window.__app); },
   // `tourStart`/`tourStop` are kept distinct from the tour module exports so the
@@ -3451,14 +3502,15 @@ window.__app = {
     // Weighted random: skip "none" 70% of the time, skip "static" 70% of the time
     const shiftWeighted = () => Math.random() < 0.7 ? SHIFT_PRESETS_ARR[Math.floor(Math.random()*SHIFT_PRESETS_ARR.length)] : 'static';
 
-    // Pick the renderer first, then select from its real capability list. This
-    // prevents Surprise from landing on a visually dead effect.
-    if (Math.random() < 0.5) {
-      const newView = VIEWS_ARR[Math.floor(Math.random() * VIEWS_ARR.length)];
-      if (newView !== params.view) switchView(newView);
-    }
+    // Start from a clean selection snapshot so repeated Surprise clicks cannot
+    // accumulate hidden animation, camera, projection, or FX state.
+    const previousView = params.view;
+    const targetView = Math.random() < 0.5
+      ? VIEWS_ARR[Math.floor(Math.random() * VIEWS_ARR.length)]
+      : previousView;
+    Object.assign(params, createViewSelectionReset(targetView, params));
     const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
-    const compatibleModes = effectsForView(params.view, quality).map(item => item.id);
+    const compatibleModes = effectsForView(targetView, quality).map(item => item.id);
     const fxWeighted = () => Math.random() < 0.7
       ? compatibleModes[Math.floor(Math.random() * compatibleModes.length)]
       : 'none';
@@ -3471,15 +3523,17 @@ window.__app = {
     // 8-45s which feels "random" without going to extremes.
     params.shiftSpeed = 8 + Math.floor(Math.random() * 37);
     params.opacity = 0.7 + Math.random() * 0.3;
-    // 60% chance to auto-rotate, 30% bloom-auto
-    if (Math.random() < 0.6) {
-      params.autoRotate = true;
+    // 60% chance to auto-rotate, 30% bloom-auto in Bloom only.
+    params.autoRotate = Math.random() < 0.6;
+    if (params.autoRotate) {
       params.rotationSpeed = 0.002 + Math.random() * 0.008;
     }
-    if (Math.random() < 0.3 && params.view !== 'bloom') {
-      params.bloomAuto = true;
-    }
+    params.bloomAuto = targetView === 'bloom' && Math.random() < 0.3;
+    params.view = targetView;
     normalizeParams(params);
+    params.view = previousView;
+    if (currentView) switchView(targetView, { resetSelection: false });
+    else params.view = targetView;
     if (fxRuntime) fxRuntime.setMode(params.fxMode);
     saveConfig(params);
     refreshPanel();
@@ -3488,9 +3542,11 @@ window.__app = {
   },
 };
 
-// Scroll the focused Create/Learn workspace to a named section.
+// Open the workspace that owns a named section, then bring it into view.
 function scrollToSection(name) {
-  const desiredMode = (name === 'math' || name === 'learn') ? 'learn' : 'create';
+  const desiredMode = (name === 'math' || name === 'learn') ? 'learn'
+    : name === 'style' ? 'style'
+    : 'scene';
   if (params.panelMode !== desiredMode) {
     params.panelMode = desiredMode;
     refreshPanel();
@@ -4048,48 +4104,6 @@ async function main() {
   switchView(params.view);
   startAutoSave(() => params);
 
-  // Welcome card: dismisses on any meaningful interaction, not just tabs.
-  // - clicking a tab (user is exploring other views)
-  // - changing a panel control (shape, palette, view-mode)
-  // - pressing Escape or 'r' (explicit dismiss)
-  // - clicking the canvas (user wants to interact with the 3D scene)
-  // - after 30s of inactivity (auto-dismiss)
-  const welcomeCard = document.getElementById('welcome-card');
-  const essaysHost = document.getElementById('essays');
-  if (welcomeCard) welcomeCard.classList.remove('hidden');
-  // The essay panel lives bottom-center and would overlap the centered welcome
-  // card on first load. Hide it until the welcome card is dismissed.
-  if (essaysHost) essaysHost.style.visibility = 'hidden';
-
-  let welcomeDismissed = false;
-  let welcomeHideTimer = null;
-  const dismissWelcome = () => {
-    if (welcomeDismissed || !welcomeCard) return;
-    welcomeDismissed = true;
-    welcomeCard.classList.add('hidden');
-    if (essaysHost) essaysHost.style.visibility = '';
-    if (welcomeHideTimer) { clearTimeout(welcomeHideTimer); welcomeHideTimer = null; }
-  };
-  // Tab clicks
-  document.getElementById('tabs')?.addEventListener('click', dismissWelcome, { once: true });
-  // Side panel changes (select boxes + sliders fire 'change' and 'input')
-  document.getElementById('panel').addEventListener('change', dismissWelcome, { once: true, capture: true });
-  document.getElementById('panel').addEventListener('input', dismissWelcome, { once: true, capture: true });
-  // The welcome card's × close button (no inline handler — CSP-safe).
-  welcomeCard?.querySelector('.wc-close')?.addEventListener('click', dismissWelcome);
-  // Canvas interaction
-  document.getElementById('canvas').addEventListener('pointerdown', dismissWelcome, { once: true });
-  // Keyboard escape or 'r'
-  const escHandler = (e) => {
-    if (e.key === 'Escape' || e.key === 'r' || e.key === 'R') {
-      dismissWelcome();
-      window.removeEventListener('keydown', escHandler);
-    }
-  };
-  window.addEventListener('keydown', escHandler);
-  // Auto-dismiss after 30s as fallback
-  welcomeHideTimer = setTimeout(dismissWelcome, 30000);
-
   animate();
 
   // Keyboard
@@ -4137,9 +4151,9 @@ async function main() {
     if (e.key === 't' || e.key === 'T') { window.__app.toggleTour(); }
     if (e.key === 'ArrowLeft') { window.__app.essayPrev(); }
     if (e.key === 'ArrowRight') { window.__app.essayNext(); }
-    // Quick-access section shortcuts (nice-to-have #6). Each jumps to a panel
-    // section and, for the search box, focuses it. They use modifier-free
-    // letters that don't collide with the existing s/r/f/i/t/space/numbers.
+    // Quick-access section shortcuts. Each opens the matching learning tool or
+    // workspace using modifier-free letters that do not collide with the
+    // existing s/r/f/i/t/space/numbers.
     if (e.key === 'm' || e.key === 'M') { scrollToSection('math'); setStatus('Math section'); }
     if (e.key === 'l' || e.key === 'L') { window.__app.openLearningCenter(); setStatus('Learning Center'); }
     if (e.key === 'g' || e.key === 'G') { window.__app.openGlossary(); setStatus('Glossary'); }
@@ -4151,14 +4165,9 @@ async function main() {
     }
     if (e.key === '[') { adjustFXIntensity(-0.1); }
     if (e.key === ']') { adjustFXIntensity(0.1); }
-    if (e.key === '/' || e.key === '?') {
+    if (e.key === '?') {
       e.preventDefault();
-      // Plain '/' focuses the control filter; Shift+/ ('?') opens the cheatsheet.
-      if (e.key === '?') {
-        window.__app.openCheatsheet();
-      } else {
-        window.__app.panelSearchFocus();
-      }
+      window.__app.openCheatsheet();
     }
     // H = hide/show chrome (zen mode). Toggles the existing presentation-mode
     // layout, which collapses header/panel/footer for a pure full-canvas view.

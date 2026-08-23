@@ -12,7 +12,7 @@ const PERSISTABLE = new Set([
   'view', 'shape', 'dynkin', 'poly4d', 'palette', 'colorBy', 'autoSliders',
   'opacity', 'rotationSpeed',
   'autoRotate', 'cameraOrbit', 'autoZoom', 'showEdges', 'showRings', 'showPetrie',
-  'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'advancedStyle',
+  'showAmbient', 'fxMode', 'fxByView', 'fxIntensity',
   'lightAmbient', 'lightKey', 'lightFill', 'lightAccent',
   // Pickup round 2 additions — all of these should persist across reloads
   'bgMode', 'bgIntensity', 'theme', 'layout',

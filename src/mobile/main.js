@@ -2978,15 +2978,31 @@ function cycleQuality() {
 }
 
 function scenePatchForTarget(target) {
-  const patch = {
+  // Manual scene selection is a replacement operation. Keep global user
+  // preferences (palette, quality, point scale), but clear scene-owned
+  // overlays, animation, FX, selection, and framing so A→B equals fresh→B.
+  return {
     modelMode: target.modelMode,
+    shape: target.shape || DEFAULT_STATE.shape,
+    polytope4d: target.polytope4d || DEFAULT_STATE.polytope4d,
+    dynkinDiagram: target.dynkinDiagram || DEFAULT_STATE.dynkinDiagram,
+    showRings: DEFAULT_STATE.showRings,
+    showContext: DEFAULT_STATE.showContext,
+    showPetrie: DEFAULT_STATE.showPetrie,
+    showMirrors: DEFAULT_STATE.showMirrors,
+    highlightSubset: DEFAULT_STATE.highlightSubset,
+    subset: DEFAULT_STATE.subset,
+    autoRotate: false,
+    autoModel: false,
+    autoColor: false,
+    softFx: false,
+    rotationSpeed: DEFAULT_STATE.rotationSpeed,
+    rotation: 0,
+    panX: 0,
+    panY: 0,
+    zoom: 1,
     selectedRoot: null,
   };
-  if (target.shape) patch.shape = target.shape;
-  if (target.polytope4d) patch.polytope4d = target.polytope4d;
-  if (target.dynkinDiagram) patch.dynkinDiagram = target.dynkinDiagram;
-  if (state.autoModel) patch.autoModel = false;
-  return patch;
 }
 
 function sceneTargetSnapshot(index = currentAutoModelIndex(), target = state) {
