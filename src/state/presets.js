@@ -1,8 +1,9 @@
 // presets.js — Hand-crafted view configurations for quick exploration
 //
-// Each preset is a partial params override that gets merged with the user's
-// current config when applied. This lets users discover interesting views
-// without having to manually tune 10+ sliders.
+// Presets are applied over a deterministic baseline. A preset may be concise in
+// source without inheriting unrelated settings from whatever was clicked first.
+
+import { createViewSelectionReset } from './selection-policy.js';
 
 export const PRESETS = [
   {
@@ -128,9 +129,16 @@ export const PRESETS = [
 ];
 
 export function applyPreset(preset, params) {
-  // Shallow merge: preset overrides current params for the keys it defines
-  for (const k of Object.keys(preset.params)) {
-    params[k] = preset.params[k];
-  }
+  Object.assign(params, createPresetBaseline(params), preset.params);
   return params;
+}
+
+export function createPresetBaseline(params = {}) {
+  return {
+    ...createViewSelectionReset(params.view, params),
+    palette: 'gold',
+    opacity: 0.9,
+    bgMode: 'void',
+    bgIntensity: 0.7,
+  };
 }

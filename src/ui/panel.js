@@ -1,21 +1,22 @@
 // panel.js — Context-sensitive side-panel for E8 ⇄ Platonics Studio
 //
 // REWORK PRINCIPLES:
-//   3 sections, always visible (no tabs to hunt through):
+//   Three focused workspaces:
 //     1. VIEW — what you're looking at + its specific controls
-//     2. STYLE — colors, effects, opacity (universal)
-//     3. MATH — per-view math explorers (Cartan, conjugacy, etc.)
+//     2. VISUALS — palettes, color motion, backgrounds, and effects
+//     3. LEARN — orientation, curriculum, and per-view mathematics
 //
 // Each view shows ONLY its relevant controls. No E8 controls on Platonic.
 // No lighting sliders that only affect mesh views when you're on Bloom.
 
-import { PALETTE_GROUPS, PALETTE_PRESETS, SHIFT_PRESETS, COLORINGS, palettePreviewCSS } from './palettes.js';
+import { PALETTE_PRESETS, SHIFT_PRESETS, COLORINGS, palettePreviewCSS } from './palettes.js';
 import { BACKGROUND_PRESETS, backgroundModesForQuality } from './backgrounds.js';
 import { renderCartanMatrix } from '../math/cartan.js';
 import { renderBrackets } from '../math/brackets.js';
 import { THEMES, THEME_LABELS } from './theme.js';
 import { CODE_ART_SHADERS, TOUR_STOPS } from '../content/essays.js';
 import { BADGE_INFO } from '../content/learning.js';
+import { activeViewModifiers } from '../state/selection-policy.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
 import {
   CURATED_LOOKS,
@@ -25,10 +26,20 @@ import {
   effectsForView,
 } from '../fx/fx-catalog.js';
 
-const QUICK_PALETTES = Object.freeze(['gold', 'cosmic', 'prime', 'aurora', 'opal', 'mono']);
-const QUICK_BACKGROUNDS = Object.freeze(['void', 'starfield', 'eclipse', 'aurora', 'synthwave', 'prism']);
+const PANEL_WORKSPACES = Object.freeze(['scene', 'style', 'learn']);
+const PANEL_WORKSPACE_LABELS = Object.freeze({ scene: 'View', style: 'Visuals', learn: 'Learn' });
 
 const SHAPES = ['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron'];
+
+function panelWorkspace(params) {
+  return params.panelMode === 'create' ? 'scene'
+    : PANEL_WORKSPACES.includes(params.panelMode) ? params.panelMode
+    : 'scene';
+}
+
+function pressed(active) {
+  return `aria-pressed="${active ? 'true' : 'false'}"`;
+}
 
 // ── Helper: short shape label (consistent across shape picker + compare subset) ──
 function shapeShort(name) {
@@ -49,9 +60,9 @@ function renderCameraControls(params, caps) {
     html += slider('Extrude', 'e8MorphT', params.e8MorphT || 0, 0, 1, 0.01, v => v.toFixed(2));
   }
   html += '<div class="seg seg-wrap">';
-  html += `<button class="${params.cameraPath === 'manual' && params.cameraOrbit ? 'on' : ''}" data-act="setCameraPreset" data-arg="orbit" title="Continuous camera orbit">Orbit</button>`;
-  html += `<button class="${params.cameraPath === 'ringDive' ? 'on' : ''}" data-act="setCameraPreset" data-arg="dive" title="Dive toward the center and back">Dive</button>`;
-  html += `<button class="${params.cameraPath === 'petrieSpiral' ? 'on' : ''}" data-act="setCameraPreset" data-arg="spiral" title="Spiral around the structure">Spiral</button>`;
+  html += `<button class="${params.cameraPath === 'manual' && params.cameraOrbit ? 'on' : ''}" ${pressed(params.cameraPath === 'manual' && params.cameraOrbit)} data-act="setCameraPreset" data-arg="orbit" title="Continuous camera orbit">Orbit</button>`;
+  html += `<button class="${params.cameraPath === 'ringDive' ? 'on' : ''}" ${pressed(params.cameraPath === 'ringDive')} data-act="setCameraPreset" data-arg="dive" title="Dive toward the center and back">Dive</button>`;
+  html += `<button class="${params.cameraPath === 'petrieSpiral' ? 'on' : ''}" ${pressed(params.cameraPath === 'petrieSpiral')} data-act="setCameraPreset" data-arg="spiral" title="Spiral around the structure">Spiral</button>`;
   html += '<button data-act="resetCamera" title="Reset camera position">Reset</button>';
   html += '</div>';
   return html;
@@ -81,20 +92,6 @@ function renderGalleryControls(params) {
     </div>
     <button data-act="stepGalleryPreset" data-arg="1" title="Next gallery preset" aria-label="Next gallery preset">→</button>
   </div>`;
-  // Featured preview cards are useful for browsing, but not worth permanent
-  // space in the focused Create workspace. Advanced users can opt them in.
-  if (params.advancedStyle) {
-    html += '<div class="gallery-preview-grid">';
-    const featured = gallery.filter(preset => preset.featured).slice(0, 4);
-    for (const preset of featured) {
-      const palette = preset.settings?.palette || 'gold';
-      html += `<button class="gallery-preview ${params.galleryPreset === preset.id ? 'on' : ''}" data-act="applyGalleryPreset" data-arg="${preset.id}" title="${preset.description || preset.name}">
-        <span class="gallery-preview-swatch" style="background:${palettePreviewCSS(palette, 'spectrum')}"></span>
-        <span>${preset.name}</span>
-      </button>`;
-    }
-    html += '</div>';
-  }
   html += `<button class="gallery-browse" data-act="openPresets" title="Browse all presets with palette previews">Browse all ${gallery.length} presets</button>`;
   return html;
 }
@@ -108,9 +105,13 @@ function renderViewSection(params, data) {
   html += `<div class="seg seg-wrap ps-view-switch">`;
   for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']) {
     const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v;
-    html += `<button class="${params.view === v ? 'on' : ''}" data-act="switchView" data-arg="${v}">${label}</button>`;
+    html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
   }
   html += '</div>';
+
+  // Gallery changes the whole scene, so keep it directly beneath the primary
+  // view selector instead of burying it below camera and per-view controls.
+  html += renderGalleryControls(params);
 
   // Keep the essential camera/motion controls near the top. The panel exposes
   // three useful paths; custom mode and bookmark grids stay out of the way.
@@ -135,7 +136,7 @@ function renderViewSection(params, data) {
       if (!platonic[name]) continue;
       const active = params.shape === name;
       const short = shapeShort(name);
-      html += `<button class="shape-pill ${active ? 'active' : ''}" data-act="setShape" data-arg="${name}" title="${name}">${short}</button>`;
+      html += `<button class="shape-pill ${active ? 'active' : ''}" ${pressed(active)} data-act="setShape" data-arg="${name}" title="${name}" aria-label="Select ${name}">${short}</button>`;
     }
     html += '</div>';
 
@@ -148,7 +149,7 @@ function renderViewSection(params, data) {
       for (const name of STELLATION_NAMES) {
         const active = params.shape === name;
         const label = STELLATION_LABELS[name] || name;
-        html += `<button class="shape-pill ${active ? 'active' : ''}" data-act="setShape" data-arg="${name}" title="${name} (Kepler–Poinsot)">${label}</button>`;
+        html += `<button class="shape-pill ${active ? 'active' : ''}" ${pressed(active)} data-act="setShape" data-arg="${name}" title="${name} (Kepler–Poinsot)" aria-label="Select ${name}">${label}</button>`;
       }
       html += '</div>';
     }
@@ -185,7 +186,14 @@ function renderViewSection(params, data) {
     html += renderPolytopeControls(params, data);
   }
 
-  html += renderGalleryControls(params);
+  const activeModifiers = activeViewModifiers(params);
+  if (activeModifiers.length) {
+    html += `<div class="info-box" style="margin-top:10px">
+      <span class="info-title">Active modifiers</span>
+      <div class="ps-help">${activeModifiers.join(' · ')}</div>
+      <div class="seg" style="margin-top:6px"><button data-act="clearViewModifiers">Clear modifiers</button></div>
+    </div>`;
+  }
 
   html += '</div>';
   return html;
@@ -221,26 +229,31 @@ function renderE8Controls(params, data) {
   const mode = params.e8ViewMode || 'coxeter';
   let html = '<div class="ps-subtitle">E₈ projection</div>';
   html += '<div class="seg seg-wrap">';
-  html += `<button class="${mode === 'coxeter' ? 'on' : ''}" data-act="setE8Mode" data-arg="coxeter" title="The canonical 2D Coxeter plane projection (8 rings of 30 roots)">Coxeter</button>`;
-  html += `<button class="${mode === 'petrie' ? 'on' : ''}" data-act="setE8Mode" data-arg="petrie" title="Same 2D as Coxeter but emphasizes the Petrie polygon">Petrie</button>`;
-  html += `<button class="${mode === 'h4' ? 'on' : ''}" data-act="setE8Mode" data-arg="h4" title="Two interlaced H₄ / 600-cell projections">H₄</button>`;
+  html += `<button class="${mode === 'coxeter' ? 'on' : ''}" ${pressed(mode === 'coxeter')} data-act="setE8Mode" data-arg="coxeter" title="The canonical 2D Coxeter plane projection (8 rings of 30 roots)">Coxeter</button>`;
+  html += `<button class="${mode === 'petrie' ? 'on' : ''}" ${pressed(mode === 'petrie')} data-act="setE8Mode" data-arg="petrie" title="Same 2D as Coxeter but emphasizes the Petrie polygon">Petrie plane</button>`;
+  html += `<button class="${mode === 'h4' ? 'on' : ''}" ${pressed(mode === 'h4')} data-act="setE8Mode" data-arg="h4" title="Two interlaced H₄ / 600-cell projections">H₄</button>`;
   // Bug fix 2026-06-25 (audit #7): was 'Rand' (unclear) — actually means
   // project by first 3 axes of R^8. New label 'Axes' is clearer.
-  html += `<button class="${mode === 'ortho3d' ? 'on' : ''}" data-act="setE8Mode" data-arg="ortho3d" title="Project to first 3 axes of ℝ⁸ (orthogonal 3D view)">Axes</button>`;
+  html += `<button class="${mode === 'ortho3d' ? 'on' : ''}" ${pressed(mode === 'ortho3d')} data-act="setE8Mode" data-arg="ortho3d" title="Project to first 3 axes of ℝ⁸ (orthogonal 3D view)">Axes</button>`;
   // And '8D' → 'Spin' for custom (user-rotation) mode.
-  html += `<button class="${mode === 'custom' ? 'on' : ''}" data-act="setE8Mode" data-arg="custom" title="Free 8D rotation via Spin/Tilt/Roll sliders below">Spin</button>`;
+  html += `<button class="${mode === 'custom' ? 'on' : ''}" ${pressed(mode === 'custom')} data-act="setE8Mode" data-arg="custom" title="Free 8D rotation via Spin/Tilt/Roll sliders below">Spin</button>`;
   html += '</div>';
 
-  html += '<div class="seg">';
-  html += `<button class="${params.showRings ? 'on' : ''}" data-act="toggleRings">Rings</button>`;
-  html += `<button class="${params.showEdges ? 'on' : ''}" data-act="toggleEdges">Edges</button>`;
-  html += `<button class="${params.showPetrie ? 'on' : ''}" data-act="togglePetrie" title="Real Hamiltonian 30-cycle in E₈ edge graph">Petrie</button>`;
+  // Separate passive drawing guides from modes that animate or reinterpret the
+  // projection. The old flat seven-button grid hid that important distinction.
+  html += '<div class="ps-subtitle overlay-title"><span>Overlays</span><button data-act="resetE8Overlays" title="Return overlays to Rings only">Reset</button></div>';
+  html += '<div class="overlay-group-label">Structure guides</div>';
+  html += '<div class="overlay-structure-grid">';
+  html += overlayOption('Rings', '8 shells', params.showRings, 'toggleRings');
+  html += overlayOption('Edges', 'root graph', params.showEdges, 'toggleEdges');
+  html += overlayOption('Petrie path', '30-cycle', params.showPetrie, 'togglePetrie', 'Real Hamiltonian 30-cycle in the E₈ edge graph');
   html += '</div>';
-  html += '<div class="seg seg-wrap">';
-  html += `<button class="${params.rootDiffusion ? 'on' : ''}" data-act="toggleRootDiffusion" title="Animate graph-distance halos from the selected root">Diffusion</button>`;
-  html += `<button class="${params.showWeylMirrors ? 'on' : ''}" data-act="toggleWeylMirrors" title="Show simple-reflection mirror lines">Mirrors</button>`;
-  html += `<button class="${params.e8Twin600 ? 'on' : ''}" data-act="toggleE8Twin600" title="Color the two projected H₄ layers used by this view">Twin 600</button>`;
-  html += `<button class="${params.e8ProjectionAuto ? 'on' : ''}" data-act="toggleProjectionAuto" title="Cycle the projection atlas">Atlas</button>`;
+  html += '<div class="overlay-group-label">Symmetry &amp; motion</div>';
+  html += '<div class="overlay-explorer-grid">';
+  html += overlayOption('Root diffusion', 'distance wave', params.rootDiffusion, 'toggleRootDiffusion', 'Animate graph-distance halos from the selected root');
+  html += overlayOption('Weyl mirrors', 'reflection axes', params.showWeylMirrors, 'toggleWeylMirrors', 'Show simple-reflection mirror lines');
+  html += overlayOption('Twin H₄', 'paired 600-cells', params.e8Twin600, 'toggleE8Twin600', 'Color the two projected H₄ layers used by this view');
+  html += overlayOption('Auto atlas', 'cycle projections', params.e8ProjectionAuto, 'toggleProjectionAuto', 'Cycle through the projection atlas');
   html += '</div>';
   if (params.rootDiffusion) {
     html += slider('Halo depth', 'rootHaloDepth', params.rootHaloDepth || 3, 1, 5, 1, v => Math.round(v).toString());
@@ -250,14 +263,14 @@ function renderE8Controls(params, data) {
   html += '<div class="ps-subtitle">Compare subset</div>';
   html += '<div class="seg seg-wrap">';
   for (const name of SHAPES) {
-    html += `<button class="${(params.compareShape || 'dodecahedron') === name ? 'on' : ''}" data-act="setCompareShape" data-arg="${name}" title="Compare ${name}">${shapeShort(name)}</button>`;
+    html += `<button class="${(params.compareShape || 'dodecahedron') === name ? 'on' : ''}" ${pressed((params.compareShape || 'dodecahedron') === name)} data-act="setCompareShape" data-arg="${name}" title="Compare ${name}">${shapeShort(name)}</button>`;
   }
   html += '</div>';
   html += '<div class="seg seg-wrap">';
   for (const modeName of ['off', 'overlay', 'intersection', 'difference']) {
     const label = modeName === 'intersection' ? 'intersect' : modeName === 'difference' ? 'diff' : 'overlay';
     const display = modeName === 'off' ? 'off' : label;
-    html += `<button class="${(params.compareMode || 'off') === modeName ? 'on' : ''}" data-act="setCompareMode" data-arg="${modeName}" title="${modeName}">${display}</button>`;
+    html += `<button class="${(params.compareMode || 'off') === modeName ? 'on' : ''}" ${pressed((params.compareMode || 'off') === modeName)} data-act="setCompareMode" data-arg="${modeName}" title="${modeName}">${display}</button>`;
   }
   html += '</div>';
   if ((params.compareMode || 'off') !== 'off') html += `<div class="compare-legend">
@@ -272,7 +285,7 @@ function renderE8Controls(params, data) {
     html += slider('Tilt', 'e8Tilt', params.e8Tilt || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
     html += slider('Roll', 'e8Roll', params.e8Roll || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
     html += '<div class="seg">';
-    html += `<button class="${params.e8AutoRotate ? 'on' : ''}" data-act="toggleE8AutoRotate">${params.e8AutoRotate ? 'Pause' : 'Anim 8D'}</button>`;
+    html += `<button class="${params.e8AutoRotate ? 'on' : ''}" ${pressed(params.e8AutoRotate)} data-act="toggleE8AutoRotate">${params.e8AutoRotate ? 'Pause' : 'Anim 8D'}</button>`;
     html += `<button data-act="resetE8Angles">Reset</button>`;
     html += '</div>';
   }
@@ -280,21 +293,26 @@ function renderE8Controls(params, data) {
   return html;
 }
 
+function overlayOption(label, detail, active, action, title = '') {
+  return `<button class="overlay-option ${active ? 'on' : ''}" ${pressed(active)} data-act="${action}"${title ? ` title="${title}"` : ''}>
+    <span class="overlay-indicator" aria-hidden="true"></span>
+    <span class="overlay-copy"><strong>${label}</strong><small>${detail}</small></span>
+  </button>`;
+}
+
 function renderSDFControls(params, data) {
   let html = '<div class="ps-subtitle">SDF shape &amp; quality</div>';
   html += '<div class="seg" aria-label="SDF render quality">';
   for (const [level, label] of [['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']]) {
-    html += `<button class="${params.mobileQuality === level ? 'on' : ''}" data-act="setMobileQuality" data-arg="${level}" title="${label} SDF shader budget">${label}</button>`;
+    html += `<button class="${params.mobileQuality === level ? 'on' : ''}" ${pressed(params.mobileQuality === level)} data-act="setMobileQuality" data-arg="${level}" title="${label} SDF shader budget">${label}</button>`;
   }
   html += '</div>';
   html += '<div class="ps-help">Quality changes the raymarch budget. Native SDF looks are lightweight surface treatments.</div>';
   html += slider('Sphere radius', 'sdfSphereR', params.sdfSphereR ?? 0.08, 0.02, 0.15, 0.005, v => v.toFixed(3));
   html += slider('Blend (smin)', 'sdfBlend', params.sdfBlend ?? 0.03, 0.0, 0.12, 0.005, v => v.toFixed(3));
-  if (params.advancedStyle) {
-    html += slider('Highlight bloom', 'sdfBloom', params.sdfBloom ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-    html += slider('Aniso spec', 'sdfAniso', params.sdfAniso ?? 0.6, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-    html += slider('Edge cylinders', 'sdfEdges', params.sdfEdges ?? 0.3, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-  }
+  html += slider('Highlight bloom', 'sdfBloom', params.sdfBloom ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  html += slider('Aniso spec', 'sdfAniso', params.sdfAniso ?? 0.6, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  html += slider('Edge cylinders', 'sdfEdges', params.sdfEdges ?? 0.3, 0, 1, 0.05, v => Math.round(v * 100) + '%');
   return html;
 }
 
@@ -303,7 +321,7 @@ function renderPolytopeControls(params, data) {
   let html = '<div class="ps-subtitle">Polytope</div>';
   html += '<div class="seg seg-wrap">';
   for (const k of Object.keys(polys)) {
-    html += `<button class="${params.poly4d === k ? 'on' : ''}" data-act="setPoly4d" data-arg="${k}">${k}</button>`;
+    html += `<button class="${params.poly4d === k ? 'on' : ''}" ${pressed(params.poly4d === k)} data-act="setPoly4d" data-arg="${k}">${k}</button>`;
   }
   html += '</div>';
   html += slider('w-depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
@@ -323,145 +341,119 @@ function renderPolytopeControls(params, data) {
   return html;
 }
 
-// ── Section 2: STYLE ──
+// ── Section 2: VISUALS ──
 function renderStyleSection(params, data) {
   const caps = VIEW_CAPABILITIES[params.view] || {};
   const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
-  let html = '<div class="ps-section" data-section="style"><div class="ps-title">Style</div>';
+  let html = '<div class="ps-section" data-section="style"><div class="ps-title">Visuals</div>';
 
-  // The default workflow is intentionally small: pick a look, a palette, and
-  // an environment. The full implementation catalog remains one click away.
-  html += '<div class="ps-subtitle">Look</div>';
-  html += '<div class="look-grid">';
-  for (const look of CURATED_LOOKS) {
-    if (!effectAvailableForView(params.view, look.mode, quality)) continue;
-    const item = FX_BY_ID[look.mode];
-    html += `<button class="look-card ${params.fxMode === look.mode ? 'on' : ''}" data-act="setFX" data-arg="${look.mode}" title="${item.description}">
-      <span>${look.label}</span><small>${look.description}</small>
-    </button>`;
-  }
-  html += '</div>';
-  if (params.view === 'raymarched') {
-    html += '<div class="ps-help">These looks are implemented directly in the SDF raymarcher. Point-only effects stay hidden.</div>';
-  }
-  // Keep this visible even when Look is Off. Hiding it made the control feel
-  // like it had vanished; its stored value applies as soon as a Look is chosen.
-  html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-
-  // Quick palette row
+  // Color is the most immediate visual choice. Keep the full catalog together
+  // in one grid rather than splitting it into subjective named families.
   html += '<div class="ps-subtitle">Palette</div>';
   const activePalette = PALETTE_PRESETS[params.palette] || PALETTE_PRESETS.gold;
   html += `<div class="palette-active-preview" style="background:${palettePreviewCSS(params.palette, 'spectrum')}">
     <span>${params.palette.replaceAll('_', ' ')}</span>
     <small>${activePalette.description}</small>
   </div>`;
-  html += '<div class="swatch-grid quick-swatches">';
-  for (const k of QUICK_PALETTES) {
+  html += '<div class="swatch-grid all-swatches">';
+  for (const k of Object.keys(PALETTE_PRESETS)) {
     html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
       style="background:${palettePreviewCSS(k, 'spectrum')}"
-      data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
+      ${pressed(params.palette === k)} data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
       aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
   }
   html += '</div>';
 
-  // Quick environment row
-  html += '<div class="ps-subtitle">Environment</div>';
-  html += '<div class="seg seg-wrap">';
-  const availableBackgrounds = new Set(backgroundModesForQuality(quality));
-  for (const m of QUICK_BACKGROUNDS.filter(mode => availableBackgrounds.has(mode))) {
-    const background = BACKGROUND_PRESETS[m];
-    html += `<button class="${params.bgMode === m ? 'on' : ''}" data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
+  // Animated palette changes are a primary creative control, not an advanced
+  // option, so they follow the static palette picker directly.
+  html += '<div class="ps-subtitle">Color shift</div><div class="seg seg-wrap">';
+  for (const k of Object.keys(SHIFT_PRESETS)) {
+    html += `<button class="${(params.shiftMode || 'static') === k ? 'on' : ''}" ${pressed((params.shiftMode || 'static') === k)} data-act="setShiftMode" data-arg="${k}">${k}</button>`;
   }
   html += '</div>';
-  html += slider('BG brightness', 'bgIntensity', params.bgIntensity ?? 0.7, 0, 1.5, 0.05, v => Math.round(v * 100) + '%');
-
-  html += `<button class="ps-advanced-toggle ${params.advancedStyle ? 'on' : ''}" data-act="toggleAdvancedStyle" aria-expanded="${params.advancedStyle ? 'true' : 'false'}">
-    ${params.advancedStyle ? 'Hide advanced controls' : 'Show advanced controls'}
-  </button>`;
-
-  if (params.advancedStyle) {
-    html += '<div class="ps-advanced">';
-
-    html += '<div class="ps-subtitle">All palettes</div><div class="palette-groups">';
-    for (const group of PALETTE_GROUPS) {
-      html += `<div class="palette-group"><div class="palette-group-label" title="${group.description}">${group.label}</div><div class="swatch-grid">`;
-      for (const k of group.palettes) {
-        html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
-          style="background:${palettePreviewCSS(k, 'spectrum')}"
-          data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
-          aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
-      }
-      html += '</div></div>';
-    }
-    html += '</div>';
-
-    if (caps.coloring) {
-      html += '<div class="ps-subtitle">Color by</div><div class="seg seg-wrap">';
-      for (const k of Object.keys(COLORINGS)) {
-        html += `<button class="${(params.colorBy || 'shell') === k ? 'on' : ''}" data-act="setColorBy" data-arg="${k}" title="${COLORINGS[k]}">${k}</button>`;
-      }
-      html += '</div>';
-    }
-
-    html += '<div class="ps-subtitle">Effect catalog</div><div class="ps-help">Only effects implemented by this view are listed. Cost badges show approximate GPU work.</div>';
-    html += '<div class="fx-catalog-grid">';
-    for (const item of effectsForView(params.view, quality, { includeUnavailable: true })) {
-      const available = effectAvailableForQuality(item.id, quality);
-      const unavailableTitle = available ? item.description : `${item.description} Requires a higher quality tier.`;
-      html += `<button class="fx-catalog-item ${params.fxMode === item.id ? 'on' : ''} ${available ? '' : 'unavailable'}"
-        data-act="setFX" data-arg="${item.id}" title="${unavailableTitle}" ${available ? '' : 'disabled'}>
-        <span>${item.label}</span><small class="fx-cost fx-cost-${item.cost}">${item.cost}</small>
-      </button>`;
-    }
-    html += '</div>';
-
-    html += '<div class="ps-subtitle">All backgrounds</div><div class="seg seg-wrap">';
-    for (const m of backgroundModesForQuality(quality)) {
-      const background = BACKGROUND_PRESETS[m];
-      html += `<button class="${params.bgMode === m ? 'on' : ''}" data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
-    }
-    html += '</div>';
-
-    html += '<div class="ps-subtitle">Theme</div><div class="seg seg-wrap">';
-    for (const tname of Object.keys(THEMES)) {
-      const label = THEME_LABELS[tname] || tname;
-      html += `<button class="${params.theme === tname ? 'on' : ''}" data-act="setTheme" data-arg="${tname}" title="Changes interface chrome only">${label}</button>`;
-    }
-    html += '</div>';
-
-    if (caps.lighting !== false || params.view === 'e8coxeter' || params.view === 'bloom') {
-      html += slider('Opacity', 'opacity', params.opacity ?? 0.9, 0.1, 1, 0.05, v => Math.round(v * 100) + '%');
-    }
-    if (caps.lighting) {
-      html += '<div class="ps-subtitle">Mesh lighting</div>';
-      html += slider('Ambient', 'lightAmbient', params.lightAmbient ?? 0.55, 0, 2, 0.05, v => v.toFixed(2));
-      html += slider('Key', 'lightKey', params.lightKey ?? 1.2, 0, 3, 0.05, v => v.toFixed(2));
-      html += slider('Fill', 'lightFill', params.lightFill ?? 0.6, 0, 2, 0.05, v => v.toFixed(2));
-      html += slider('Accent', 'lightAccent', params.lightAccent ?? 1.0, 0, 3, 0.05, v => v.toFixed(2));
-    }
-
-    html += '<div class="ps-subtitle">Color shift</div><div class="seg seg-wrap">';
-    for (const k of Object.keys(SHIFT_PRESETS)) {
-      html += `<button class="${(params.shiftMode || 'static') === k ? 'on' : ''}" data-act="setShiftMode" data-arg="${k}">${k}</button>`;
-    }
-    html += '</div>';
-    if ((params.shiftMode || 'static') !== 'static') {
-      html += slider('Cycle', 'shiftSpeed', Math.max(4, params.shiftSpeed || 12), 4, 120, 1, v => {
-        const n = Math.round(v);
-        if (n < 60) return n + 's';
-        const m = Math.floor(n / 60);
-        const s = n % 60;
-        return s === 0 ? m + 'm' : m + 'm ' + s + 's';
-      });
-    }
-
-    html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
-    html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution PNG image">PNG</button>';
-    html += '<button data-act="exportSVG" title="Scalable vector diagram (E₈ Coxeter)">SVG</button>';
-    html += '<button data-act="exportOBJ" title="3D model of the current solid">OBJ</button>';
-    html += '<button data-act="exportGeometryJSON" title="Raw geometry as JSON">Data</button>';
-    html += '</div></div>';
+  if ((params.shiftMode || 'static') !== 'static') {
+    html += slider('Cycle', 'shiftSpeed', Math.max(4, params.shiftSpeed || 12), 4, 120, 1, v => {
+      const n = Math.round(v);
+      if (n < 60) return n + 's';
+      const m = Math.floor(n / 60);
+      const s = n % 60;
+      return s === 0 ? m + 'm' : m + 'm ' + s + 's';
+    });
   }
+
+  // These are backgrounds, so call them backgrounds. Show every option that
+  // the active quality tier can render instead of hiding most behind a gate.
+  html += '<div class="ps-subtitle">Background</div><div class="seg seg-wrap">';
+  for (const m of backgroundModesForQuality(quality)) {
+    const background = BACKGROUND_PRESETS[m];
+    html += `<button class="${params.bgMode === m ? 'on' : ''}" ${pressed(params.bgMode === m)} data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
+  }
+  html += '</div>';
+  html += slider('Brightness', 'bgIntensity', params.bgIntensity ?? 0.7, 0, 1.5, 0.05, v => Math.round(v * 100) + '%');
+
+  if (caps.coloring) {
+    html += '<div class="ps-subtitle">Color by</div><div class="seg seg-wrap">';
+    for (const k of Object.keys(COLORINGS)) {
+      html += `<button class="${(params.colorBy || 'shell') === k ? 'on' : ''}" ${pressed((params.colorBy || 'shell') === k)} data-act="setColorBy" data-arg="${k}" title="${COLORINGS[k]}">${k}</button>`;
+    }
+    html += '</div>';
+  }
+
+  html += '<div class="ps-subtitle">Effects</div><div class="ps-help">Effects supported by this view are shown here. Cost badges indicate approximate GPU work.</div>';
+  html += '<div class="fx-catalog-grid">';
+  for (const item of effectsForView(params.view, quality, { includeUnavailable: true })) {
+    const available = effectAvailableForQuality(item.id, quality);
+    const unavailableTitle = available ? item.description : `${item.description} Requires a higher quality tier.`;
+    html += `<button class="fx-catalog-item ${params.fxMode === item.id ? 'on' : ''} ${available ? '' : 'unavailable'}"
+      ${pressed(params.fxMode === item.id)} data-act="setFX" data-arg="${item.id}" title="${unavailableTitle}" ${available ? '' : 'disabled'}>
+      <span>${item.label}</span><small class="fx-cost fx-cost-${item.cost}">${item.cost}</small>
+    </button>`;
+  }
+  html += '</div>';
+  html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  if (params.view === 'raymarched') {
+    html += '<div class="ps-help">SDF effects are implemented directly in the raymarcher; point-only effects are omitted.</div>';
+  }
+
+  if (caps.lighting !== false || params.view === 'e8coxeter' || params.view === 'bloom') {
+    html += slider('Opacity', 'opacity', params.opacity ?? 0.9, 0.1, 1, 0.05, v => Math.round(v * 100) + '%');
+  }
+  if (caps.lighting) {
+    html += '<div class="ps-subtitle">Mesh lighting</div>';
+    html += slider('Ambient', 'lightAmbient', params.lightAmbient ?? 0.55, 0, 2, 0.05, v => v.toFixed(2));
+    html += slider('Key', 'lightKey', params.lightKey ?? 1.2, 0, 3, 0.05, v => v.toFixed(2));
+    html += slider('Fill', 'lightFill', params.lightFill ?? 0.6, 0, 2, 0.05, v => v.toFixed(2));
+    html += slider('Accent', 'lightAccent', params.lightAccent ?? 1.0, 0, 3, 0.05, v => v.toFixed(2));
+  }
+
+  // The six curated looks are shortcuts into the effect catalog. Keeping them
+  // near the bottom makes them optional accelerators rather than the hierarchy.
+  html += '<div class="ps-subtitle">Quick looks</div>';
+  html += '<div class="look-grid">';
+  for (const look of CURATED_LOOKS) {
+    if (!effectAvailableForView(params.view, look.mode, quality)) continue;
+    const item = FX_BY_ID[look.mode];
+    html += `<button class="look-card ${params.fxMode === look.mode ? 'on' : ''}" ${pressed(params.fxMode === look.mode)} data-act="setFX" data-arg="${look.mode}" title="${item.description}">
+      <span>${look.label}</span><small>${look.description}</small>
+    </button>`;
+  }
+  html += '</div>';
+
+  // Theme affects the interface chrome rather than the artwork, so it comes
+  // after all scene-facing appearance controls.
+  html += '<div class="ps-subtitle">Interface theme</div><div class="seg seg-wrap">';
+  for (const tname of Object.keys(THEMES)) {
+    const label = THEME_LABELS[tname] || tname;
+    html += `<button class="${params.theme === tname ? 'on' : ''}" ${pressed(params.theme === tname)} data-act="setTheme" data-arg="${tname}" title="Changes interface chrome only">${label}</button>`;
+  }
+  html += '</div>';
+
+  html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
+  html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution PNG image">PNG</button>';
+  html += '<button data-act="exportSVG" title="Scalable vector diagram (E₈ Coxeter)">SVG</button>';
+  html += '<button data-act="exportOBJ" title="3D model of the current solid">OBJ</button>';
+  html += '<button data-act="exportGeometryJSON" title="Raw geometry as JSON">Data</button>';
+  html += '</div>';
 
   html += '</div>';
   return html;
@@ -472,7 +464,11 @@ function renderMathSection(params, data) {
   const caps = VIEW_CAPABILITIES[params.view] || {};
   if (!caps.math) return '';  // no math section for this view
 
-  let html = '<div class="ps-section" data-section="math"><div class="ps-title">Math</div>';
+  const subject = caps.math === 'e8' ? 'the E₈ root system'
+    : caps.math === '600' ? 'the 600-cell'
+    : 'the selected solid';
+  let html = `<div class="ps-section" data-section="math"><div class="ps-title">Math lab</div>
+    <div class="ps-help learn-math-intro">Interactive details for ${subject}. Change the active View to open a different lab.</div>`;
 
   if (caps.math === 'e8') {
     html += `<div class="info-box">
@@ -664,7 +660,7 @@ function slider(label, paramKey, value, min, max, step, formatFn, off, options =
     <label class="control-label">${label}</label>
     <input type="range" id="slider-${paramKey}" data-param="${paramKey}"${offAttr}${invertAttr} min="${min}" max="${max}" step="${step}" value="${displayValue}" ${fillStyle}>
     <span class="control-value" id="slider-val-${paramKey}">${formatFn(value)}</span>
-    <button class="slider-auto ${auto ? 'on' : ''}" data-act="toggleSliderAuto" data-arg="${paramKey}" title="Auto-animate this slider" aria-label="Auto-animate ${label}">⟳</button>
+    <button class="slider-auto ${auto ? 'on' : ''}" ${pressed(auto)} data-act="toggleSliderAuto" data-arg="${paramKey}" title="Auto-animate this slider" aria-label="Auto-animate ${label}">⟳</button>
   </div>`;
 }
 
@@ -674,7 +670,7 @@ function slider(label, paramKey, value, min, max, step, formatFn, off, options =
 function toggle(label, value, act) {
   return `<div class="control-row">
     <label class="control-label">${label}</label>
-    <button class="${value ? 'on' : ''}" data-act="${act}">${value ? 'on' : 'off'}</button>
+    <button class="${value ? 'on' : ''}" ${pressed(value)} data-act="${act}">${value ? 'on' : 'off'}</button>
   </div>`;
 }
 
@@ -688,117 +684,121 @@ function renderLearnSection(params) {
   const daily = learning?.dailyFact;
   const progress = learning?.progress || {};
   const unlocked = new Set(progress.unlocked?.backgrounds || []);
+  const quizzes = learning?.quizzes || [];
+  const rewards = learning?.rewards || [];
+  const earnedBadges = new Set(progress.badges || []);
   return `
     <div class="ps-section" data-section="learn">
       <div class="ps-title">Learn</div>
-      <div class="info-box">
-        <span class="info-title">Learning Center</span>
-        <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">
-          Follow four ordered paths connecting readings, visualizations, sources, and low-stakes quizzes.
+      <div class="info-box learn-orientation" data-learn-orientation>
+        <span class="info-title">E₈ at a glance</span>
+        <div class="learn-fact-strip" aria-label="Key E8 facts">
+          <div><strong>240</strong><span>roots</span></div>
+          <div><strong>8</strong><span>rings</span></div>
+          <div><strong>30×</strong><span>symmetry</span></div>
         </div>
-        <div class="seg"><button data-act="openLearningCenter">Open curriculum</button></div>
+        <p>The exceptional Lie algebra E<sub>8</sub> is shown through its 240 <b>root vectors</b>, projected from eight dimensions onto the <b>Coxeter plane</b>.</p>
+        <p>Those roots land on <b>eight concentric rings</b>. The Petrie path traces a 30-step orbit; bright roots are an illustrative McKay-source highlight.</p>
+        <div class="learn-orientation-actions"><button data-act="openE8Explorer">Explore E₈</button></div>
       </div>
-      <div class="info-box">
-        <span class="info-title">Reference</span>
-        <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">
-          Look up a term, meet the people, or trace the history. Press <kbd>G</kbd> for the glossary.
-        </div>
-        <div class="seg">
-          <button data-act="openGlossary">Glossary</button>
-          <button data-act="openBiographies">People</button>
-          <button data-act="openTimeline">Timeline</button>
-        </div>
+
+      <div class="ps-subtitle">Start exploring</div>
+      <div class="learn-path-grid" data-learn-paths>
+        <button class="learn-path-card primary" data-act="openLearningCenter">
+          <span>Curriculum</span><small>Four guided learning paths</small>
+        </button>
+        <button class="learn-path-card" data-act="toggleTour">
+          <span>Guided tour</span><small>${TOUR_STOPS.length} scenes · ${mins}m ${secs}s</small>
+        </button>
+        <button class="learn-path-card" data-act="openProofs">
+          <span>Interactive proofs</span><small>Build the ideas step by step</small>
+        </button>
       </div>
+
       ${curiosity ? `
+        <div class="ps-subtitle">In this view</div>
         <div class="info-box curiosity-card">
           <span class="info-title">${escapeHtml(curiosity.title)}</span>
           <div>${escapeHtml(curiosity.body)}</div>
         </div>
       ` : ''}
-      <div class="info-box">
-        <span class="info-title">Interactive proofs</span>
-        <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">
-          Step through why there are exactly five Platonic solids, and why dim(E₈) = 248.
-        </div>
-        <div class="seg">
-          <button data-act="openProofs">Open proofs</button>
-        </div>
-      </div>
-      <div class="info-box">
-        <span class="info-title">Guided tour</span>
-        <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">
-          Auto-cycles through ${TOUR_STOPS.length} views, narrating each with a short essay.
-          Total runtime: <b>${mins}m ${secs}s</b>. Press <kbd>T</kbd> to start/stop.
-        </div>
-        <div class="seg">
-          <button data-act="toggleTour">Start tour</button>
-        </div>
-      </div>
+
       ${daily ? `
+        <div class="ps-subtitle">Today's discovery</div>
         <div class="info-box daily-card">
           <span class="info-title">${escapeHtml(daily.title)}</span>
           <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">${escapeHtml(daily.body)}</div>
-          <div class="seg">
-            <button data-act="claimDailyFact">${learning.dailyClaimedToday ? 'View today' : 'Claim today'}</button>
-            <button data-act="openPostcardStudio">Postcard</button>
-          </div>
-          <div class="learn-progress">Streak ${summary.streak || 0} - ${summary.quizPassed || 0}/${summary.quizTotal || 0} quizzes - ${summary.postcardsCreated || 0} postcards</div>
+          <div class="seg"><button data-act="claimDailyFact">${learning.dailyClaimedToday ? 'View today' : 'Claim today'}</button></div>
         </div>
       ` : ''}
-      <div class="ps-subtitle">Quizzes</div>
-      <div class="quiz-grid">
-        ${(learning?.quizzes || []).map(q => {
-          const qState = progress.quiz?.[q.id] || {};
-          const passed = !!qState.passedAt;
-          return `<button class="quiz-card ${passed ? 'passed' : ''}" data-act="startQuiz" data-arg="${q.id}">
-            <span>${escapeHtml(q.title)}</span>
-            <small>${passed ? `Best ${qState.bestScore || 0}/${qState.total || q.questions.length}` : `${q.questions.length} questions`}</small>
-          </button>`;
-        }).join('')}
+
+      <div class="ps-subtitle">Reference</div>
+      <div class="learn-reference-grid">
+        <button data-act="openGlossary"><span>Glossary</span><small>terms</small></button>
+        <button data-act="openBiographies"><span>People</span><small>thinkers</small></button>
+        <button data-act="openTimeline"><span>Timeline</span><small>history</small></button>
       </div>
-      <div class="ps-subtitle">Rewards</div>
-      <div class="reward-grid">
-        ${(learning?.rewards || []).map(r => `
-          <div class="reward-card ${unlocked.has(r.id) ? 'unlocked' : 'locked'}" title="${escapeHtml(r.description)}">
-            <span class="reward-swatch" style="background:linear-gradient(135deg, ${r.colors.join(',')})"></span>
-            <span>${escapeHtml(r.name)}</span>
-            <small>${unlocked.has(r.id) ? 'unlocked' : 'cosmetic'}</small>
+
+      <details class="learn-disclosure" data-learn-disclosure="progress">
+        <summary><span>Progress &amp; challenges</span><small>${summary.quizPassed || 0}/${summary.quizTotal || 0} quizzes · ${earnedBadges.size}/${BADGE_INFO.length} badges</small></summary>
+        <div class="learn-disclosure-body">
+          <div class="learn-progress-stats">
+            <div><strong>${summary.streak || 0}</strong><span>day streak</span></div>
+            <div><strong>${summary.quizPassed || 0}</strong><span>quizzes</span></div>
+            <div><strong>${summary.postcardsCreated || 0}</strong><span>postcards</span></div>
           </div>
-        `).join('')}
-      </div>
-      <div class="ps-subtitle">Achievements</div>
-      <div style="font-size:10px;color:var(--ink-2);margin:4px 0 8px">
-        Badges earned by exploring, reading, and passing quizzes. All local — no accounts.
-      </div>
-      <div class="quiz-grid">
-        ${BADGE_INFO.map(b => {
-          const earned = (progress.badges || []).includes(b.id);
-          return `<div class="quiz-card ${earned ? 'passed' : ''}" title="${escapeHtml(b.description)}">
-            <span>${escapeHtml(b.name)}</span>
-            <small>${earned ? '✓ earned' : escapeHtml(b.kind)}</small>
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="info-box">
-        <span class="info-title">Postcard Studio</span>
-        <div style="font-size:10px;color:var(--ink-2);margin:4px 0 6px">
-          Export a 9:16 PNG or WebM with an editable caption. No rating prompts, no forced posting.
+          <div class="ps-subtitle">Quizzes</div>
+          <div class="quiz-grid">
+            ${quizzes.map(q => {
+              const qState = progress.quiz?.[q.id] || {};
+              const passed = !!qState.passedAt;
+              return `<button class="quiz-card ${passed ? 'passed' : ''}" data-act="startQuiz" data-arg="${q.id}">
+                <span>${escapeHtml(q.title)}</span>
+                <small>${passed ? `Best ${qState.bestScore || 0}/${qState.total || q.questions.length}` : `${q.questions.length} questions`}</small>
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="ps-subtitle">Rewards</div>
+          <div class="reward-grid">
+            ${rewards.map(r => `
+              <div class="reward-card ${unlocked.has(r.id) ? 'unlocked' : 'locked'}" title="${escapeHtml(r.description)}">
+                <span class="reward-swatch" style="background:linear-gradient(135deg, ${r.colors.join(',')})"></span>
+                <span>${escapeHtml(r.name)}</span>
+                <small>${unlocked.has(r.id) ? 'unlocked' : 'cosmetic'}</small>
+              </div>
+            `).join('')}
+          </div>
+          <div class="ps-subtitle">Achievements</div>
+          <div class="ps-help">Earned by exploring, reading, and passing quizzes. Progress stays on this device.</div>
+          <div class="quiz-grid">
+            ${BADGE_INFO.map(b => {
+              const earned = earnedBadges.has(b.id);
+              return `<div class="quiz-card ${earned ? 'passed' : ''}" title="${escapeHtml(b.description)}">
+                <span>${escapeHtml(b.name)}</span>
+                <small>${earned ? '✓ earned' : escapeHtml(b.kind)}</small>
+              </div>`;
+            }).join('')}
+          </div>
         </div>
-        <div class="seg">
-          <button data-act="openPostcardStudio">Create postcard</button>
+      </details>
+
+      <details class="learn-disclosure" data-learn-disclosure="creative">
+        <summary><span>Create &amp; experiment</span><small>postcards · shader sketches</small></summary>
+        <div class="learn-disclosure-body">
+          <div class="info-box learn-creative-card">
+            <span class="info-title">Postcard Studio</span>
+            <div class="ps-help">Export a vertical PNG or WebM with your own caption.</div>
+            <div class="seg"><button data-act="openPostcardStudio">Create postcard</button></div>
+          </div>
+          <div class="ps-subtitle">Code-art gallery</div>
+          <div class="ps-help">Self-contained E₈ fragment-shader sketches. Select one to copy its code.</div>
+          ${CODE_ART_SHADERS.map((s, idx) => `
+            <button class="learn-code-card" data-act="copyCodeArt" data-arg="${idx}" title="Copy ${escapeHtml(s.title)} shader code">
+              <span>${escapeHtml(s.title)}</span><small>${escapeHtml(s.description)}</small>
+            </button>
+          `).join('')}
         </div>
-      </div>
-      <div class="ps-subtitle">Code-art gallery</div>
-      <div style="font-size:10px;color:var(--ink-2);margin:4px 0 8px">
-        Self-contained GLSL fragment-shader one-liners with E8 themes. Click any card to copy the code.
-      </div>
-      ${CODE_ART_SHADERS.map((s, idx) => `
-        <div class="info-box" style="cursor:pointer" data-act="copyCodeArt" data-arg="${idx}" title="Click to copy">
-          <span class="info-title">${escapeHtml(s.title)}</span>
-          <div style="font-size:10px;color:var(--ink-2);margin:4px 0">${escapeHtml(s.description)}</div>
-          <pre style="font-size:9px;color:var(--ink-1);margin:0;padding:6px;background:var(--bg-0);border:1px solid var(--line);border-radius:3px;overflow-x:auto;white-space:pre;line-height:1.3">${escapeHtml(s.code.slice(0, 200))}${s.code.length > 200 ? '\n...' : ''}</pre>
-        </div>
-      `).join('')}
+      </details>
     </div>
   `;
 }
@@ -825,6 +825,8 @@ export class ControlPanel {
     this.lastView = params.view;
     this.lastPalette = params.palette;
     this.lastFx = params.fxMode;
+    this.workspaceScroll = { scene: 0, style: 0, learn: 0 };
+    this.renderedWorkspace = null;
     this.render();
   }
 
@@ -843,19 +845,17 @@ export class ControlPanel {
       // rewrite → scrollTop reset to 0. Now we save+restore the scrollTop
       // of the body element across the rewrite.
       const oldBody = this.panelEl.querySelector('#ps-body');
-      const oldScrollTop = oldBody ? oldBody.scrollTop : 0;
+      if (oldBody && this.renderedWorkspace) {
+        this.workspaceScroll[this.renderedWorkspace] = oldBody.scrollTop;
+      }
+      const workspace = panelWorkspace(this.params);
       this.panelEl.classList.remove('collapsed');
       this.panelEl.innerHTML = `
         <div class="ps-status" id="ps-status"></div>
-        <div class="ps-search-wrap" title="Filter controls by name (press / to focus)">
-          <input class="ps-search" id="ps-search" type="search" placeholder="Filter controls…" autocomplete="off" aria-label="Filter panel controls">
-          <span class="ps-search-kbd" title="Press / to focus">/</span>
-        </div>
         <div class="ps-mode-tabs" role="tablist" aria-label="Control workspace">
-          <button class="${this.params.panelMode !== 'learn' ? 'on' : ''}" data-act="setPanelMode" data-arg="create" role="tab" aria-selected="${this.params.panelMode !== 'learn' ? 'true' : 'false'}">Create</button>
-          <button class="${this.params.panelMode === 'learn' ? 'on' : ''}" data-act="setPanelMode" data-arg="learn" role="tab" aria-selected="${this.params.panelMode === 'learn' ? 'true' : 'false'}">Learn</button>
+          ${PANEL_WORKSPACES.map(mode => `<button id="panel-tab-${mode}" class="${workspace === mode ? 'on' : ''}" data-act="setPanelMode" data-arg="${mode}" role="tab" aria-controls="ps-body" aria-selected="${workspace === mode ? 'true' : 'false'}" tabindex="${workspace === mode ? '0' : '-1'}">${PANEL_WORKSPACE_LABELS[mode]}</button>`).join('')}
         </div>
-        <div class="ps-scroll" id="ps-body"></div>
+        <div class="ps-scroll" id="ps-body" role="tabpanel" aria-labelledby="panel-tab-${workspace}"></div>
         <div class="panel-footer">
           <button data-act="resetConfig" title="Reset all settings"><span style="font-size:13px">↺</span> Reset</button>
           <button data-act="surprise" title="Surprise: randomize view, palette, FX, shape, and shift settings for discovery"><span style="font-size:13px">✦</span> Surprise</button>
@@ -863,37 +863,22 @@ export class ControlPanel {
           <button data-act="shareSnapshot" title="Save a snapshot of the current render"><span style="font-size:13px">▣</span> Snapshot</button>
           <button data-act="openVideoExport" title="Record a video clip (720p+)"><span style="font-size:13px">⏺</span> Video</button>
           <button data-act="togglePresentationMode" title="Full screen: hide all chrome (press Esc to exit)"><span style="font-size:13px">⛶</span> Full</button>
-          ${this.params.advancedStyle ? `
-            <button data-act="togglePerf" title="Toggle performance overlay">Perf</button>
-            <button data-act="toggleCommandPalette" title="Open command palette">Cmd</button>
-            <button data-act="copyDiagnostics" title="Copy diagnostics">Diag</button>
-            <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keys</button>
-            <div class="panel-shortcuts" aria-label="Keyboard shortcuts">
-              <span><kbd>1–6</kbd> views</span><span><kbd>Space</kbd> pause</span><span><kbd>S</kbd> png</span>
-              <span><kbd>T</kbd> tour</span><span><kbd>G</kbd> glossary</span><span><kbd>H</kbd> zen</span>
-              <span><kbd>?</kbd> shortcuts</span><span><kbd>⌘K</kbd> commands</span>
-            </div>
-          ` : ''}
+          <button data-act="togglePerf" title="Toggle the performance overlay">Perf</button>
+          <button data-act="toggleCommandPalette" title="Open the command palette">Cmd</button>
+          <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diag</button>
+          <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keys</button>
         </div>
       `;
-      // Wire the control-filter search box (nice-to-have #5). We re-attach on
-      // every render because innerHTML is rebuilt; the current query is
-      // preserved across renders via _searchQuery so typing isn't lost.
-      const search = this.panelEl.querySelector('#ps-search');
-      if (search) {
-        search.value = _searchQuery;
-        search.addEventListener('input', (e) => {
-          _searchQuery = e.target.value;
-          applyPanelFilter(_searchQuery);
-        });
-      }
       const body = this.panelEl.querySelector('#ps-body');
-      body.innerHTML = this.params.panelMode === 'learn'
-        ? renderMathSection(this.params, this.data) + renderLearnSection(this.params)
-        : renderViewSection(this.params, this.data) + renderStyleSection(this.params, this.data);
-      applyPanelFilter(_searchQuery);
-      // Restore scroll position
-      body.scrollTop = oldScrollTop;
+      body.innerHTML = workspace === 'learn'
+        ? renderLearnSection(this.params) + renderMathSection(this.params, this.data)
+        : workspace === 'style'
+          ? renderStyleSection(this.params, this.data)
+          : renderViewSection(this.params, this.data);
+      // Each workspace owns its own position. Switching tabs never lands the
+      // user halfway through an unrelated group of controls.
+      body.scrollTop = this.workspaceScroll[workspace] || 0;
+      this.renderedWorkspace = workspace;
       this.renderStatus();
     } catch (e) {
       console.error('Panel render error:', e);
@@ -904,13 +889,17 @@ export class ControlPanel {
     const el = this.panelEl.querySelector('#ps-status');
     if (!el) return;
     const p = this.params;
+    const viewLabel = ({ e8coxeter: 'E₈', sixhundred: '600-cell', polytope: '4D', raymarched: 'SDF' })[p.view]
+      || p.view;
+    const shapeLabel = String(p.shape || '').replaceAll('_', ' ');
+    const paletteLabel = String(p.palette || '').replaceAll('_', ' ');
     el.innerHTML = `
       <div class="ps-status-row">
-        <span class="ps-status-key">${p.view}</span>
+        <span class="ps-status-key">${viewLabel}</span>
         <span class="ps-status-sep">·</span>
-        <span class="ps-status-key">${p.shape}</span>
+        <span class="ps-status-key">${shapeLabel}</span>
         <span class="ps-status-sep">·</span>
-        <span class="ps-status-key">${p.palette}</span>
+        <span class="ps-status-key">${paletteLabel}</span>
         <span class="ps-status-sep">·</span>
         <span class="ps-motion" id="ps-motion" title="Animation state — updates live"></span>
       </div>
@@ -962,7 +951,21 @@ export function updateMotionStatus(params) {
 }
 
 export function initPanelEvents(panel) {
-  // No tab events needed — the new panel has no tabs
+  const root = panel?.panelEl || panel;
+  if (!root || root.dataset.workspaceKeysBound === 'true') return;
+  root.dataset.workspaceKeysBound = 'true';
+  root.addEventListener('keydown', event => {
+    const tab = event.target.closest?.('.ps-mode-tabs [role="tab"]');
+    if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const tabs = [...root.querySelectorAll('.ps-mode-tabs [role="tab"]')];
+    const current = tabs.indexOf(tab);
+    const next = event.key === 'Home' ? 0
+      : event.key === 'End' ? tabs.length - 1
+      : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[next].focus();
+    tabs[next].click();
+  });
 }
 
 // Legacy panel collapse is disabled. Mobile V2 owns the phone UI; the desktop
@@ -979,71 +982,4 @@ export function setPanelCollapsed(collapsed) {
 
 export function togglePanelCollapsed() {
   return false;
-}
-
-// ── Panel control filter / search (nice-to-have #5) ──────────────────────
-// A live filter box that hides control rows whose label doesn't match the
-// query. Survives panel re-renders via the module-level _searchQuery. When a
-// query is active, sections with no visible rows are hidden too.
-let _searchQuery = '';
-
-/** Focus the panel search input (called from the '/' shortcut). */
-export function focusPanelSearch() {
-  const el = document.getElementById('ps-search');
-  if (el) {
-    // Expand the panel first if it's collapsed, otherwise the input is hidden.
-    if (isPanelCollapsed()) togglePanelCollapsed();
-    el.focus();
-    el.select();
-  }
-}
-
-/** Hide controls that don't match the query; hide empty sections.
- *  The panel is organized as `.ps-subtitle` headers each followed by a group
- *  of controls (`.seg` button grids, `.control-row` sliders, etc.). We match
- *  against the subtitle label plus every label/button inside the group, and
- *  hide whole groups (subtitle + body) that don't match. Standalone sliders
- *  without a preceding subtitle are matched on their own label. */
-function applyPanelFilter(query) {
-  const body = document.getElementById('ps-body');
-  if (!body) return;
-  const q = (query || '').trim().toLowerCase();
-  // Reset: show everything.
-  body.querySelectorAll('.ps-hidden').forEach(el => el.classList.remove('ps-hidden'));
-  if (!q) return;
-
-  // Walk the children of each section. A `.ps-subtitle` opens a group that
-  // includes all following siblings until the next `.ps-subtitle` (or a
-  // `.ps-title`/end). Match the group as a whole on its combined text.
-  body.querySelectorAll('.ps-section').forEach(section => {
-    let sectionHasMatch = false;
-    const kids = Array.from(section.children);
-    // Group: subtitle + the run of siblings after it until the next subtitle.
-    let i = 0;
-    while (i < kids.length) {
-      const el = kids[i];
-      if (el.classList && el.classList.contains('ps-subtitle')) {
-        // Collect the subtitle + following siblings until next subtitle.
-        const group = [el];
-        let j = i + 1;
-        while (j < kids.length && !(kids[j].classList && kids[j].classList.contains('ps-subtitle'))) {
-          group.push(kids[j]);
-          j++;
-        }
-        const text = group.map(g => g.textContent || '').join(' ').toLowerCase();
-        const match = text.includes(q);
-        group.forEach(g => g.classList.toggle('ps-hidden', !match));
-        if (match) sectionHasMatch = true;
-        i = j;
-      } else {
-        // Standalone element (slider row, info-box, etc.) — match on its own text.
-        const text = (el.textContent || '').toLowerCase();
-        const match = text.includes(q);
-        el.classList.toggle('ps-hidden', !match);
-        if (match) sectionHasMatch = true;
-        i++;
-      }
-    }
-    section.classList.toggle('ps-hidden', !sectionHasMatch);
-  });
 }

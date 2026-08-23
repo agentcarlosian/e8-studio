@@ -4,7 +4,7 @@
    Facelift goals:
    - Refined depth via layered surfaces + subtle gradients
    - Modern range sliders (accent track fill, larger knobs)
-   - Glassmorphic overlays (command palette, toasts, welcome card)
+   - Glassmorphic overlays (command palette, toasts, and dialogs)
    - Smoother, snappier transitions
    - All existing class names, CSS variables, and structural hooks preserved.
 */
@@ -568,101 +568,6 @@ main {
   font-feature-settings: "tnum" 1;
 }
 
-/* ---------- Welcome card (first-time intro) ---------- */
-.welcome-card {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(560px, 86vw);
-  max-height: 80vh;
-  overflow-y: auto;
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  padding: 22px 26px 26px;
-  box-shadow: var(--shadow-lg), 0 0 0 1px var(--glass-border);
-  z-index: 20;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-1);
-  transition: opacity 240ms var(--ease), transform 240ms var(--ease);
-}
-.welcome-card.hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, calc(-50% + 12px));
-}
-.welcome-card .wc-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 16px;
-}
-.welcome-card .wc-mark {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  color: var(--accent);
-  text-transform: uppercase;
-  font-weight: 500;
-}
-.welcome-card .wc-close {
-  background: transparent;
-  border: none;
-  color: var(--ink-2);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  transition: background 120ms var(--ease), color 120ms var(--ease), transform 120ms var(--ease);
-}
-.welcome-card .wc-close:hover {
-  background: var(--bg-2);
-  color: var(--ink-0);
-  transform: rotate(90deg);
-}
-.welcome-card .wc-body p {
-  margin: 0 0 10px;
-}
-.welcome-card .wc-body p:last-child {
-  margin-bottom: 0;
-}
-.welcome-card .wc-body b {
-  color: var(--ink-0);
-  font-weight: 600;
-}
-.welcome-card .wc-mono {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--accent-4);
-}
-.welcome-card .wc-hint {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-soft);
-  color: var(--ink-2);
-  font-size: 12px;
-}
-.welcome-card .wc-hint kbd {
-  display: inline-block;
-  color: var(--ink-1);
-  padding: 1px 5px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: var(--radius-sm);
-  margin: 0 2px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  background: var(--bg-0);
-}
-
 /* ---------- Footer ---------- */
 
 footer {
@@ -995,20 +900,6 @@ body.desktop-touch-shell #panel .ps-status {
   padding: 12px 14px 12px 116px;
   min-height: 72px;
   font-size: 11px;
-}
-
-body.desktop-touch-shell #panel .ps-search-wrap {
-  padding: 12px 14px;
-}
-
-body.desktop-touch-shell #panel .ps-search {
-  min-height: 46px;
-  padding: 10px 42px 10px 14px;
-  font-size: 16px;
-}
-
-body.desktop-touch-shell #panel .ps-search-kbd {
-  display: none;
 }
 
 body.desktop-touch-shell #panel .ps-scroll {

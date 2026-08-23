@@ -24,9 +24,10 @@ JS_FILES    = [
     # module it imports from.
     ROOT / 'src' / 'state' / 'persistence.js',
     ROOT / 'src' / 'state' / 'progress.js',
+    ROOT / 'src' / 'state' / 'selection-policy.js',
+    ROOT / 'src' / 'state' / 'view-transition.js',
     ROOT / 'src' / 'state' / 'presets.js',
     ROOT / 'src' / 'state' / 'gallery.js',
-    ROOT / 'src' / 'state' / 'view-transition.js',
     ROOT / 'src' / 'state' / 'camera.js',
     ROOT / 'src' / 'platform' / 'resource-scope.js',
     ROOT / 'src' / 'platform' / 'frame-health.js',

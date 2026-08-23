@@ -260,12 +260,12 @@ def main() -> int:
               window.__app.switchView('raymarched');
               return { cleared, sdfAutos: window.__app.params.autoSliders.slice() };
             }""")
-            check("view switches clear incompatible motion without losing E8-to-SDF flux",
+            check("view switches replace all selection-owned motion and modifiers",
                   transition_state["cleared"] == {
                     "poly": False, "rotate": False, "orbit": False,
                     "path": "manual", "zoom": False, "autos": []
                   }
-                  and transition_state["sdfAutos"] == ["e8MorphT"],
+                  and transition_state["sdfAutos"] == [],
                   str(transition_state))
 
             poly_motion = pg.evaluate("""() => {

@@ -46,7 +46,7 @@ E8 Studio is both an explorer and a generative visual instrument. You can:
 
 - Choose from dozens of curated color palettes, including mathematically driven E8 color modes.
 - Place the geometry in star fields, nebulae, galactic dust, deep-space fields, aurorae, grids, and other procedural backgrounds.
-- Start with six outcome-oriented looks, then open **Advanced controls** for the complete effect, palette, background, lighting, and export catalogs.
+- Use the focused **Visuals** workspace for the complete palette, color-shift, background, effect, lighting, quick-look, theme, and export controls.
 - Apply view-aware shader effects: point and mesh views expose the full compatible catalog, while E8 SDF provides native Glow, Pulse, Heat, Iridescent, Hologram, and X-ray surface treatments.
 - Animate individual sliders, extrusion, rotations, morphs, palette shifts, and camera movement.
 - Use Orbit, Dive, and Spiral camera paths or take direct control with drag, scroll, and touch gestures.
@@ -88,7 +88,7 @@ The educational system is integrated with the visual controls instead of being a
 - **Mouse:** drag to orbit, scroll to zoom, and click supported roots or structures for details.
 - **Touch:** drag to orbit and pinch to zoom; the responsive control drawer keeps the render visible on smaller screens.
 - **Keyboard:** use `1–6` for views, `Space` to pause, `S` for PNG, `T` for the tour, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
-- **Control search:** press `/` or use the filter field to find a setting without opening every section.
+- **Workspaces:** use **View** for geometry and camera controls, **Visuals** for appearance, and **Learn** for orientation, guided paths, references, progress, and interactive mathematics.
 - **Reset and recovery:** camera and view resets stop conflicting animation drivers and return to a known pose.
 
 ## Mathematical Visualization

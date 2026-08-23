@@ -52,45 +52,9 @@
   display: none;
 }
 
-/* ── Panel control-filter search box (nice-to-have #5) ── */
-.ps-search-wrap {
-  position: relative;
-  padding: 6px 10px 8px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.ps-search {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 5px 24px 5px 8px;
-  background: var(--bg-0);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm, 5px);
-  color: var(--ink-0);
-  min-height: var(--control-min);
-  font-size: var(--text-sm);
-  font-family: inherit;
-  outline: none;
-  transition: border-color var(--duration-fast) var(--ease, ease);
-}
-.ps-search:focus { border-color: var(--accent); }
-.ps-search::placeholder { color: var(--ink-3); }
-.ps-search-kbd {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 10px;
-  color: var(--ink-3);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0 4px;
-  pointer-events: none;
-  font-family: 'JetBrains Mono', monospace;
-}
-
 .ps-mode-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 0 10px 8px;
   border-bottom: 1px solid var(--line-soft);
@@ -108,9 +72,6 @@
 }
 .ps-mode-tabs button:hover { border-color: var(--accent); color: var(--ink-0); }
 .ps-mode-tabs button.on { border-color: var(--accent); background: var(--bg-2); color: var(--accent); }
-
-/* Hidden control rows / sections when a filter is active. */
-.ps-hidden { display: none !important; }
 
 /* Brief flash when a section is jumped to via the 'm'/'l' shortcuts. */
 @keyframes ps-flash {
@@ -193,29 +154,6 @@
 .look-card span { color: var(--ink-0); font-size: 10px; font-weight: 650; }
 .look-card.on span { color: var(--accent); }
 .look-card small { margin-top: 2px; color: var(--ink-2); font-size: 8px; white-space: nowrap; }
-
-.quick-swatches { margin-bottom: 6px; }
-
-.ps-advanced-toggle {
-  width: 100%;
-  min-height: 30px;
-  margin: 10px 0 3px;
-  border: 1px dashed var(--line);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--ink-2);
-  cursor: pointer;
-  font: 9px 'JetBrains Mono', monospace;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.ps-advanced-toggle:hover,
-.ps-advanced-toggle.on { border-color: var(--accent); color: var(--accent); }
-.ps-advanced {
-  margin-top: 7px;
-  padding-top: 2px;
-  border-top: 1px solid var(--line-soft);
-}
 
 .fx-catalog-grid {
   display: grid;
@@ -314,14 +252,260 @@
   height: 20px;
   border-radius: 3px;
 }
-.palette-groups { display: grid; gap: var(--space-2); }
-.palette-group-label {
-  margin-bottom: var(--space-1);
+.learn-orientation p { margin: 6px 0; }
+.learn-orientation p:last-child { margin-bottom: 0; }
+.learn-equation {
+  color: var(--accent-4);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* E8 overlays: passive guides and animated symmetry tools are deliberately
+   presented as separate groups instead of one ambiguous button matrix. */
+.overlay-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.overlay-title button {
+  min-height: 20px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
   color: var(--ink-2);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
+  cursor: pointer;
+  font: 8px 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.overlay-title button:hover { border-color: var(--accent); color: var(--accent); }
+.overlay-group-label {
+  margin: 5px 0 4px;
+  color: var(--ink-2);
+  font: 8px 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.overlay-structure-grid,
+.overlay-explorer-grid {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+.overlay-structure-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.overlay-explorer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.overlay-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-1);
+  color: var(--ink-1);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 140ms, background 140ms, transform 140ms;
+}
+.overlay-option:hover { border-color: var(--accent); transform: translateY(-1px); }
+.overlay-option.on {
+  border-color: var(--accent);
+  background: var(--bg-2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.overlay-indicator {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--ink-3);
+  border-radius: 50%;
+  background: transparent;
+}
+.overlay-option.on .overlay-indicator {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 72%, transparent);
+}
+.overlay-copy,
+.overlay-copy strong,
+.overlay-copy small { display: block; min-width: 0; }
+.overlay-copy strong {
+  overflow: hidden;
+  color: var(--ink-0);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+.overlay-option.on .overlay-copy strong { color: var(--accent); }
+.overlay-copy small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 7px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overlay-structure-grid .overlay-option {
+  grid-template-columns: 1fr;
+  min-height: 39px;
+  padding: 5px;
+  text-align: center;
+}
+.overlay-structure-grid .overlay-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+}
+
+/* Learn starts with orientation and clear entry points. Long-tail progress and
+   creative material remain available through native, keyboard-friendly folds. */
+.learn-fact-strip,
+.learn-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.learn-fact-strip div,
+.learn-progress-stats div {
+  min-width: 0;
+  padding: 6px 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--bg-1);
+  text-align: center;
+}
+.learn-fact-strip strong,
+.learn-progress-stats strong {
+  display: block;
+  color: var(--accent);
+  font: 600 12px 'JetBrains Mono', monospace;
+}
+.learn-fact-strip span,
+.learn-progress-stats span {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.learn-orientation-actions { margin-top: 8px; }
+.learn-orientation-actions button {
+  width: 100%;
+  min-height: 29px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-1));
+  color: var(--accent);
+  cursor: pointer;
+  font: 9px 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}
+.learn-path-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+.learn-path-card {
+  min-width: 0;
+  min-height: 50px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-1);
+  color: var(--ink-1);
+  cursor: pointer;
+  text-align: left;
+}
+.learn-path-card.primary { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--accent) 58%, var(--line)); }
+.learn-path-card:hover { border-color: var(--accent); }
+.learn-path-card span,
+.learn-path-card small { display: block; }
+.learn-path-card span { color: var(--ink-0); font-size: 10px; font-weight: 650; }
+.learn-path-card.primary span { color: var(--accent); }
+.learn-path-card small { margin-top: 3px; color: var(--ink-2); font-size: 8px; line-height: 1.25; }
+.learn-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.learn-reference-grid button {
+  min-width: 0;
+  min-height: 39px;
+  padding: 5px 3px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--ink-1);
+  cursor: pointer;
+}
+.learn-reference-grid button:hover { border-color: var(--accent); }
+.learn-reference-grid span,
+.learn-reference-grid small { display: block; }
+.learn-reference-grid span { color: var(--ink-0); font-size: 9px; }
+.learn-reference-grid small { margin-top: 2px; color: var(--ink-3); font-size: 7px; text-transform: uppercase; }
+.learn-disclosure {
+  margin: 5px 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-1);
+  overflow: clip;
+}
+.learn-disclosure summary {
+  position: relative;
+  padding: 8px 25px 8px 9px;
+  cursor: pointer;
+  list-style: none;
+}
+.learn-disclosure summary::-webkit-details-marker { display: none; }
+.learn-disclosure summary::after {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  color: var(--ink-2);
+  font: 13px 'JetBrains Mono', monospace;
+  transform: translateY(-50%);
+}
+.learn-disclosure[open] summary::after { content: '−'; color: var(--accent); }
+.learn-disclosure summary span,
+.learn-disclosure summary small { display: block; }
+.learn-disclosure summary span { color: var(--ink-0); font-size: 10px; font-weight: 600; }
+.learn-disclosure summary small { margin-top: 2px; color: var(--ink-2); font-size: 8px; }
+.learn-disclosure[open] summary { border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.learn-disclosure-body { padding: 8px; }
+.learn-disclosure-body > .ps-subtitle:first-child { margin-top: 3px; }
+.learn-creative-card { margin-bottom: 8px; }
+.learn-code-card {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-0);
+  color: var(--ink-1);
+  cursor: pointer;
+  text-align: left;
+}
+.learn-code-card:hover { border-color: var(--accent-4); }
+.learn-code-card span,
+.learn-code-card small { display: block; }
+.learn-code-card span { color: var(--accent-4); font-size: 9px; }
+.learn-code-card small { margin-top: 2px; color: var(--ink-2); font-size: 8px; line-height: 1.3; }
+.learn-math-intro { margin-top: -3px; }
 
 .palette-active-preview {
   min-height: 40px;
