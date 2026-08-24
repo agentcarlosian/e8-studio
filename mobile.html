@@ -74,13 +74,6 @@
                 <button type="button" data-bloom-action="reset">Reset</button>
               </div>
             </div>
-            <div class="scene-preset-panel" aria-label="Scene presets">
-              <div class="browse-head">
-                <strong>Scenes</strong>
-                <output id="scene-preset-output">E8</output>
-              </div>
-              <div id="scene-preset-grid" class="scene-preset-grid"></div>
-            </div>
             <div class="model-shortcut-panel" aria-label="Model shortcuts">
               <div class="browse-head">
                 <strong>Models</strong>
@@ -88,7 +81,9 @@
               </div>
               <div id="model-shortcut-groups" class="model-shortcut-groups"></div>
             </div>
-            <label class="field">
+            <!-- The grouped Models catalog above is the sole visible selector.
+                 Native selects remain hidden as compact state/event fallbacks. -->
+            <label class="field" hidden aria-hidden="true">
               <span>Model</span>
               <select id="model-select">
                 <option value="bloom">Bloom</option>
@@ -121,7 +116,7 @@
                 <input id="sdf-aniso" type="range" min="0" max="1" step="0.05" value="0.6">
               </label>
             </div>
-            <label id="shape-field" class="field hidden">
+            <label id="shape-field" class="field hidden" hidden aria-hidden="true">
               <span>Shape</span>
               <select id="shape-select">
                 <optgroup label="Platonic solids">
@@ -139,7 +134,7 @@
                 </optgroup>
               </select>
             </label>
-            <label id="polytope4d-field" class="field hidden">
+            <label id="polytope4d-field" class="field hidden" hidden aria-hidden="true">
               <span>4D polytope</span>
               <select id="polytope4d-select">
                 <option value="5cell">5-cell</option>
@@ -150,7 +145,7 @@
                 <option value="120cell">120-cell</option>
               </select>
             </label>
-            <label id="dynkin-field" class="field hidden">
+            <label id="dynkin-field" class="field hidden" hidden aria-hidden="true">
               <span>Dynkin diagram</span>
               <select id="dynkin-select">
                 <option value="E8">E8</option>
