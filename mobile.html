@@ -153,42 +153,42 @@
                 <option value="E6">E6</option>
               </select>
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>McKay highlight</strong>
                 <small>Show the selected Platonic subset.</small>
               </span>
               <input id="highlight-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>Context rays</strong>
                 <small>Show selected-root neighbors and opposite root.</small>
               </span>
               <input id="context-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>Petrie cycle</strong>
                 <small>Trace the desktop 30-root Coxeter cycle.</small>
               </span>
               <input id="petrie-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-only">
               <span>
                 <strong>Weyl mirrors</strong>
                 <small>Show the eight simple-reflection mirror lines.</small>
               </span>
               <input id="mirrors-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="vertex-models">
               <span>
                 <strong>Vertex nodes</strong>
                 <small>Show point markers on solids and 4D polytopes.</small>
               </span>
               <input id="vertices-toggle" type="checkbox">
             </label>
-            <label class="field">
+            <label class="field" data-model-context="e8-roots">
               <span>Subset</span>
               <select id="subset-select">
                 <option value="icosahedron">Icosahedron</option>
@@ -196,7 +196,7 @@
                 <option value="simple_roots">Simple roots</option>
               </select>
             </label>
-            <div class="subset-panel" aria-label="Subset root browser">
+            <div class="subset-panel" data-model-context="e8-roots" aria-label="Subset root browser">
               <div class="browse-head">
                 <strong>Subset roots</strong>
                 <output id="subset-output">0 roots</output>
@@ -209,7 +209,7 @@
                 <button type="button" data-subset-action="frame" aria-label="Frame subset">Frame</button>
               </div>
             </div>
-            <div class="browse-panel" aria-label="Root browser">
+            <div class="browse-panel" data-model-context="e8-roots" aria-label="Root browser">
               <div class="browse-head">
                 <strong>Root browser</strong>
                 <output id="root-output">None</output>
@@ -296,24 +296,32 @@
               <span class="field-heading">Opacity <output id="point-opacity-output">72%</output></span>
               <input id="point-opacity" type="range" min="0.3" max="1" step="0.05">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-only">
               <span>
                 <strong>Rings</strong>
                 <small>Draw the Coxeter shell guides.</small>
               </span>
               <input id="rings-toggle" type="checkbox">
             </label>
-            <div class="fx-preset-panel" aria-label="FX presets">
+            <div class="fx-preset-panel" aria-label="FX animation presets">
               <div class="browse-head">
-                <strong>FX presets</strong>
+                <strong>FX animation</strong>
                 <output id="fx-preset-output">Clean</output>
               </div>
               <div id="fx-preset-grid" class="fx-preset-grid"></div>
             </div>
+            <div class="fx-mode-panel" aria-label="Mobile FX treatments">
+              <div class="browse-head">
+                <strong>FX treatment</strong>
+                <output id="fx-mode-output">Clean</output>
+              </div>
+              <div id="fx-mode-grid" class="fx-mode-grid"></div>
+              <small id="fx-mode-description" class="panel-note">Original color and clarity.</small>
+            </div>
             <label class="toggle-row">
               <span>
-                <strong>Soft FX</strong>
-                <small>Add a lightweight pulse to points and models.</small>
+                <strong>Motion pulse</strong>
+                <small>Add a lightweight breathing animation to points and models.</small>
               </span>
               <input id="soft-fx-toggle" type="checkbox">
             </label>
