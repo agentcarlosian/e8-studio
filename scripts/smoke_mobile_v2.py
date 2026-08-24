@@ -1260,6 +1260,13 @@ def main() -> int:
                     window.__mobileApp.selectFxMode(id);
                     window.__mobileApp.forceRender();
                     const stats = window.__mobileApp.getMetrics().lastDrawStats;
+                    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+                    let canvasSignature = 2166136261;
+                    const stride = Math.max(4, Math.floor(pixels.length / 8192 / 4) * 4);
+                    for (let offset = 0; offset < pixels.length; offset += stride) {
+                        canvasSignature ^= pixels[offset] + pixels[offset + 1] * 3 + pixels[offset + 2] * 7 + pixels[offset + 3] * 11;
+                        canvasSignature = Math.imul(canvasSignature, 16777619);
+                    }
                     return {
                         id,
                         state: window.__mobileApp.getState().fxMode,
@@ -1271,14 +1278,21 @@ def main() -> int:
                         fxOverlayPrimitives: stats.fxOverlayPrimitives,
                         nativeFxApplied: stats.nativeFxApplied,
                         nativeFxPrimitives: stats.nativeFxPrimitives,
+                        canvasFxPassApplied: stats.canvasFxPassApplied,
+                        canvasFxPassPrimitives: stats.canvasFxPassPrimitives,
+                        canvasFxPassRenderer: stats.canvasFxPassRenderer,
+                        canvasSignature: (canvasSignature >>> 0).toString(16),
                         ripplePointCount: stats.ripplePointCount
                     };
                 });
             }""", desktop_fx_ids)
-            check("Every mobile effect has a Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["canvasFilter"] != "none" or item["fxOverlayApplied"]) and (item["id"] == "none" or item["sdfFilter"] != "none") for item in fx_rendering), str(fx_rendering))
+            check("Every mobile effect has a native Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["nativeFxApplied"]) and (item["id"] == "none" or item["sdfFilter"] != "none") for item in fx_rendering), str(fx_rendering))
             check("FX never filters or overlays the background layer", all(item["backgroundFilter"] == "none" for item in fx_rendering), str(fx_rendering))
+            composite_ids = set(desktop_fx_ids) - {"none", "ripple"}
+            check("All non-Ripple Canvas effects use the native foreground compositor", all(item["canvasFxPassApplied"] and item["canvasFxPassPrimitives"] > 0 and item["canvasFxPassRenderer"] == f"canvas-composite-{item['id']}" for item in fx_rendering if item["id"] in composite_ids), str(fx_rendering))
+            check("All 24 Canvas effects produce visibly distinct model pixels", len({item["canvasSignature"] for item in fx_rendering}) == len(desktop_fx_ids), str(fx_rendering))
             patterned_ids = {"kaleidoscope", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
-            check("Procedural Canvas FX are clipped into the foreground model", all(item["fxRenderer"] == "foreground-mask" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))
+            check("Procedural Canvas FX retain foreground-clipped pattern detail", all(item["fxRenderer"] == f"canvas-composite-{item['id']}" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))
             ripple_native = next(item for item in fx_rendering if item["id"] == "ripple")
             check("Ripple uses native radial geometry instead of painted cyan rings", ripple_native["fxRenderer"] == "geometry-ripple" and ripple_native["nativeFxApplied"] and ripple_native["nativeFxPrimitives"] >= 240 and ripple_native["ripplePointCount"] == 240 and not ripple_native["fxOverlayApplied"] and ripple_native["fxOverlayPrimitives"] == 0, str(ripple_native))
             ripple_reference = page.evaluate("""() => {
@@ -1320,7 +1334,7 @@ def main() -> int:
                     strength: shell.style.getPropertyValue('--mobile-fx-strength').trim()
                 };
             }""")
-            check("Hologram FX applies to both Canvas and SDF surfaces", hologram_fx["state"]["fxMode"] == "hologram" and hologram_fx["shellMode"] == "hologram" and hologram_fx["canvasFilter"] != "none" and hologram_fx["sdfFilter"] != "none" and hologram_fx["backgroundFilter"] == "none" and hologram_fx["drawStats"]["fxRenderer"] == "foreground-mask" and hologram_fx["output"] == "Hologram" and "scanlines" in hologram_fx["description"] and hologram_fx["active"] == "hologram" and hologram_fx["strength"] == "1.25", str(hologram_fx))
+            check("Hologram FX applies to both Canvas and SDF surfaces", hologram_fx["state"]["fxMode"] == "hologram" and hologram_fx["shellMode"] == "hologram" and hologram_fx["canvasFilter"] != "none" and hologram_fx["sdfFilter"] != "none" and hologram_fx["backgroundFilter"] == "none" and hologram_fx["drawStats"]["fxRenderer"] == "canvas-composite-hologram" and hologram_fx["drawStats"]["canvasFxPassApplied"] and hologram_fx["output"] == "Hologram" and "scanlines" in hologram_fx["description"] and hologram_fx["active"] == "hologram" and hologram_fx["strength"] == "1.25", str(hologram_fx))
             check("FX treatment uses lightweight settings sync", hologram_fx["metrics"]["fxModeSelectCount"] > fx_mode_before["fxModeSelectCount"] and hologram_fx["metrics"]["fxModeSyncSkipCount"] > fx_mode_before["fxModeSyncSkipCount"] and hologram_fx["metrics"]["lastFxMode"] == "hologram" and hologram_fx["metrics"]["lastSettingsControlSyncSkip"] == "fx-mode-hologram" and hologram_fx["metrics"]["controlSyncCount"] == fx_mode_before["controlSyncCount"], str(hologram_fx["metrics"]))
             page.evaluate("() => window.__mobileApp.selectModelShortcut('sdf')")
             sdf_hologram = page.evaluate("""() => ({
@@ -1359,6 +1373,23 @@ def main() -> int:
             }""", desktop_fx_ids)
             check("All 24 native SDF effects produce distinct model frames", len({item["sdf"] for item in sdf_fx_sweep}) == 24 and all(item["renderer"] == "sdf-shader" for item in sdf_fx_sweep), str(sdf_fx_sweep))
             check("SDF effect sweep leaves the selected background pixel-identical", len({item["background"] for item in sdf_fx_sweep}) == 1, str(sdf_fx_sweep))
+            sdf_fx_animation_before = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                app.setState({ modelMode: 'sdf', fxMode: 'pulse', autoRotate: false, autoColor: false, softFx: false });
+                app.forceRender();
+                const metrics = app.getMetrics();
+                app.closeSettings('sdf-fx-animation-test');
+                return { renderCount: metrics.renderCount, stylePhase: metrics.lastStylePhase };
+            }""")
+            page.wait_for_timeout(220)
+            sdf_fx_animation_after = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const metrics = app.getMetrics();
+                const result = { renderCount: metrics.renderCount, stylePhase: metrics.lastStylePhase, state: app.getState(), stats: metrics.lastDrawStats };
+                app.openSettings('style');
+                return result;
+            }""")
+            check("Animated FX continue moving through the native SDF shader", sdf_fx_animation_after["state"]["modelMode"] == "sdf" and sdf_fx_animation_after["state"]["fxMode"] == "pulse" and sdf_fx_animation_after["renderCount"] > sdf_fx_animation_before["renderCount"] and sdf_fx_animation_after["stylePhase"] != sdf_fx_animation_before["stylePhase"] and sdf_fx_animation_after["stats"]["fxRenderer"] == "sdf-shader", str({"before": sdf_fx_animation_before, "after": sdf_fx_animation_after}))
             page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_2d')")
             page.locator('#fx-mode-grid [data-fx-treatment="none"]').click()
             clean_treatment = page.evaluate("""() => ({
