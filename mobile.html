@@ -246,6 +246,27 @@
         <section class="settings-section" data-section="style">
           <h2>Visuals</h2>
           <div class="control-stack">
+            <label class="field">
+              <span>Background</span>
+              <select id="background-select">
+                <option value="void">Void</option>
+                <option value="starfield">Space</option>
+                <option value="grid">Grid</option>
+                <option value="aurora">Cloud</option>
+                <option value="cosmos">Cosmos</option>
+                <option value="mandala">Mandala</option>
+                <option value="plasma">Plasma</option>
+                <option value="vortex">Vortex</option>
+                <option value="quantum">Quantum</option>
+                <option value="eclipse">Eclipse</option>
+                <option value="synthwave">Barset</option>
+                <option value="prism">Prism</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-heading">Background brightness <output id="background-brightness-output">70%</output></span>
+              <input id="background-brightness" type="range" min="0.3" max="1.2" step="0.05">
+            </label>
             <div class="palette-panel" aria-label="Palette swatches">
               <div class="browse-head">
                 <strong>Palette</strong>
@@ -267,27 +288,6 @@
             <label class="field">
               <span class="field-heading">Shift speed <output id="color-speed-output">Medium</output></span>
               <input id="color-speed" type="range" min="0.25" max="1.5" step="0.05">
-            </label>
-            <label class="field">
-              <span>Background</span>
-              <select id="background-select">
-                <option value="void">Void</option>
-                <option value="starfield">Space</option>
-                <option value="grid">Grid</option>
-                <option value="aurora">Cloud</option>
-                <option value="cosmos">Cosmos</option>
-                <option value="mandala">Mandala</option>
-                <option value="plasma">Plasma</option>
-                <option value="vortex">Vortex</option>
-                <option value="quantum">Quantum</option>
-                <option value="eclipse">Eclipse</option>
-                <option value="synthwave">Barset</option>
-                <option value="prism">Prism</option>
-              </select>
-            </label>
-            <label class="field">
-              <span class="field-heading">Background brightness <output id="background-brightness-output">70%</output></span>
-              <input id="background-brightness" type="range" min="0.3" max="1.2" step="0.05">
             </label>
             <label class="field">
               <span class="field-heading">Point size <output id="point-size-output">100%</output></span>
