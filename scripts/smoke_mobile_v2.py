@@ -1139,7 +1139,7 @@ def main() -> int:
                 });
                 app.setState({ background: 'void', backgroundBrightness: 0.7 });
                 app.forceRender();
-                const canvas = document.getElementById('mobile-canvas');
+                const canvas = document.getElementById('mobile-background-canvas');
                 const context = canvas.getContext('2d');
                 const topLeft = [...context.getImageData(3, 3, 1, 1).data];
                 const bottomLeft = [...context.getImageData(3, canvas.height - 4, 1, 1).data];
@@ -1253,60 +1253,99 @@ def main() -> int:
             fx_costs = {button["id"]: button["cost"] for button in fx_modes["buttons"]}
             check("Effect buttons expose desktop-compatible GPU cost badges", all(button["cost"] in ["low", "medium", "high"] and button["costText"] == button["cost"] for button in fx_modes["buttons"]) and fx_costs["voronoi"] == "high" and fx_costs["trail"] == "medium" and fx_costs["glow"] == "low", str(fx_modes["buttons"]))
             fx_rendering = page.evaluate("""ids => {
-                const shell = document.querySelector('.mobile-shell');
                 const canvas = document.getElementById('mobile-canvas');
                 const sdf = document.getElementById('mobile-sdf-canvas');
+                const background = document.getElementById('mobile-background-canvas');
                 return ids.map(id => {
                     window.__mobileApp.selectFxMode(id);
-                    const after = getComputedStyle(shell, '::after');
-                    const before = getComputedStyle(shell, '::before');
+                    window.__mobileApp.forceRender();
+                    const stats = window.__mobileApp.getMetrics().lastDrawStats;
                     return {
                         id,
                         state: window.__mobileApp.getState().fxMode,
                         canvasFilter: getComputedStyle(canvas).filter,
                         sdfFilter: getComputedStyle(sdf).filter,
-                        overlayOpacity: Math.max(Number(after.opacity) || 0, Number(before.opacity) || 0),
-                        overlayBackground: `${after.backgroundImage} ${before.backgroundImage}`
+                        backgroundFilter: getComputedStyle(background).filter,
+                        fxRenderer: stats.fxRenderer,
+                        fxOverlayApplied: stats.fxOverlayApplied,
+                        fxOverlayPrimitives: stats.fxOverlayPrimitives
                     };
                 });
             }""", desktop_fx_ids)
-            check("Every mobile effect has a Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["canvasFilter"] != "none" or item["overlayOpacity"] > 0) and (item["id"] == "none" or item["sdfFilter"] != "none" or item["overlayOpacity"] > 0) for item in fx_rendering), str(fx_rendering))
+            check("Every mobile effect has a Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["canvasFilter"] != "none" or item["fxOverlayApplied"]) and (item["id"] == "none" or item["sdfFilter"] != "none") for item in fx_rendering), str(fx_rendering))
+            check("FX never filters or overlays the background layer", all(item["backgroundFilter"] == "none" for item in fx_rendering), str(fx_rendering))
+            patterned_ids = {"kaleidoscope", "ripple", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
+            check("Procedural Canvas FX are clipped into the foreground model", all(item["fxRenderer"] == "foreground-mask" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))
             page.evaluate("() => window.__mobileApp.selectFxMode('none')")
             fx_mode_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-mode-grid [data-fx-treatment="hologram"]').click()
             hologram_fx = page.evaluate("""() => {
                 const shell = document.querySelector('.mobile-shell');
+                window.__mobileApp.forceRender();
                 return {
                     state: window.__mobileApp.getState(),
                     metrics: window.__mobileApp.getMetrics(),
                     shellMode: shell.dataset.fxMode,
                     canvasFilter: getComputedStyle(document.getElementById('mobile-canvas')).filter,
                     sdfFilter: getComputedStyle(document.getElementById('mobile-sdf-canvas')).filter,
-                    overlayOpacity: Number(getComputedStyle(shell, '::after').opacity),
+                    backgroundFilter: getComputedStyle(document.getElementById('mobile-background-canvas')).filter,
+                    drawStats: window.__mobileApp.getMetrics().lastDrawStats,
                     output: document.getElementById('fx-mode-output').textContent.trim(),
                     description: document.getElementById('fx-mode-description').textContent.trim(),
                     active: document.querySelector('#fx-mode-grid button.active')?.dataset.fxTreatment,
                     strength: shell.style.getPropertyValue('--mobile-fx-strength').trim()
                 };
             }""")
-            check("Hologram FX applies to both Canvas and SDF surfaces", hologram_fx["state"]["fxMode"] == "hologram" and hologram_fx["shellMode"] == "hologram" and hologram_fx["canvasFilter"] != "none" and hologram_fx["sdfFilter"] != "none" and hologram_fx["overlayOpacity"] > 0 and hologram_fx["output"] == "Hologram" and "scanlines" in hologram_fx["description"] and hologram_fx["active"] == "hologram" and hologram_fx["strength"] == "1.25", str(hologram_fx))
+            check("Hologram FX applies to both Canvas and SDF surfaces", hologram_fx["state"]["fxMode"] == "hologram" and hologram_fx["shellMode"] == "hologram" and hologram_fx["canvasFilter"] != "none" and hologram_fx["sdfFilter"] != "none" and hologram_fx["backgroundFilter"] == "none" and hologram_fx["drawStats"]["fxRenderer"] == "foreground-mask" and hologram_fx["output"] == "Hologram" and "scanlines" in hologram_fx["description"] and hologram_fx["active"] == "hologram" and hologram_fx["strength"] == "1.25", str(hologram_fx))
             check("FX treatment uses lightweight settings sync", hologram_fx["metrics"]["fxModeSelectCount"] > fx_mode_before["fxModeSelectCount"] and hologram_fx["metrics"]["fxModeSyncSkipCount"] > fx_mode_before["fxModeSyncSkipCount"] and hologram_fx["metrics"]["lastFxMode"] == "hologram" and hologram_fx["metrics"]["lastSettingsControlSyncSkip"] == "fx-mode-hologram" and hologram_fx["metrics"]["controlSyncCount"] == fx_mode_before["controlSyncCount"], str(hologram_fx["metrics"]))
             page.evaluate("() => window.__mobileApp.selectModelShortcut('sdf')")
             sdf_hologram = page.evaluate("""() => ({
+                ...(() => { window.__mobileApp.forceRender(); return {}; })(),
                 state: window.__mobileApp.getState(),
                 shellMode: document.querySelector('.mobile-shell').dataset.fxMode,
-                filter: getComputedStyle(document.getElementById('mobile-sdf-canvas')).filter
+                filter: getComputedStyle(document.getElementById('mobile-sdf-canvas')).filter,
+                backgroundFilter: getComputedStyle(document.getElementById('mobile-background-canvas')).filter,
+                fxRenderer: window.__mobileApp.getMetrics().lastDrawStats.fxRenderer
             })""")
-            check("FX treatment persists when switching to SDF", sdf_hologram["state"]["modelMode"] == "sdf" and sdf_hologram["state"]["fxMode"] == "hologram" and sdf_hologram["shellMode"] == "hologram" and sdf_hologram["filter"] != "none", str(sdf_hologram))
+            check("FX treatment persists through the native SDF shader", sdf_hologram["state"]["modelMode"] == "sdf" and sdf_hologram["state"]["fxMode"] == "hologram" and sdf_hologram["shellMode"] == "hologram" and sdf_hologram["filter"] != "none" and sdf_hologram["backgroundFilter"] == "none" and sdf_hologram["fxRenderer"] == "sdf-shader", str(sdf_hologram))
+            sdf_fx_sweep = page.evaluate("""ids => {
+                const app = window.__mobileApp;
+                const background = document.getElementById('mobile-background-canvas');
+                const sdf = document.getElementById('mobile-sdf-canvas');
+                const checksum = canvas => {
+                    const text = canvas.toDataURL();
+                    let hash = 2166136261;
+                    for (let index = 0; index < text.length; index += 101) {
+                        hash ^= text.charCodeAt(index);
+                        hash = Math.imul(hash, 16777619);
+                    }
+                    return hash >>> 0;
+                };
+                app.setState({ modelMode: 'sdf', background: 'vortex', quality: 'smooth', autoRotate: false, autoColor: false, softFx: false });
+                return ids.map(id => {
+                    app.setState({ fxMode: id });
+                    app.forceRender();
+                    return {
+                        id,
+                        sdf: checksum(sdf),
+                        background: checksum(background),
+                        renderer: app.getMetrics().lastDrawStats.fxRenderer
+                    };
+                });
+            }""", desktop_fx_ids)
+            check("All 24 native SDF effects produce distinct model frames", len({item["sdf"] for item in sdf_fx_sweep}) == 24 and all(item["renderer"] == "sdf-shader" for item in sdf_fx_sweep), str(sdf_fx_sweep))
+            check("SDF effect sweep leaves the selected background pixel-identical", len({item["background"] for item in sdf_fx_sweep}) == 1, str(sdf_fx_sweep))
             page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_2d')")
             page.locator('#fx-mode-grid [data-fx-treatment="none"]').click()
             clean_treatment = page.evaluate("""() => ({
+                ...(() => { window.__mobileApp.forceRender(); return {}; })(),
                 state: window.__mobileApp.getState(),
                 mode: document.querySelector('.mobile-shell').dataset.fxMode,
                 filter: getComputedStyle(document.getElementById('mobile-canvas')).filter,
-                overlayOpacity: Number(getComputedStyle(document.querySelector('.mobile-shell'), '::after').opacity)
+                backgroundFilter: getComputedStyle(document.getElementById('mobile-background-canvas')).filter,
+                fxOverlayApplied: window.__mobileApp.getMetrics().lastDrawStats.fxOverlayApplied
             })""")
-            check("Off treatment removes filters and overlays", clean_treatment["state"]["fxMode"] == "none" and clean_treatment["mode"] == "none" and clean_treatment["filter"] == "none" and clean_treatment["overlayOpacity"] == 0, str(clean_treatment))
+            check("Off treatment removes foreground effects without changing the background", clean_treatment["state"]["fxMode"] == "none" and clean_treatment["mode"] == "none" and clean_treatment["filter"] == "none" and clean_treatment["backgroundFilter"] == "none" and not clean_treatment["fxOverlayApplied"], str(clean_treatment))
             fx_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-preset-grid [data-fx-preset="live"]').click()
             fx_live = page.evaluate("""() => ({
