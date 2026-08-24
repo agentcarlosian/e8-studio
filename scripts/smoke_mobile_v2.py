@@ -1455,6 +1455,32 @@ def main() -> int:
             check("All non-Ripple Canvas effects use the native foreground compositor", all(item["canvasFxPassApplied"] and item["canvasFxPassPrimitives"] > 0 and item["canvasFxPassRenderer"] == f"canvas-composite-{item['id']}" for item in fx_rendering if item["id"] in composite_ids), str(fx_rendering))
             check("GPU chords feed the Canvas FX compositor without double painting", all(item["e8ChordRenderer"] == "webgl-lines" and item["e8ChordGpuDrawCalls"] == 1 and item["chordActive"] and item["chordComposited"] for item in fx_rendering if item["id"] in composite_ids) and all(item["chordActive"] and not item["chordComposited"] for item in fx_rendering if item["id"] in {"none", "ripple"}), str(fx_rendering))
             check("All 24 Canvas effects produce visibly distinct model pixels", len({item["canvasSignature"] for item in fx_rendering}) == len(desktop_fx_ids), str(fx_rendering))
+            chord_visibility = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const snapshot = () => {
+                    app.forceRender();
+                    const stats = app.getMetrics().lastDrawStats;
+                    return {
+                        zoom: app.getState().zoom,
+                        fxMode: app.getState().fxMode,
+                        alphaBoost: stats.e8ChordAlphaBoost,
+                        colorLift: stats.e8ChordColorLift,
+                        recovery: stats.e8ChordRecoveryPass,
+                        renderer: stats.e8ChordRenderer
+                    };
+                };
+                app.setState({ modelMode: 'e8_2d', showEdges: true, zoom: 1, fxMode: 'none' });
+                const overview = snapshot();
+                app.setState({ zoom: 25, fxMode: 'wireframe' });
+                const deepFx = snapshot();
+                app.setState({ fxMode: 'ripple' });
+                const deepRipple = snapshot();
+                app.setState({ zoom: 1, fxMode: 'none' });
+                app.forceRender();
+                return { overview, deepFx, deepRipple };
+            }""")
+            check("deep E8 zoom raises GPU chord luminance without overbrightening the clean overview", chord_visibility["overview"]["renderer"] == "webgl-lines" and chord_visibility["overview"]["alphaBoost"] == 1 and chord_visibility["overview"]["colorLift"] <= 0.021 and chord_visibility["deepFx"]["alphaBoost"] >= 2.99 and chord_visibility["deepFx"]["colorLift"] >= 0.189, str(chord_visibility))
+            check("composited FX restore one crisp E8 chord pass while native Ripple stays single-pass", chord_visibility["deepFx"]["recovery"] and not chord_visibility["deepRipple"]["recovery"] and chord_visibility["deepRipple"]["alphaBoost"] >= 2.99, str(chord_visibility))
             patterned_ids = {"kaleidoscope", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
             check("Procedural Canvas FX retain foreground-clipped pattern detail", all(item["fxRenderer"] == f"canvas-composite-{item['id']}" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))
             ripple_native = next(item for item in fx_rendering if item["id"] == "ripple")
