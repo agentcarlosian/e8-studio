@@ -5325,8 +5325,10 @@ void main() {
 }`;
 
 const MOBILE_SDF_QUALITY = {
-  interactive: { scale: 0.48, marchSteps: 28, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
-  motion: { scale: 0.66, marchSteps: 34, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
+  // Moving frames still need the symmetric root neighbourhood. Compiling it
+  // out brought back the angular normal seams that the settled shader removes.
+  interactive: { scale: 0.72, marchSteps: 30, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  motion: { scale: 1.0, marchSteps: 38, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
   smooth: { scale: 1.0, marchSteps: 42, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
   balanced: { scale: 1.0, marchSteps: 48, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
   sharp: { scale: 1.25, marchSteps: 60, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
@@ -5511,11 +5513,14 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     const gl = sdfGl;
     const devicePixelRatio = window.devicePixelRatio || 1;
     const isStaticFrame = !interactionLiteFrame && !hasRuntimeAnimation();
-    let rasterScale = profile.scale * (isStaticFrame ? Math.min(devicePixelRatio, 1.75) : 1);
+    const selectedMotionBoost = { smooth: 1, balanced: 1.08, sharp: 1.18 }[state.quality] || 1;
+    const motionPixelBoost = profileKey === 'motion' ? selectedMotionBoost : 1;
+    let pixelBoost = isStaticFrame ? Math.min(devicePixelRatio, 1.75) : motionPixelBoost;
+    let rasterScale = profile.scale * pixelBoost;
     // Sharp is the inspection tier: render at the display's native pixel grid
     // so WebView scaling cannot manufacture a dark filtered contour.
     if (isStaticFrame && profileKey === 'sharp') rasterScale = Math.max(rasterScale, devicePixelRatio);
-    const staticPixelBoost = rasterScale / profile.scale;
+    pixelBoost = rasterScale / profile.scale;
     const width = Math.max(1, Math.round(window.innerWidth * rasterScale));
     const height = Math.max(1, Math.round(window.innerHeight * rasterScale));
     if (sdfCanvas.width !== width || sdfCanvas.height !== height) {
@@ -5587,7 +5592,8 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     drawStats.sdfRenderer = 'webgl-raymarch';
     drawStats.sdfQuality = profileKey;
     drawStats.sdfRasterScale = rasterScale;
-    drawStats.sdfStaticPixelBoost = staticPixelBoost;
+    drawStats.sdfStaticPixelBoost = isStaticFrame ? pixelBoost : 1;
+    drawStats.sdfMotionPixelBoost = profileKey === 'motion' ? pixelBoost : 1;
     drawStats.sdfRasterSize = Math.min(width, height);
     drawStats.sdfPixels = width * height;
     drawStats.sdfSpheres = points.length;
