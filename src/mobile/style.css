@@ -225,7 +225,8 @@ button:disabled {
   display: none;
 }
 
-.field.hidden {
+.field.hidden,
+.bloom-timeline-panel.hidden {
   display: none;
 }
 
@@ -402,6 +403,7 @@ button:disabled {
 .zoom-panel,
 .scene-preset-panel,
 .model-shortcut-panel,
+.bloom-timeline-panel,
 .palette-panel,
 .fx-preset-panel,
 .motion-speed-panel,
@@ -443,6 +445,7 @@ button:disabled {
 .zoom-panel,
 .scene-preset-panel,
 .model-shortcut-panel,
+.bloom-timeline-panel,
 .palette-panel,
 .fx-preset-panel,
 .motion-speed-panel,
@@ -450,6 +453,17 @@ button:disabled {
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.bloom-time-field {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.bloom-actions button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(244, 210, 122, 0.1);
 }
 
 .browse-head {

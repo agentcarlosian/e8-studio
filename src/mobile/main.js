@@ -21,6 +21,10 @@ const DEFAULT_STATE = {
   subset: 'icosahedron',
   pointScale: 1.0,
   pointOpacity: 0.72,
+  bloomAmount: 0,
+  bloomAuto: false,
+  bloomSpeed: 0.08,
+  bloomTwinH4: true,
   autoRotate: false,
   autoModel: false,
   autoColor: false,
@@ -283,8 +287,8 @@ const MOBILE_TOUR_STEPS = [
     label: 'Bloom',
     target: { modelMode: 'bloom' },
     title: 'Designed Bloom',
-    body: 'Fine E8 root filaments open into a luminous depth cloud, echoing the desktop Bloom without its heavier shader stack.',
-    detail: 'Drag or enable Motion to turn the bloom through depth.',
+    body: 'The source solid grows through the 600-cell and twin H4 stages before opening into the Coxeter plane.',
+    detail: 'Open View to scrub the Bloom timeline or start Auto.',
   },
   {
     id: 'distance-field',
@@ -412,6 +416,9 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'polytope4d',
   'dynkinDiagram',
   'selectedRoot',
+  'bloomAmount',
+  'bloomAuto',
+  'bloomTwinH4',
   'autoRotate',
   'autoModel',
   'autoColor',
@@ -467,6 +474,8 @@ let metrics = {
   modelVertexFills: 0,
   e8Projection3DCount: 0,
   bloomDrawCount: 0,
+  bloomAutoFrameCount: 0,
+  bloomTimelineSyncCount: 0,
   sdfDrawCount: 0,
   platonicDrawCount: 0,
   polytope4DDrawCount: 0,
@@ -792,6 +801,7 @@ let directPointQueue = [];
 let platonicGeometry = {};
 let platonicFaceCache = new Map();
 let polytope4DGeometry = {};
+let bloomOrder600 = [];
 let dynkinGeometry = {};
 let dynkinHitTargets = [];
 let mckayInfo = {};
@@ -957,6 +967,8 @@ function normalizeState(next) {
   next.backgroundBrightness = clamp(Number(next.backgroundBrightness) || DEFAULT_STATE.backgroundBrightness, 0.3, 1.2);
   next.colorSpeed = clamp(Number(next.colorSpeed) || DEFAULT_STATE.colorSpeed, 0.25, 1.5);
   next.fxStrength = clamp(Number(next.fxStrength) || DEFAULT_STATE.fxStrength, 0.25, 1.5);
+  next.bloomAmount = clamp(Number(next.bloomAmount) || 0, 0, 1);
+  next.bloomSpeed = clamp(Number(next.bloomSpeed) || DEFAULT_STATE.bloomSpeed, 0.02, 0.25);
   next.rotationSpeed = clamp(Number(next.rotationSpeed) || 0.7, 0.2, 2);
   next.rotation = Number(next.rotation) || 0;
   next.panX = Number(next.panX) || 0;
@@ -973,6 +985,8 @@ function normalizeState(next) {
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
+  if (typeof next.bloomAuto !== 'boolean') next.bloomAuto = false;
+  if (typeof next.bloomTwinH4 !== 'boolean') next.bloomTwinH4 = true;
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
   if (typeof next.autoColor !== 'boolean') next.autoColor = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
@@ -1049,6 +1063,12 @@ function cacheElements() {
   els.mirrorsToggle = document.getElementById('mirrors-toggle');
   els.verticesToggle = document.getElementById('vertices-toggle');
   els.modelSelect = document.getElementById('model-select');
+  els.bloomTimelineField = document.getElementById('bloom-timeline-field');
+  els.bloomTime = document.getElementById('bloom-time');
+  els.bloomTimeOutput = document.getElementById('bloom-time-output');
+  els.bloomPhaseOutput = document.getElementById('bloom-phase-output');
+  els.bloomAutoButton = document.getElementById('bloom-auto-button');
+  els.bloomTwinButton = document.getElementById('bloom-twin-button');
   els.shapeField = document.getElementById('shape-field');
   els.shapeSelect = document.getElementById('shape-select');
   els.polytope4DField = document.getElementById('polytope4d-field');
@@ -1169,6 +1189,11 @@ function bindEvents() {
       selectModelShortcut(modelShortcut);
       return;
     }
+    const bloomAction = event.target.closest('[data-bloom-action]')?.dataset.bloomAction;
+    if (bloomAction) {
+      handleBloomAction(bloomAction);
+      return;
+    }
     const viewAction = event.target.closest('[data-view-action]')?.dataset.viewAction;
     if (viewAction) {
       handleViewAction(viewAction);
@@ -1270,6 +1295,12 @@ function bindEvents() {
     autoModel: false,
     selectedRoot: els.dynkinSelect.value === 'E8' && simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null,
   }, 'dynkin-select'));
+  els.bloomTime.addEventListener('input', () => {
+    previewState({ bloomAmount: Number(els.bloomTime.value), bloomAuto: false }, 'bloom-time');
+    syncBloomControls();
+    syncSceneAccessibility(activeSceneSummary());
+  });
+  els.bloomTime.addEventListener('change', () => commitLiveControl('bloom-time'));
   els.subsetSelect.addEventListener('change', () => setManualExploreState({ subset: els.subsetSelect.value }, 'subset-select', { syncSubset: true }));
   els.rootRange.addEventListener('input', () => selectRoot(Number(els.rootRange.value), { save: false, interactionType: 'root-scrub' }));
   els.rootRange.addEventListener('change', () => selectRoot(Number(els.rootRange.value), { interactionType: 'root-commit' }));
@@ -1700,8 +1731,9 @@ function activeObjRecord() {
   const isDepth = state.modelMode === 'bloom';
   const vertices = points.map(point => {
     if (isDepth) {
-      const v = e8ModelVector(point.idx);
-      return [v.x, v.y, v.z];
+      return point.bloomVisible
+        ? [point.bloomX, point.bloomY, point.bloomZ]
+        : [point.x, point.y, 0];
     }
     return [point.x, point.y, 0];
   });
@@ -2382,6 +2414,9 @@ function mobileSurprise() {
     panY: 0,
     zoom: 1,
     selectedRoot: null,
+    bloomAmount: DEFAULT_STATE.bloomAmount,
+    bloomAuto: false,
+    bloomTwinH4: DEFAULT_STATE.bloomTwinH4,
   };
   metrics.surpriseCount++;
   metrics.lastSurpriseMs = performance.now();
@@ -2542,6 +2577,7 @@ function setSettingState(patch, interactionType, options = {}) {
   if (options.syncSubset) syncSubsetControls();
   if (options.syncMotionSpeed) syncMotionSpeedControls();
   if (options.syncMotionPreset) syncMotionPresetControls();
+  if (options.syncBloom) syncBloomControls();
   if (options.syncModel) {
     syncModelControls();
     updateSelectionUI({ reason: interactionType });
@@ -3325,6 +3361,7 @@ function syncModelControls() {
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
+  syncBloomControls();
   if (els.autoModelToggle) els.autoModelToggle.checked = state.autoModel;
   syncScenePresetControls();
   syncModelShortcutControls();
@@ -3338,6 +3375,55 @@ function syncModelControls() {
   syncSceneAccessibility(scene);
   syncMckayCard();
   syncCuriosityCard();
+}
+
+function bloomPhaseLabel(amount = state.bloomAmount) {
+  if (amount < 0.1) return 'Shape';
+  if (amount < 0.5) return '600-cell';
+  if (amount < 0.75) return 'Twin H4';
+  if (amount < 0.9) return 'Unfold';
+  return 'Coxeter';
+}
+
+function syncBloomControls() {
+  const active = state.modelMode === 'bloom';
+  if (els.bloomTimelineField) els.bloomTimelineField.classList.toggle('hidden', !active);
+  syncBloomRuntimeReadout();
+  if (els.bloomAutoButton) {
+    els.bloomAutoButton.textContent = state.bloomAuto ? 'Pause' : 'Auto';
+    els.bloomAutoButton.classList.toggle('active', state.bloomAuto);
+    els.bloomAutoButton.setAttribute('aria-pressed', String(state.bloomAuto));
+  }
+  if (els.bloomTwinButton) {
+    els.bloomTwinButton.classList.toggle('active', state.bloomTwinH4);
+    els.bloomTwinButton.setAttribute('aria-pressed', String(state.bloomTwinH4));
+  }
+  metrics.bloomTimelineSyncCount++;
+  metrics.lastBloomTimelineSyncMs = performance.now();
+  return active;
+}
+
+function syncBloomRuntimeReadout() {
+  if (els.bloomTime) els.bloomTime.value = String(state.bloomAmount);
+  if (els.bloomTimeOutput) els.bloomTimeOutput.textContent = state.bloomAmount.toFixed(2);
+  if (els.bloomPhaseOutput) els.bloomPhaseOutput.textContent = bloomPhaseLabel();
+  if (state.modelMode === 'bloom' && els.sceneChip) {
+    const small = els.sceneChip.querySelector('small');
+    if (small) small.textContent = `${bloomPhaseLabel()} / ${state.bloomAmount.toFixed(2)}`;
+  }
+}
+
+function handleBloomAction(action) {
+  if (action === 'toggle-auto') {
+    return setManualRuntimeState({ bloomAuto: !state.bloomAuto }, 'bloom-auto-toggle', { syncBloom: true });
+  }
+  if (action === 'toggle-twin') {
+    return setManualRuntimeState({ bloomTwinH4: !state.bloomTwinH4 }, 'bloom-twin-toggle', { syncBloom: true });
+  }
+  if (action === 'reset') {
+    return setManualRuntimeState({ bloomAmount: 0, bloomAuto: false }, 'bloom-reset', { syncBloom: true });
+  }
+  return false;
 }
 
 function activeSceneSummary() {
@@ -3390,10 +3476,10 @@ function activeSceneSummary() {
   if (state.modelMode === 'bloom') {
     return {
       chipStrong: MODEL_LABELS.bloom,
-      chipSmall: '240 / bloom',
-      topbarLabel: 'Designed Bloom, 240 E8 roots and luminous filaments',
-      canvasLabel: 'Designed Bloom visualization with 240 E8 roots in a luminous depth cloud',
-      infoCopy: 'Designed Bloom opens the 240 E8 roots into a fine depth cloud with luminous root filaments. It keeps the desktop Bloom identity on the lightweight mobile Canvas path, and roots remain tappable for mathematical context.',
+      chipSmall: `${bloomPhaseLabel()} / ${state.bloomAmount.toFixed(2)}`,
+      topbarLabel: `Designed Bloom timeline at ${state.bloomAmount.toFixed(2)}, ${bloomPhaseLabel()} phase`,
+      canvasLabel: `Designed Bloom visualization in the ${bloomPhaseLabel()} phase`,
+      infoCopy: 'Designed Bloom follows the desktop construction: the source solid grows through the 600-cell and twin H4 stages, then opens into the E8 Coxeter plane. Open View to scrub the timeline or start Auto.',
     };
   }
   if (state.modelMode === 'sdf') {
@@ -3500,8 +3586,8 @@ function activeCuriosityNotes() {
   } else if (state.modelMode === 'bloom') {
     notes.push({
       title: 'Designed Bloom',
-      body: 'The same 240 roots become a luminous depth cloud joined by a restrained sample of Cartan filaments.',
-      detail: 'Tap still selects roots; drag and Motion rotate the bloom.',
+      body: 'A source solid grows through a 600-cell, gains its twin H4 layer, then unfolds into all 240 E8 roots.',
+      detail: 'Open View to scrub the construction, pause it, or compare the warm and cool H4 layers.',
     });
   } else if (state.modelMode === 'sdf') {
     notes.push({
@@ -3763,6 +3849,7 @@ function mobileTourPatchForTarget(target) {
     autoModel: false,
     autoColor: false,
     softFx: false,
+    bloomAuto: false,
   };
 }
 
@@ -4090,7 +4177,11 @@ function handleViewportChange() {
 
 function renderScale() {
   const q = QUALITY[state.quality] || QUALITY.smooth;
-  return typeof q.scale === 'function' ? q.scale() : q.scale;
+  const scale = typeof q.scale === 'function' ? q.scale() : q.scale;
+  // The SDF's continuous shading exposes upscaling artifacts far more than
+  // points or wireframes do. Keep it at a full CSS-pixel backing store even
+  // in Smooth mode; its own raster still follows the selected quality tier.
+  return state.modelMode === 'sdf' ? Math.max(1, scale) : scale;
 }
 
 function activePaletteSet() {
@@ -4160,6 +4251,15 @@ function preparePoints() {
   platonicGeometry = { ...(data.platonic || {}), ...(data.stellations || {}) };
   platonicFaceCache = new Map();
   polytope4DGeometry = data.polytopes4d || {};
+  const cell600 = polytope4DGeometry['600cell'];
+  const classes600 = Array.isArray(cell600?.conjugacy_classes) ? cell600.conjugacy_classes : [];
+  const byClass600 = Array.from({ length: 9 }, () => []);
+  for (let index = 0; index < (cell600?.verts?.length || 0); index++) {
+    const classIndex = clamp(Number(classes600[index]) || 0, 0, byClass600.length - 1);
+    byClass600[classIndex].push(index);
+  }
+  bloomOrder600 = byClass600.flat();
+  if (bloomOrder600.length !== 120) bloomOrder600 = Array.from({ length: cell600?.verts?.length || 0 }, (_, index) => index);
   dynkinGeometry = data.dynkin || {};
   mckayInfo = data.mckay || {};
   const ringRadii = data.e8.ring_radii || [];
@@ -4410,8 +4510,8 @@ function render() {
     }
 
     if (state.modelMode === 'bloom') {
-      projectBloomIntoCache(layout, drawStats);
-      const projectedAllFrame = projectedPointFrameMetrics(allRootList);
+      const visibleBloomPoints = projectBloomIntoCache(layout, drawStats);
+      const projectedAllFrame = projectedPointFrameMetrics(visibleBloomPoints);
       drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
@@ -4607,37 +4707,111 @@ function projectModelPoint(x, y, z, layout, modelScale = 1) {
   };
 }
 
-function e8ModelVector(index) {
-  const p = points[index];
-  const root = data.e8.roots8d?.[index] || [];
-  const z = (
-    (root[0] || 0) - (root[1] || 0) +
-    (root[2] || 0) - (root[3] || 0) +
-    (root[4] || 0) * 0.6 - (root[5] || 0) * 0.6 +
-    (root[6] || 0) * 0.35 - (root[7] || 0) * 0.35
-  ) / 2.4;
-  return { x: (p?.x || 0) * 0.92, y: (p?.y || 0) * 0.92, z };
-}
-
 function projectBloomIntoCache(layout, drawStats) {
-  const pointScale = state.pointScale;
+  const sourceName = data.platonic?.[state.shape] ? state.shape : 'icosahedron';
+  const sourceShape = data.platonic?.[sourceName] || data.platonic?.icosahedron;
+  const sourceVerts = normalizedPlatonicVerts(sourceShape);
+  const cell600 = polytope4DGeometry['600cell'];
+  const cellVerts = normalizedPolytope4DVerts(cell600);
+  const nSrc = sourceVerts.length;
+  const amount = clamp(state.bloomAmount, 0, 1);
+  const phaseMorph = Math.min(1, amount / 0.5);
+  const phaseGrow = clamp((amount - 0.1) / 0.4, 0, 1);
+  const phaseTwin = clamp((amount - 0.5) / 0.25, 0, 1);
+  const phase2D = clamp((amount - 0.75) / 0.25, 0, 1);
+  const n600ToShow = Math.floor(120 * phaseGrow);
+  const visibleIndices = [];
+  const modelScale = 1.07;
+
   for (const p of points) {
-    const v = e8ModelVector(p.idx);
-    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.98);
+    p.bloomVisible = false;
+    p.bloomAlpha = 0;
+    p.bloomLayer = p.idx < 120 ? 0 : 1;
+  }
+
+  function place(index, x, y, z, baseSize, alpha = 1) {
+    const p = points[index];
+    if (!p) return;
+    p.bloomX = x;
+    p.bloomY = y;
+    p.bloomZ = z;
+    p.bloomBaseSize = baseSize;
+    p.bloomVisible = true;
+    p.bloomAlpha = alpha;
+    visibleIndices.push(index);
+  }
+
+  for (let index = 0; index < nSrc; index++) {
+    const src = sourceVerts[index];
+    const dst = cellVerts[bloomOrder600[index] ?? 0] || [0, 0, 0, 0];
+    place(
+      index,
+      src[0] * (1 - phaseMorph) + dst[0] * phaseMorph,
+      src[1] * (1 - phaseMorph) + dst[1] * phaseMorph,
+      src[2] * (1 - phaseMorph) + dst[2] * phaseMorph,
+      2.5,
+    );
+  }
+
+  for (let index = nSrc; index < n600ToShow && index < 120; index++) {
+    const v = cellVerts[bloomOrder600[index] ?? 0] || [0, 0, 0, 0];
+    place(index, v[0], v[1], v[2], 2.05);
+  }
+
+  if (phaseTwin > 0) {
+    const angle = Math.PI * 0.5 * phaseTwin;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const yShift = -((1 + Math.sqrt(5)) / 2) * 0.25 * phaseTwin;
+    for (let index = 0; index < 120; index++) {
+      const v = cellVerts[index] || [0, 0, 0, 0];
+      const y = v[1] * cos - v[2] * sin + yShift;
+      const z = v[1] * sin + v[2] * cos;
+      place(120 + index, v[0], y, z, 1.85 + phaseTwin * 0.25, 0.2 + phaseTwin * 0.8);
+    }
+  }
+
+  if (phase2D > 0) {
+    for (const index of visibleIndices) {
+      const p = points[index];
+      const target = data.e8.proj2d?.[index];
+      if (!target) continue;
+      p.bloomX = p.bloomX * (1 - phase2D) + target.x * 1.05 * phase2D;
+      p.bloomY = p.bloomY * (1 - phase2D) + target.y * 1.05 * phase2D;
+      p.bloomZ *= 1 - phase2D;
+      p.bloomBaseSize = p.bloomBaseSize * (1 - phase2D) + 2.35 * phase2D;
+    }
+  }
+
+  for (const index of visibleIndices) {
+    const p = points[index];
+    const projected = projectModelPoint(p.bloomX, p.bloomY, p.bloomZ, layout, modelScale);
     p.sx = projected.x;
     p.sy = projected.y;
     p.depth = projected.z;
-    p.size = Math.max(1.15, (1.15 + p.norm * 0.72) * pointScale * (0.74 + projected.perspective * 0.34));
+    p.size = Math.max(1.35, p.bloomBaseSize * state.pointScale * (0.75 + projected.perspective * 0.34));
     drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
     drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.modelProjectedVertices++;
     drawStats.baseSizeCacheHits++;
   }
+
+  drawStats.bloomAmount = amount;
+  drawStats.bloomPhase = bloomPhaseLabel(amount);
+  drawStats.bloomSource = sourceName;
+  drawStats.bloomSourceVertices = nSrc;
+  drawStats.bloomFirstCellPoints = visibleIndices.filter(index => index < 120).length;
+  drawStats.bloomTwinPoints = visibleIndices.filter(index => index >= 120).length;
+  drawStats.bloomVisiblePoints = visibleIndices.length;
+  drawStats.bloomPhaseMorph = phaseMorph;
+  drawStats.bloomPhaseTwin = phaseTwin;
+  drawStats.bloomPhase2D = phase2D;
+  return visibleIndices;
 }
 
 function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
-  if (visibleContext && !interactionLiteFrame) {
+  if (visibleContext && state.bloomAmount >= 0.95 && !interactionLiteFrame) {
     const rayStats = drawNeighborRays(visibleContext, paletteSet);
     drawStats.rays = rayStats.rays;
     drawStats.rayStrokes = rayStats.strokes;
@@ -4647,30 +4821,56 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
     drawStats.raysSkippedForInteraction = visibleContext.neighborCount;
   }
 
-  // A restrained sample of Cartan-neighbor links supplies the filament
-  // structure that distinguishes Bloom from a generic 3D point cloud.
-  let filaments = 0;
-  if (!interactionLiteFrame) {
+  const sourceName = data.platonic?.[state.shape] ? state.shape : 'icosahedron';
+  const sourceShape = data.platonic?.[sourceName] || data.platonic?.icosahedron;
+  const phaseMorph = Math.min(1, state.bloomAmount / 0.5);
+  const phaseTwin = clamp((state.bloomAmount - 0.5) / 0.25, 0, 1);
+  const sourceEdgeAlpha = Math.max(0, 1 - phaseMorph * 1.2) * 0.82;
+  const trailAlpha = Math.sin(phaseTwin * Math.PI) * 0.32;
+  let sourceEdges = 0;
+  let twinTrails = 0;
+
+  if (sourceEdgeAlpha > 0.005) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.13;
-    ctx.strokeStyle = paletteSet.colors[1] || paletteSet.colors[0];
-    ctx.lineWidth = 0.75;
+    ctx.globalAlpha = sourceEdgeAlpha;
+    ctx.strokeStyle = paletteSet.colors[0];
+    ctx.lineWidth = interactionLiteFrame ? 1.35 : 2.05;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    for (let index = 0; index < points.length; index += 2) {
-      const point = points[index];
-      const neighbors = point.neighbors || [];
-      const neighbor = points[neighbors[(index * 13) % Math.max(1, neighbors.length)]];
-      if (!neighbor) continue;
-      ctx.moveTo(point.sx, point.sy);
-      ctx.lineTo(neighbor.sx, neighbor.sy);
-      filaments++;
+    for (const edge of sourceShape?.edges || []) {
+      const a = points[edge[0]];
+      const b = points[edge[1]];
+      if (!a?.bloomVisible || !b?.bloomVisible) continue;
+      ctx.moveTo(a.sx, a.sy);
+      ctx.lineTo(b.sx, b.sy);
+      sourceEdges++;
     }
     ctx.stroke();
     ctx.restore();
   }
 
-  const ordered = [...points].sort((a, b) => (a.depth || 0) - (b.depth || 0));
+  if (trailAlpha > 0.005 && !interactionLiteFrame) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = trailAlpha;
+    ctx.strokeStyle = state.bloomTwinH4 ? '#6affe8' : (paletteSet.colors[1] || paletteSet.colors[0]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let index = 0; index < 12; index++) {
+      const a = points[index];
+      const b = points[120 + index];
+      if (!a?.bloomVisible || !b?.bloomVisible) continue;
+      ctx.moveTo(a.sx, a.sy);
+      ctx.lineTo(b.sx, b.sy);
+      twinTrails++;
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const ordered = points.filter(point => point.bloomVisible).sort((a, b) => (a.depth || 0) - (b.depth || 0));
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const p of ordered) {
@@ -4689,29 +4889,33 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
     if (mask & DRAW_ANTIPODE) drawStats.antipodePoints++;
     if (mask & DRAW_PETRIE) drawStats.petriePoints++;
     if (mask) drawStats.glowPoints++;
-    if (mask && !interactionLiteFrame) {
+    if (!interactionLiteFrame) {
       drawStats.glowFills++;
       drawStats.alphaColorCacheHits++;
-      ctx.globalAlpha = 0.12 * state.fxStrength;
-      ctx.fillStyle = paletteSet.colors[2] || paletteSet.colors[0];
+      ctx.globalAlpha = (mask ? 0.18 : 0.09) * state.fxStrength * p.bloomAlpha;
+      ctx.fillStyle = p.bloomLayer && state.bloomTwinH4 ? '#6affe8' : (paletteSet.colors[1] || paletteSet.colors[0]);
       ctx.beginPath();
-      ctx.arc(p.sx, p.sy, p.size + 4.5, 0, TAU);
+      ctx.arc(p.sx, p.sy, p.size + (mask ? 5 : 3.2), 0, TAU);
       ctx.fill();
     }
     drawStats.directPoints++;
     if (interactionLiteFrame && mask) drawStats.glowsSkippedForInteraction++;
     const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + p.idx * 0.17) * 0.08 * state.fxStrength : 1;
-    ctx.globalAlpha = mask ? 0.96 : state.pointOpacity * (0.58 + (p.depth || 0) * 0.045);
-    ctx.fillStyle = paletteSet.colors[p.baseFillSlot % paletteSet.colors.length];
+    ctx.globalAlpha = (mask ? 1 : Math.max(0.72, state.pointOpacity)) * p.bloomAlpha;
+    ctx.fillStyle = p.bloomLayer && state.bloomTwinH4
+      ? '#6affe8'
+      : (state.bloomTwinH4 ? (paletteSet.colors[1] || '#f4d27a') : paletteSet.colors[p.baseFillSlot % paletteSet.colors.length]);
     ctx.beginPath();
     ctx.arc(p.sx, p.sy, Math.max(0.85, p.size * pulse), 0, TAU);
     ctx.fill();
     drawStats.directPointFills++;
   }
   ctx.restore();
-  drawStats.modelVertices = points.length;
-  drawStats.modelEdges = filaments;
-  drawStats.modelEdgeStrokes = filaments ? 1 : 0;
+  drawStats.modelVertices = ordered.length;
+  drawStats.modelEdges = sourceEdges + twinTrails;
+  drawStats.modelEdgeStrokes = (sourceEdges ? 1 : 0) + (twinTrails ? 1 : 0);
+  drawStats.bloomSourceEdges = sourceEdges;
+  drawStats.bloomTwinTrails = twinTrails;
 }
 
 function ensureSdfRaster(size) {
@@ -4736,8 +4940,8 @@ function colorChannels(hex) {
 }
 
 function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
-  const qualitySize = state.quality === 'sharp' ? 220 : state.quality === 'balanced' ? 168 : 132;
-  const rasterSize = interactionLiteFrame ? Math.min(104, qualitySize) : qualitySize;
+  const qualitySize = state.quality === 'sharp' ? 512 : state.quality === 'balanced' ? 400 : 320;
+  const rasterSize = interactionLiteFrame ? Math.min(192, qualitySize) : qualitySize;
   if (!ensureSdfRaster(rasterSize)) return null;
 
   const pixels = sdfRasterImageData.data;
@@ -4907,10 +5111,15 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   }
 
   ctx.save();
-  ctx.lineWidth = interactionLiteFrame ? 1.2 : 1.6;
+  const edgeWidth = interactionLiteFrame ? 1.5 : 2.2;
+  const edgeAlpha = interactionLiteFrame ? 0.82 : 0.96;
+  ctx.lineWidth = edgeWidth;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.strokeStyle = paletteSet.petrieStroke;
+  ctx.globalAlpha = edgeAlpha;
+  ctx.strokeStyle = paletteSet.colors[0];
+  ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+  ctx.shadowBlur = interactionLiteFrame ? 0 : 3;
   ctx.beginPath();
   for (const edge of shape.edges || []) {
     const a = projected[edge[0]];
@@ -4921,6 +5130,9 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   }
   ctx.stroke();
   drawStats.modelEdgeStrokes = shape.edges?.length ? 1 : 0;
+  drawStats.modelEdgeWidth = edgeWidth;
+  drawStats.modelEdgeAlpha = edgeAlpha;
+  drawStats.modelEdgeColor = paletteSet.colors[0];
   ctx.restore();
 
   if (state.showVertices) {
@@ -4999,11 +5211,15 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
 
   ctx.save();
   const dense = polyName === '600cell' || polyName === '120cell';
-  ctx.lineWidth = dense ? (interactionLiteFrame ? 0.55 : 0.72) : (interactionLiteFrame ? 1 : 1.35);
+  const edgeWidth = dense ? (interactionLiteFrame ? 0.72 : 1.05) : (interactionLiteFrame ? 1.25 : 1.9);
+  const edgeAlpha = dense ? (interactionLiteFrame ? 0.58 : 0.74) : (interactionLiteFrame ? 0.82 : 0.96);
+  ctx.lineWidth = edgeWidth;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.globalAlpha = dense ? 0.48 : 0.66;
-  ctx.strokeStyle = paletteSet.petrieStroke;
+  ctx.globalAlpha = edgeAlpha;
+  ctx.strokeStyle = paletteSet.colors[0];
+  ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+  ctx.shadowBlur = interactionLiteFrame ? 0 : (dense ? 1.5 : 3);
   ctx.beginPath();
   for (const edge of poly.edges || []) {
     const a = projected[edge[0]];
@@ -5014,6 +5230,9 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   }
   ctx.stroke();
   drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
+  drawStats.modelEdgeWidth = edgeWidth;
+  drawStats.modelEdgeAlpha = edgeAlpha;
+  drawStats.modelEdgeColor = paletteSet.colors[0];
   ctx.restore();
 
   if (state.showVertices) {
@@ -5814,7 +6033,7 @@ function syncMotionLoop() {
 }
 
 function hasRuntimeAnimation() {
-  return !!(state.autoRotate || state.autoModel || state.autoColor || state.softFx);
+  return !!(state.autoRotate || state.autoModel || state.autoColor || state.softFx || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -5835,6 +6054,11 @@ function startMotion() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (state.autoRotate) state.rotation += dt * state.rotationSpeed * 0.55;
+    if (state.modelMode === 'bloom' && state.bloomAuto) {
+      state.bloomAmount = (state.bloomAmount + dt * state.bloomSpeed) % 1;
+      metrics.bloomAutoFrameCount++;
+      syncBloomRuntimeReadout();
+    }
     if (state.autoModel) {
       autoModelElapsed += dt;
       metrics.autoModelFrameCount++;
@@ -6508,11 +6732,9 @@ function screenPointFor(point, layout = layoutForCanvas()) {
     }
   }
   if (state.modelMode === 'bloom') {
-    const v = e8ModelVector(point.idx);
-    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.92);
     return {
-      x: projected.x,
-      y: projected.y,
+      x: point.bloomVisible ? point.sx : layout.cx + state.panX,
+      y: point.bloomVisible ? point.sy : layout.cy + state.panY,
     };
   }
   const cos = Math.cos(state.rotation);
@@ -6599,7 +6821,7 @@ function modelInfoHtml() {
     return `<strong>${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin diagram</strong><small>${diagram?.nodes?.length || 0} simple roots | ${diagram?.edges?.length || 0} Cartan edges</small><small>Tap an E8 node to select its simple root context.</small>`;
   }
   if (state.modelMode === 'bloom') {
-    return '<strong>Designed Bloom</strong><small>240 roots | luminous depth filaments</small><small>Tap a root to inspect McKay, Cartan, and neighbor context.</small>';
+    return `<strong>Designed Bloom</strong><small>${escapeHtml(bloomPhaseLabel())} phase | time ${state.bloomAmount.toFixed(2)}</small><small>Source solid -&gt; 600-cell -&gt; twin H4 -&gt; E8 Coxeter plane. Open View to scrub or animate it.</small>`;
   }
   if (state.modelMode === 'sdf') {
     return '<strong>E8 SDF</strong><small>240 smoothly joined root spheres</small><small>A lightweight mobile counterpart to the desktop raymarcher.</small>';
