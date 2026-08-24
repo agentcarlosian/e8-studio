@@ -63,9 +63,8 @@ const MOTION_SPEED_PRESETS = [
   { id: 'medium', label: 'Med', name: 'Medium', value: 0.7 },
   { id: 'fast', label: 'Fast', value: 1.2 },
 ];
-// The manual slider keeps its full inspection range. Auto uses a narrower
-// cinematic band so 2D views visibly breathe without spending half the cycle
-// cropped far beyond a phone screen.
+// Most models use a restrained cinematic band. E8 Coxeter deliberately uses
+// its complete inspection range so Auto-zoom can travel all the way to 2500%.
 const AUTO_ZOOM_MIN = 0.7;
 const AUTO_ZOOM_MAX = 1.65;
 const MANUAL_ZOOM_MIN = 0.55;
@@ -2855,8 +2854,9 @@ function setState(patch, options = {}) {
   const previousAutoModel = state.autoModel;
   const previousAutoZoom = state.autoZoom;
   const previousAutoExtrude = state.autoExtrude;
+  const previousModelMode = state.modelMode;
   state = next;
-  if (state.autoZoom && !previousAutoZoom) syncAutoMotionPhase('zoom');
+  if (state.autoZoom && (!previousAutoZoom || state.modelMode !== previousModelMode)) syncAutoMotionPhase('zoom');
   if (state.autoExtrude && !previousAutoExtrude) syncAutoMotionPhase('extrude');
   if (state.autoModel && (!previousAutoModel || patch.modelMode != null || patch.shape != null || patch.polytope4d != null || patch.dynkinDiagram != null)) {
     autoModelIndex = currentAutoModelIndex();
@@ -8432,8 +8432,8 @@ function mobileMotionFrameIntervalMs() {
 
 function syncAutoMotionPhase(kind) {
   const isZoom = kind === 'zoom';
-  const min = isZoom ? AUTO_ZOOM_MIN : 0;
-  const max = isZoom ? AUTO_ZOOM_MAX : 1;
+  const min = isZoom ? autoZoomMinForModel(state.modelMode) : 0;
+  const max = isZoom ? autoZoomMaxForModel(state.modelMode) : 1;
   const value = isZoom ? state.zoom : state.e8MorphT;
   const normalized = clamp((value - min) / (max - min), 0, 1);
   const offset = Math.asin(clamp(normalized * 2 - 1, -1, 1)) - motionPhase * AUTO_MOTION_RATE;
@@ -8479,7 +8479,11 @@ function startMotion() {
       state.rotation += dt * state.rotationSpeed * pathRate;
     }
     if (state.autoZoom) {
-      state.zoom = autoMotionValue(AUTO_ZOOM_MIN, AUTO_ZOOM_MAX, autoZoomPhaseOffset);
+      state.zoom = autoMotionValue(
+        autoZoomMinForModel(state.modelMode),
+        autoZoomMaxForModel(state.modelMode),
+        autoZoomPhaseOffset
+      );
       metrics.autoZoomFrameCount++;
     }
     if (state.autoExtrude) {
@@ -9474,6 +9478,10 @@ function getMetrics() {
   const relation = selectedRootRelation();
   return {
     ...metrics,
+    autoZoomRange: {
+      min: autoZoomMinForModel(state.modelMode),
+      max: autoZoomMaxForModel(state.modelMode),
+    },
     canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
     viewport: { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1 },
     settingsOpen: isSettingsOpen(),
@@ -9561,6 +9569,14 @@ function clamp(value, min, max) {
 
 function zoomMaxForModel(modelMode) {
   return modelMode === 'e8_2d' ? E8_COXETER_ZOOM_MAX : STANDARD_ZOOM_MAX;
+}
+
+function autoZoomMinForModel(modelMode) {
+  return modelMode === 'e8_2d' ? MANUAL_ZOOM_MIN : AUTO_ZOOM_MIN;
+}
+
+function autoZoomMaxForModel(modelMode) {
+  return modelMode === 'e8_2d' ? E8_COXETER_ZOOM_MAX : AUTO_ZOOM_MAX;
 }
 
 async function init() {
