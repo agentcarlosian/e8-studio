@@ -56,10 +56,10 @@
         <section class="settings-section active" data-section="view">
           <h2>View</h2>
           <div class="control-stack">
-            <div class="view-actions" aria-label="View framing">
+            <div class="view-actions" aria-label="View actions">
               <button class="wide-action" type="button" data-action="reset-view">Reset</button>
               <button id="surprise-button" class="wide-action" type="button" data-view-action="surprise">Surprise</button>
-              <button class="wide-action fit-all-action" type="button" data-view-action="fit-all">Fit all</button>
+              <button id="settings-done" class="wide-action done-button view-done-action" type="button">Done</button>
             </div>
             <div id="bloom-timeline-field" class="bloom-timeline-panel hidden" aria-label="Bloom timeline">
               <div class="browse-head">
@@ -508,10 +508,6 @@
           </div>
           <div id="cartan-matrix" class="cartan-matrix" aria-label="E8 simple-root Cartan matrix"></div>
         </section>
-      </div>
-
-      <div class="sheet-footer">
-        <button id="settings-done" class="done-button" type="button">Done</button>
       </div>
     </section>
   </main>
