@@ -72,12 +72,30 @@ const FX_PRESETS = [
   { id: 'live', label: 'Live', autoColor: true, softFx: true },
 ];
 const MOBILE_FX_MODES = [
-  { id: 'none', label: 'Clean', description: 'Original color and clarity.' },
-  { id: 'glow', label: 'Glow', description: 'Luminous highlights and a soft outer halo.' },
-  { id: 'chromatic', label: 'Chrom', name: 'Chromatic', description: 'Magenta and cyan fringes separate along silhouettes.' },
-  { id: 'hologram', label: 'Holo', name: 'Hologram', description: 'Cyan display tint, glow, and animated scanlines.' },
-  { id: 'heat', label: 'Heat', description: 'A warm, high-energy ember treatment.' },
-  { id: 'crystal', label: 'Crystal', description: 'Cool prismatic contrast with glassy highlights.' },
+  { id: 'none', label: 'Off', cost: 'low', description: 'Use clean, unmodified shading.' },
+  { id: 'glow', label: 'Glow', cost: 'low', description: 'Add a luminous rim and brighter highlights.' },
+  { id: 'pulse', label: 'Pulse', cost: 'low', description: 'Breathe the form gently over time.' },
+  { id: 'trail', label: 'Trail', cost: 'medium', description: 'Echo color behind moving geometry.' },
+  { id: 'chromatic', label: 'Chrom', name: 'Chromatic', cost: 'low', description: 'Separate color channels across the form.' },
+  { id: 'kaleidoscope', label: 'Kaleid', name: 'Kaleidoscope', cost: 'medium', description: 'Mirror light into a kaleidoscopic pattern.' },
+  { id: 'ripple', label: 'Ripple', cost: 'low', description: 'Send a radial wave across the view.' },
+  { id: 'spiral', label: 'Spiral', cost: 'low', description: 'Twist light around the view axis.' },
+  { id: 'fog', label: 'Fog', cost: 'low', description: 'Fade the structure into atmospheric depth.' },
+  { id: 'heat', label: 'Heat', cost: 'low', description: 'Map warm energy bands across the form.' },
+  { id: 'edge-glow', label: 'Edge', name: 'Edge glow', cost: 'low', description: 'Emphasize silhouettes and structural edges.' },
+  { id: 'aura', label: 'Aura', cost: 'low', description: 'Add a soft animated field around the form.' },
+  { id: 'voronoi', label: 'Voronoi', cost: 'high', description: 'Cut a procedural cellular pattern into the view.' },
+  { id: 'caustic', label: 'Caustic', cost: 'medium', description: 'Add moving refractive light bands.' },
+  { id: 'iridescent', label: 'Irides', name: 'Iridescent', cost: 'low', description: 'Shift color like thin-film light.' },
+  { id: 'flowfield', label: 'Flow', name: 'Flow field', cost: 'medium', description: 'Move an animated current across the geometry.' },
+  { id: 'plasma', label: 'Plasma', cost: 'medium', description: 'Add animated plasma color bands.' },
+  { id: 'kaleido6', label: 'K6', name: 'Kaleido 6', cost: 'medium', description: 'Apply six-fold procedural symmetry.' },
+  { id: 'dof', label: 'DOF', name: 'Depth of field', cost: 'medium', description: 'Focus the center while softening depth.' },
+  { id: 'nebula', label: 'Nebula', cost: 'medium', description: 'Suspend the form in a drifting cloudy field.' },
+  { id: 'wireframe', label: 'Wire', name: 'Wireframe', cost: 'low', description: 'Reduce shading to a technical wire look.' },
+  { id: 'hologram', label: 'Holo', name: 'Hologram', cost: 'low', description: 'Add cyan scanlines and digital flicker.' },
+  { id: 'xray', label: 'X-ray', cost: 'low', description: 'Reveal cool rims and dark interiors.' },
+  { id: 'crystal', label: 'Crystal', cost: 'low', description: 'Add sharp faceted prismatic highlights.' },
 ];
 const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
 const MOTION_PRESETS = [
@@ -2995,7 +3013,7 @@ function activeFxMode() {
 function renderFxModes() {
   if (!els.fxModeGrid) return false;
   els.fxModeGrid.innerHTML = MOBILE_FX_MODES.map(mode => (
-    `<button type="button" data-fx-treatment="${escapeHtml(mode.id)}" aria-label="${escapeHtml(fxModeLabel(mode))} effect">${escapeHtml(mode.label)}</button>`
+    `<button type="button" data-fx-treatment="${escapeHtml(mode.id)}" data-fx-cost="${escapeHtml(mode.cost)}" aria-label="${escapeHtml(fxModeLabel(mode))} effect, ${escapeHtml(mode.cost)} GPU cost"><span>${escapeHtml(mode.label)}</span><small>${escapeHtml(mode.cost)}</small></button>`
   )).join('');
   metrics.fxModeButtonCount = MOBILE_FX_MODES.length;
   return true;

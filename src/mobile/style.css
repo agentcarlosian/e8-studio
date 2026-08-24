@@ -75,6 +75,7 @@ button:disabled {
   -webkit-touch-callout: none;
 }
 
+.mobile-shell::before,
 .mobile-shell::after {
   content: "";
   position: absolute;
@@ -113,9 +114,59 @@ button:disabled {
   filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(244, 210, 122, var(--mobile-fx-alpha)));
 }
 
+.mobile-shell[data-fx-mode="pulse"] #mobile-canvas,
+.mobile-shell[data-fx-mode="pulse"] #mobile-sdf-canvas {
+  filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 6px rgba(244, 210, 122, var(--mobile-fx-alpha)));
+  animation: mobile-fx-pulse 2.8s ease-in-out infinite;
+}
+
+.mobile-shell[data-fx-mode="trail"] #mobile-canvas,
+.mobile-shell[data-fx-mode="trail"] #mobile-sdf-canvas {
+  filter: saturate(var(--mobile-fx-saturation)) drop-shadow(3px 1px rgba(106, 255, 232, var(--mobile-fx-alpha))) drop-shadow(7px 2px rgba(155, 77, 255, calc(var(--mobile-fx-alpha) * 0.7))) drop-shadow(11px 3px rgba(255, 107, 157, calc(var(--mobile-fx-alpha) * 0.45)));
+}
+
 .mobile-shell[data-fx-mode="chromatic"] #mobile-canvas,
 .mobile-shell[data-fx-mode="chromatic"] #mobile-sdf-canvas {
   filter: saturate(var(--mobile-fx-saturation)) drop-shadow(var(--mobile-fx-fringe) 0 rgba(255, 44, 150, var(--mobile-fx-alpha))) drop-shadow(calc(-1 * var(--mobile-fx-fringe)) 0 rgba(40, 230, 255, var(--mobile-fx-alpha)));
+}
+
+.mobile-shell[data-fx-mode="kaleidoscope"] #mobile-canvas,
+.mobile-shell[data-fx-mode="kaleidoscope"] #mobile-sdf-canvas {
+  filter: saturate(calc(var(--mobile-fx-saturation) * 1.12)) contrast(1.08) drop-shadow(0 0 7px rgba(155, 77, 255, var(--mobile-fx-alpha)));
+}
+
+.mobile-shell[data-fx-mode="kaleidoscope"]::after {
+  inset: -35%;
+  opacity: calc(var(--mobile-fx-alpha) * 0.72);
+  background: repeating-conic-gradient(from 0deg at 50% 46%, rgba(255, 0, 212, 0.38) 0deg 8deg, transparent 8deg 22deg, rgba(77, 255, 255, 0.3) 22deg 30deg, transparent 30deg 45deg);
+  mix-blend-mode: screen;
+  animation: mobile-fx-spin 22s linear infinite;
+}
+
+.mobile-shell[data-fx-mode="ripple"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.9);
+  background: repeating-radial-gradient(circle at 50% 46%, transparent 0 32px, rgba(106, 255, 232, 0.34) 34px 36px, transparent 38px 68px);
+  mix-blend-mode: screen;
+  animation: mobile-fx-ripple 4.2s ease-in-out infinite;
+}
+
+.mobile-shell[data-fx-mode="spiral"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.76);
+  background: repeating-conic-gradient(from 40deg at 50% 46%, transparent 0deg 13deg, rgba(244, 210, 122, 0.36) 15deg 17deg, transparent 19deg 34deg);
+  mix-blend-mode: screen;
+  animation: mobile-fx-spin 28s linear infinite;
+}
+
+.mobile-shell[data-fx-mode="fog"] #mobile-canvas,
+.mobile-shell[data-fx-mode="fog"] #mobile-sdf-canvas {
+  filter: blur(0.65px) brightness(0.94) saturate(0.82) contrast(0.9);
+}
+
+.mobile-shell[data-fx-mode="fog"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.78);
+  background: radial-gradient(ellipse at 48% 45%, rgba(225, 235, 245, 0.2), transparent 57%), linear-gradient(12deg, transparent 18%, rgba(210, 225, 240, 0.16) 47%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: mobile-fx-drift 9s ease-in-out infinite alternate;
 }
 
 .mobile-shell[data-fx-mode="hologram"] #mobile-canvas,
@@ -130,9 +181,143 @@ button:disabled {
   animation: mobile-hologram-scan 5s linear infinite;
 }
 
+.mobile-shell[data-fx-mode="xray"] #mobile-canvas,
+.mobile-shell[data-fx-mode="xray"] #mobile-sdf-canvas {
+  filter: grayscale(0.72) invert(0.86) sepia(0.35) hue-rotate(142deg) saturate(calc(var(--mobile-fx-saturation) * 1.15)) contrast(1.36) brightness(0.86) drop-shadow(0 0 5px rgba(106, 255, 232, var(--mobile-fx-alpha)));
+}
+
 .mobile-shell[data-fx-mode="heat"] #mobile-canvas,
 .mobile-shell[data-fx-mode="heat"] #mobile-sdf-canvas {
   filter: sepia(0.34) saturate(calc(var(--mobile-fx-saturation) * 1.45)) hue-rotate(-18deg) brightness(var(--mobile-fx-brightness)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(255, 90, 30, var(--mobile-fx-alpha)));
+}
+
+.mobile-shell[data-fx-mode="edge-glow"] #mobile-canvas,
+.mobile-shell[data-fx-mode="edge-glow"] #mobile-sdf-canvas {
+  filter: contrast(1.5) saturate(0.74) brightness(1.05) drop-shadow(0 0 2px rgba(255, 255, 255, calc(var(--mobile-fx-alpha) * 1.35))) drop-shadow(0 0 7px rgba(106, 255, 232, var(--mobile-fx-alpha)));
+}
+
+.mobile-shell[data-fx-mode="aura"] #mobile-canvas,
+.mobile-shell[data-fx-mode="aura"] #mobile-sdf-canvas {
+  filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 calc(var(--mobile-fx-blur) * 0.8) rgba(106, 255, 232, var(--mobile-fx-alpha))) drop-shadow(0 0 calc(var(--mobile-fx-blur) * 1.8) rgba(155, 77, 255, calc(var(--mobile-fx-alpha) * 0.7)));
+}
+
+.mobile-shell[data-fx-mode="aura"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.68);
+  background: radial-gradient(ellipse at 50% 46%, rgba(106, 255, 232, 0.24), rgba(155, 77, 255, 0.12) 38%, transparent 68%);
+  mix-blend-mode: screen;
+  animation: mobile-fx-aura 4.6s ease-in-out infinite;
+}
+
+.mobile-shell[data-fx-mode="voronoi"] #mobile-canvas,
+.mobile-shell[data-fx-mode="voronoi"] #mobile-sdf-canvas {
+  filter: contrast(1.22) saturate(calc(var(--mobile-fx-saturation) * 1.15));
+}
+
+.mobile-shell[data-fx-mode="voronoi"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.94);
+  background: linear-gradient(32deg, transparent 38%, rgba(106, 255, 232, 0.34) 39% 40%, transparent 41% 70%, rgba(255, 107, 157, 0.28) 71% 72%, transparent 73%), linear-gradient(148deg, transparent 24%, rgba(244, 210, 122, 0.3) 25% 26%, transparent 27% 61%, rgba(155, 77, 255, 0.3) 62% 63%, transparent 64%);
+  background-size: 72px 64px, 92px 78px;
+  mix-blend-mode: screen;
+}
+
+.mobile-shell[data-fx-mode="caustic"] #mobile-canvas,
+.mobile-shell[data-fx-mode="caustic"] #mobile-sdf-canvas {
+  filter: brightness(1.08) saturate(var(--mobile-fx-saturation)) contrast(1.08);
+}
+
+.mobile-shell[data-fx-mode="caustic"]::after {
+  opacity: var(--mobile-fx-alpha);
+  background: radial-gradient(ellipse at 18% 25%, transparent 0 24%, rgba(106, 255, 232, 0.4) 27%, transparent 31%), radial-gradient(ellipse at 72% 68%, transparent 0 20%, rgba(244, 210, 122, 0.38) 23%, transparent 28%), radial-gradient(ellipse at 54% 36%, transparent 0 17%, rgba(155, 77, 255, 0.3) 20%, transparent 25%);
+  background-size: 180px 140px, 230px 170px, 150px 210px;
+  mix-blend-mode: screen;
+  animation: mobile-fx-caustic 8s ease-in-out infinite alternate;
+}
+
+.mobile-shell[data-fx-mode="iridescent"] #mobile-canvas,
+.mobile-shell[data-fx-mode="iridescent"] #mobile-sdf-canvas {
+  filter: saturate(calc(var(--mobile-fx-saturation) * 1.24)) brightness(var(--mobile-fx-brightness)) hue-rotate(18deg) drop-shadow(0 0 7px rgba(106, 255, 232, var(--mobile-fx-alpha)));
+  animation: mobile-fx-iridescent 8s ease-in-out infinite alternate;
+}
+
+.mobile-shell[data-fx-mode="iridescent"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.72);
+  background: conic-gradient(from 90deg at 50% 46%, rgba(255, 107, 157, 0.22), rgba(106, 255, 232, 0.2), rgba(244, 210, 122, 0.18), rgba(155, 77, 255, 0.2), rgba(255, 107, 157, 0.22));
+  mix-blend-mode: color-dodge;
+}
+
+.mobile-shell[data-fx-mode="flowfield"] #mobile-canvas,
+.mobile-shell[data-fx-mode="flowfield"] #mobile-sdf-canvas {
+  filter: saturate(var(--mobile-fx-saturation)) drop-shadow(4px 1px rgba(106, 255, 232, calc(var(--mobile-fx-alpha) * 0.85)));
+}
+
+.mobile-shell[data-fx-mode="flowfield"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.8);
+  background: repeating-linear-gradient(112deg, transparent 0 34px, rgba(106, 255, 232, 0.28) 36px 38px, transparent 40px 74px);
+  background-size: 180px 180px;
+  mix-blend-mode: screen;
+  animation: mobile-fx-flow 6s linear infinite;
+}
+
+.mobile-shell[data-fx-mode="plasma"] #mobile-canvas,
+.mobile-shell[data-fx-mode="plasma"] #mobile-sdf-canvas {
+  filter: contrast(1.12) saturate(calc(var(--mobile-fx-saturation) * 1.45)) brightness(1.08);
+}
+
+.mobile-shell[data-fx-mode="plasma"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.9);
+  background: radial-gradient(circle at 24% 30%, rgba(255, 0, 212, 0.35), transparent 33%), radial-gradient(circle at 76% 66%, rgba(0, 255, 234, 0.32), transparent 36%), conic-gradient(from 120deg at 52% 48%, transparent, rgba(155, 77, 255, 0.26), transparent 42%);
+  background-size: 130% 130%;
+  mix-blend-mode: screen;
+  animation: mobile-fx-plasma 9s ease-in-out infinite alternate;
+}
+
+.mobile-shell[data-fx-mode="kaleido6"] #mobile-canvas,
+.mobile-shell[data-fx-mode="kaleido6"] #mobile-sdf-canvas {
+  filter: saturate(calc(var(--mobile-fx-saturation) * 1.18)) contrast(1.1);
+}
+
+.mobile-shell[data-fx-mode="kaleido6"]::after {
+  inset: -25%;
+  opacity: calc(var(--mobile-fx-alpha) * 0.82);
+  background: repeating-conic-gradient(from 0deg at 50% 46%, rgba(244, 210, 122, 0.28) 0deg 3deg, transparent 3deg 57deg, rgba(106, 255, 232, 0.28) 57deg 60deg);
+  mix-blend-mode: screen;
+  animation: mobile-fx-spin 32s linear infinite reverse;
+}
+
+.mobile-shell[data-fx-mode="dof"] #mobile-canvas,
+.mobile-shell[data-fx-mode="dof"] #mobile-sdf-canvas {
+  filter: blur(0.45px) contrast(1.12) brightness(1.04) drop-shadow(0 0 4px rgba(244, 210, 122, calc(var(--mobile-fx-alpha) * 0.7)));
+}
+
+.mobile-shell[data-fx-mode="dof"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.78);
+  background: radial-gradient(ellipse at 50% 46%, transparent 0 34%, rgba(4, 5, 12, 0.34) 74%, rgba(2, 2, 7, 0.68) 100%);
+  mix-blend-mode: multiply;
+}
+
+.mobile-shell[data-fx-mode="nebula"] #mobile-canvas,
+.mobile-shell[data-fx-mode="nebula"] #mobile-sdf-canvas {
+  filter: blur(0.35px) saturate(calc(var(--mobile-fx-saturation) * 1.12)) brightness(1.04);
+}
+
+.mobile-shell[data-fx-mode="nebula"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.9);
+  background: radial-gradient(ellipse at 24% 38%, rgba(155, 77, 255, 0.34), transparent 39%), radial-gradient(ellipse at 73% 54%, rgba(77, 255, 255, 0.24), transparent 36%), radial-gradient(ellipse at 50% 72%, rgba(255, 107, 157, 0.2), transparent 32%);
+  background-size: 120% 120%;
+  mix-blend-mode: screen;
+  animation: mobile-fx-drift 11s ease-in-out infinite alternate;
+}
+
+.mobile-shell[data-fx-mode="wireframe"] #mobile-canvas,
+.mobile-shell[data-fx-mode="wireframe"] #mobile-sdf-canvas {
+  filter: grayscale(0.82) contrast(1.48) brightness(0.92) drop-shadow(0 0 2px rgba(106, 255, 232, calc(var(--mobile-fx-alpha) * 1.2)));
+}
+
+.mobile-shell[data-fx-mode="wireframe"]::after {
+  opacity: calc(var(--mobile-fx-alpha) * 0.45);
+  background: linear-gradient(rgba(106, 255, 232, 0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(106, 255, 232, 0.16) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mix-blend-mode: screen;
 }
 
 .mobile-shell[data-fx-mode="crystal"] #mobile-canvas,
@@ -143,6 +328,59 @@ button:disabled {
 @keyframes mobile-hologram-scan {
   from { transform: translateY(-4px); }
   to { transform: translateY(4px); }
+}
+
+@keyframes mobile-fx-pulse {
+  0%, 100% { filter: brightness(1.02) saturate(1.08) drop-shadow(0 0 3px rgba(244, 210, 122, 0.1)); }
+  50% { filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(244, 210, 122, var(--mobile-fx-alpha))); }
+}
+
+@keyframes mobile-fx-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes mobile-fx-ripple {
+  0%, 100% { background-size: 94% 94%; opacity: calc(var(--mobile-fx-alpha) * 0.52); }
+  50% { background-size: 112% 112%; opacity: var(--mobile-fx-alpha); }
+}
+
+@keyframes mobile-fx-drift {
+  from { background-position: -4% 2%, 4% -2%, 0 0; }
+  to { background-position: 6% -3%, -5% 4%, 3% -2%; }
+}
+
+@keyframes mobile-fx-aura {
+  0%, 100% { opacity: calc(var(--mobile-fx-alpha) * 0.42); transform: scale(0.96); }
+  50% { opacity: calc(var(--mobile-fx-alpha) * 0.82); transform: scale(1.04); }
+}
+
+@keyframes mobile-fx-caustic {
+  from { background-position: -18px 8px, 12px -14px, -8px 16px; }
+  to { background-position: 26px -18px, -24px 20px, 20px -12px; }
+}
+
+@keyframes mobile-fx-iridescent {
+  from { filter: saturate(var(--mobile-fx-saturation)) brightness(1.04) hue-rotate(-18deg) drop-shadow(0 0 5px rgba(255, 107, 157, var(--mobile-fx-alpha))); }
+  to { filter: saturate(calc(var(--mobile-fx-saturation) * 1.24)) brightness(var(--mobile-fx-brightness)) hue-rotate(72deg) drop-shadow(0 0 8px rgba(106, 255, 232, var(--mobile-fx-alpha))); }
+}
+
+@keyframes mobile-fx-flow {
+  from { background-position: -180px 80px; }
+  to { background-position: 180px -80px; }
+}
+
+@keyframes mobile-fx-plasma {
+  from { background-position: 0% 0%; transform: scale(1); }
+  to { background-position: 18% -12%; transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-shell[data-fx-mode]::after,
+  .mobile-shell[data-fx-mode] #mobile-canvas,
+  .mobile-shell[data-fx-mode] #mobile-sdf-canvas {
+    animation: none;
+  }
 }
 
 .topbar {
@@ -749,13 +987,33 @@ button:disabled {
 }
 
 .fx-mode-grid button {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
   min-width: 0;
-  min-height: 42px;
-  padding: 0 5px;
+  min-height: 50px;
+  padding: 5px 4px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
   line-height: 1.05;
+}
+
+.fx-mode-grid button small {
+  color: var(--dim);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fx-mode-grid button[data-fx-cost="medium"] small {
+  color: #b6a36f;
+}
+
+.fx-mode-grid button[data-fx-cost="high"] small {
+  color: var(--danger);
 }
 
 .fx-mode-grid button.active {
@@ -764,10 +1022,19 @@ button:disabled {
   color: var(--accent-2);
 }
 
+.fx-mode-grid button.active small {
+  color: inherit;
+}
+
 .panel-note {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.fx-cost-note {
+  color: var(--dim);
+  font-size: 10px;
 }
 
 .fx-preset-grid button,
