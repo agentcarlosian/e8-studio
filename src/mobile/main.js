@@ -32,6 +32,7 @@ const DEFAULT_STATE = {
   autoColor: false,
   colorSpeed: 0.72,
   softFx: false,
+  fxMode: 'none',
   fxStrength: 1,
   rotationSpeed: 0.7,
   rotation: 0,
@@ -70,6 +71,15 @@ const FX_PRESETS = [
   { id: 'color', label: 'Color', autoColor: true, softFx: false },
   { id: 'live', label: 'Live', autoColor: true, softFx: true },
 ];
+const MOBILE_FX_MODES = [
+  { id: 'none', label: 'Clean', description: 'Original color and clarity.' },
+  { id: 'glow', label: 'Glow', description: 'Luminous highlights and a soft outer halo.' },
+  { id: 'chromatic', label: 'Chrom', name: 'Chromatic', description: 'Magenta and cyan fringes separate along silhouettes.' },
+  { id: 'hologram', label: 'Holo', name: 'Hologram', description: 'Cyan display tint, glow, and animated scanlines.' },
+  { id: 'heat', label: 'Heat', description: 'A warm, high-energy ember treatment.' },
+  { id: 'crystal', label: 'Crystal', description: 'Cool prismatic contrast with glassy highlights.' },
+];
+const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
 const MOTION_PRESETS = [
   { id: 'still', label: 'Still', interaction: 'still' },
   { id: 'orbit', label: 'Orbit', interaction: 'orbit' },
@@ -422,6 +432,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'autoModel',
   'autoColor',
   'softFx',
+  'fxMode',
   'showVertices',
 ];
 
@@ -565,6 +576,12 @@ let metrics = {
   lastFxPreset: null,
   lastFxPresetLabel: null,
   lastFxPresetMs: null,
+  fxModeButtonCount: 0,
+  fxModeSelectCount: 0,
+  fxModeSyncSkipCount: 0,
+  lastFxMode: null,
+  lastFxModeLabel: null,
+  lastFxModeMs: null,
   motionPresetButtonCount: 0,
   motionPresetSelectCount: 0,
   motionPresetSyncSkipCount: 0,
@@ -1007,6 +1024,7 @@ function normalizeState(next) {
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
   if (typeof next.autoColor !== 'boolean') next.autoColor = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
+  if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
   if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
   return next;
 }
@@ -1121,6 +1139,9 @@ function cacheElements() {
   els.backgroundBrightnessOutput = document.getElementById('background-brightness-output');
   els.fxPresetGrid = document.getElementById('fx-preset-grid');
   els.fxPresetOutput = document.getElementById('fx-preset-output');
+  els.fxModeGrid = document.getElementById('fx-mode-grid');
+  els.fxModeOutput = document.getElementById('fx-mode-output');
+  els.fxModeDescription = document.getElementById('fx-mode-description');
   els.pointSize = document.getElementById('point-size');
   els.pointSizeOutput = document.getElementById('point-size-output');
   els.pointOpacity = document.getElementById('point-opacity');
@@ -1153,6 +1174,7 @@ function cacheElements() {
   els.sectionTabs = [...els.sheet.querySelectorAll('[data-section-tab]')];
   els.sectionPanels = [...els.sheet.querySelectorAll('[data-section]')];
   els.qualityButtons = [...els.sheet.querySelectorAll('[data-quality]')];
+  els.modelContextControls = [...els.sheet.querySelectorAll('[data-model-context]')];
 }
 
 function bindEvents() {
@@ -1249,6 +1271,11 @@ function bindEvents() {
     const fxPreset = event.target.closest('[data-fx-preset]')?.dataset.fxPreset;
     if (fxPreset) {
       selectFxPreset(fxPreset);
+      return;
+    }
+    const fxMode = event.target.closest('[data-fx-treatment]')?.dataset.fxTreatment;
+    if (fxMode) {
+      selectFxMode(fxMode);
       return;
     }
     const styleAction = event.target.closest('[data-style-action]')?.dataset.styleAction;
@@ -2490,6 +2517,7 @@ function randomDifferent(items, current) {
 function mobileSurprise() {
   const palettes = Object.keys(PALETTES);
   const subsets = [...SUPPORTED_SUBSETS];
+  const fxModes = MOBILE_FX_MODES.map(mode => mode.id);
   const patch = {
     palette: randomDifferent(palettes, state.palette),
     subset: randomDifferent(subsets, state.subset),
@@ -2507,6 +2535,7 @@ function mobileSurprise() {
     autoModel: false,
     autoColor: false,
     softFx: false,
+    fxMode: randomDifferent(fxModes, state.fxMode),
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
     rotation: Math.random() * TAU,
     cameraTilt: DEFAULT_STATE.cameraTilt,
@@ -2689,6 +2718,7 @@ function setSettingState(patch, interactionType, options = {}) {
   if (options.syncQuality) syncQualityControls();
   if (options.syncPalette) syncPaletteControls();
   if (options.syncFx) syncFxPresetControls();
+  if (options.syncFxMode) syncFxModeControls();
   if (options.syncSubset) syncSubsetControls();
   if (options.syncMotionSpeed) syncMotionSpeedControls();
   if (options.syncMotionPreset) syncMotionPresetControls();
@@ -2919,6 +2949,7 @@ function syncVisualRangeOutputs() {
   if (els.pointOpacityOutput) els.pointOpacityOutput.textContent = `${Math.round(state.pointOpacity * 100)}%`;
   if (els.colorSpeedOutput) els.colorSpeedOutput.textContent = colorSpeedLabel(state.colorSpeed);
   if (els.fxStrengthOutput) els.fxStrengthOutput.textContent = `${Math.round(state.fxStrength * 100)}%`;
+  syncFxSurface();
   return true;
 }
 
@@ -2930,6 +2961,7 @@ function syncVisualControls() {
   if (els.colorSpeed) els.colorSpeed.value = String(state.colorSpeed);
   if (els.fxStrength) els.fxStrength.value = String(state.fxStrength);
   syncVisualRangeOutputs();
+  syncFxModeControls();
   return true;
 }
 
@@ -2949,6 +2981,66 @@ function selectFxPreset(id) {
   metrics.lastFxPresetLabel = fxPresetLabel(preset);
   metrics.lastFxPresetMs = performance.now();
   showStatus(`FX: ${metrics.lastFxPresetLabel}`);
+  return result;
+}
+
+function fxModeLabel(mode) {
+  return mode?.name || mode?.label || 'FX';
+}
+
+function activeFxMode() {
+  return MOBILE_FX_MODES.find(mode => mode.id === state.fxMode) || MOBILE_FX_MODES[0];
+}
+
+function renderFxModes() {
+  if (!els.fxModeGrid) return false;
+  els.fxModeGrid.innerHTML = MOBILE_FX_MODES.map(mode => (
+    `<button type="button" data-fx-treatment="${escapeHtml(mode.id)}" aria-label="${escapeHtml(fxModeLabel(mode))} effect">${escapeHtml(mode.label)}</button>`
+  )).join('');
+  metrics.fxModeButtonCount = MOBILE_FX_MODES.length;
+  return true;
+}
+
+function syncFxSurface() {
+  if (!els.shell) return false;
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  els.shell.dataset.fxMode = state.fxMode;
+  els.shell.style.setProperty('--mobile-fx-strength', strength.toFixed(2));
+  els.shell.style.setProperty('--mobile-fx-brightness', (1 + strength * 0.13).toFixed(3));
+  els.shell.style.setProperty('--mobile-fx-saturation', (1 + strength * 0.32).toFixed(3));
+  els.shell.style.setProperty('--mobile-fx-blur', `${(4 + strength * 6).toFixed(1)}px`);
+  els.shell.style.setProperty('--mobile-fx-fringe', `${(0.8 + strength * 1.35).toFixed(1)}px`);
+  els.shell.style.setProperty('--mobile-fx-alpha', clamp(0.08 + strength * 0.12, 0.1, 0.3).toFixed(3));
+  return true;
+}
+
+function syncFxModeControls() {
+  const active = activeFxMode();
+  if (els.fxModeOutput) els.fxModeOutput.textContent = fxModeLabel(active);
+  if (els.fxModeDescription) els.fxModeDescription.textContent = active.description;
+  if (els.fxModeGrid) {
+    els.fxModeGrid.querySelectorAll('[data-fx-treatment]').forEach(button => {
+      const isActive = button.dataset.fxTreatment === active.id;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+  syncFxSurface();
+  return true;
+}
+
+function selectFxMode(id) {
+  const mode = MOBILE_FX_MODES.find(item => item.id === id);
+  if (!mode) return false;
+  const previous = state.fxMode;
+  const result = setManualRuntimeState({ fxMode: mode.id }, `fx-mode-${mode.id}`, { syncFxMode: true });
+  if (state.fxMode === previous) return result;
+  metrics.fxModeSelectCount++;
+  metrics.fxModeSyncSkipCount++;
+  metrics.lastFxMode = mode.id;
+  metrics.lastFxModeLabel = fxModeLabel(mode);
+  metrics.lastFxModeMs = performance.now();
+  showStatus(`Effect: ${metrics.lastFxModeLabel}`);
   return result;
 }
 
@@ -3377,20 +3469,14 @@ function cycleQuality() {
 
 function scenePatchForTarget(target) {
   // Manual scene selection is a replacement operation. Keep global user
-  // preferences (palette, quality, point scale), but clear scene-owned
-  // overlays, animation, FX, selection, and framing so A→B equals fresh→B.
+  // preferences and hidden E8-root choices, but clear active animation,
+  // selection, and framing so A→B starts from a predictable camera state.
   return {
     modelMode: target.modelMode,
     shape: target.shape || DEFAULT_STATE.shape,
     polytope4d: target.polytope4d || DEFAULT_STATE.polytope4d,
     dynkinDiagram: target.dynkinDiagram || DEFAULT_STATE.dynkinDiagram,
-    showRings: DEFAULT_STATE.showRings,
-    showContext: DEFAULT_STATE.showContext,
-    showPetrie: DEFAULT_STATE.showPetrie,
-    showMirrors: DEFAULT_STATE.showMirrors,
     showVertices: DEFAULT_STATE.showVertices,
-    highlightSubset: DEFAULT_STATE.highlightSubset,
-    subset: DEFAULT_STATE.subset,
     autoRotate: false,
     autoZoom: false,
     autoExtrude: false,
@@ -3524,6 +3610,7 @@ function syncModelControls() {
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
   if (els.sdfField) els.sdfField.classList.toggle('hidden', state.modelMode !== 'sdf');
+  syncModelContextControls();
   syncSdfControls();
   syncBloomControls();
   if (els.autoModelToggle) els.autoModelToggle.checked = state.autoModel;
@@ -3538,6 +3625,22 @@ function syncModelControls() {
   syncSceneAccessibility(scene);
   syncMckayCard();
   syncCuriosityCard();
+}
+
+function modelContextVisible(context) {
+  if (context === 'e8-roots') return state.modelMode === 'e8_2d' || state.modelMode === 'bloom';
+  if (context === 'e8-only') return state.modelMode === 'e8_2d';
+  if (context === 'vertex-models') return state.modelMode === 'platonic' || state.modelMode === 'poly4d';
+  return true;
+}
+
+function syncModelContextControls() {
+  for (const control of els.modelContextControls || []) {
+    const visible = modelContextVisible(control.dataset.modelContext);
+    control.hidden = !visible;
+    control.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+  return true;
 }
 
 function syncSdfControls() {
@@ -4024,6 +4127,7 @@ function mobileTourPatchForTarget(target) {
     autoModel: false,
     autoColor: false,
     softFx: false,
+    fxMode: DEFAULT_STATE.fxMode,
     bloomAuto: false,
   };
 }
@@ -4144,6 +4248,7 @@ function applyMobileTourStep(index, options = {}) {
   metrics.lastMobileTourAction = interactionType;
   metrics.lastMobileTourMs = performance.now();
   syncModelControls();
+  syncFxModeControls();
   updateSelectionUI({ reason: interactionType });
   syncMobileTourCard();
   if (options.status !== false) showStatus(`Tour: ${step.label}`);
@@ -4652,6 +4757,7 @@ function render() {
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
       softFx: state.softFx,
+      fxMode: state.fxMode,
       stylePhase,
       modelVertices: 0,
       modelProjectedVertices: 0,
@@ -7931,6 +8037,7 @@ async function init() {
   renderRootJumps();
   renderMotionSpeedPresets();
   renderFxPresets();
+  renderFxModes();
   renderMotionPresets();
   bindEvents();
   data = await loadData();
@@ -7964,6 +8071,7 @@ async function init() {
     setScenePreset,
     selectModelShortcut,
     selectFxPreset,
+    selectFxMode,
     selectMotionPreset,
     selectLearnTopic,
     nextLearnTopic,

@@ -320,6 +320,51 @@ def main() -> int:
             })""")
             check("Models retains direct Dodecahedron selection", model_shortcut_dodecahedron["state"]["modelMode"] == "platonic" and model_shortcut_dodecahedron["state"]["shape"] == "dodecahedron" and model_shortcut_dodecahedron["activeShortcut"] == "shape-dodecahedron" and model_shortcut_dodecahedron["output"] == "Dodecahedron", str(model_shortcut_dodecahedron))
             page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.hideStatus(); }")
+            contextual_controls = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const visibility = () => Object.fromEntries(['e8-roots', 'e8-only', 'vertex-models'].map(context => [
+                    context,
+                    [...document.querySelectorAll(`[data-model-context="${context}"]`)].map(control => ({
+                        hidden: control.hidden,
+                        ariaHidden: control.getAttribute('aria-hidden')
+                    }))
+                ]));
+                app.setState({
+                    modelMode: 'e8_2d',
+                    subset: 'dodecahedron',
+                    highlightSubset: false,
+                    showContext: false,
+                    showPetrie: true,
+                    showMirrors: true
+                });
+                const e8 = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('bloom');
+                const bloom = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('sdf');
+                const sdf = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('poly-24cell');
+                const poly4d = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('shape-icosahedron');
+                const platonic = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('dynkin-E8');
+                const dynkin = { visibility: visibility(), state: app.getState() };
+                app.selectModelShortcut('e8_2d');
+                const restored = { visibility: visibility(), state: app.getState() };
+                return { e8, bloom, sdf, poly4d, platonic, dynkin, restored };
+            }""")
+            all_visible = lambda controls: bool(controls) and all(not control["hidden"] and control["ariaHidden"] == "false" for control in controls)
+            all_hidden = lambda controls: bool(controls) and all(control["hidden"] and control["ariaHidden"] == "true" for control in controls)
+            check("E8 View exposes root controls without irrelevant vertex controls", all_visible(contextual_controls["e8"]["visibility"]["e8-roots"]) and all_visible(contextual_controls["e8"]["visibility"]["e8-only"]) and all_hidden(contextual_controls["e8"]["visibility"]["vertex-models"]), str(contextual_controls["e8"]))
+            check("Bloom keeps root exploration but hides E8-only and vertex controls", all_visible(contextual_controls["bloom"]["visibility"]["e8-roots"]) and all_hidden(contextual_controls["bloom"]["visibility"]["e8-only"]) and all_hidden(contextual_controls["bloom"]["visibility"]["vertex-models"]), str(contextual_controls["bloom"]))
+            for model_name in ["sdf", "dynkin"]:
+                model = contextual_controls[model_name]
+                check(f"{model_name.upper()} hides root and vertex controls", all_hidden(model["visibility"]["e8-roots"]) and all_hidden(model["visibility"]["e8-only"]) and all_hidden(model["visibility"]["vertex-models"]), str(model))
+            for model_name in ["poly4d", "platonic"]:
+                model = contextual_controls[model_name]
+                check(f"{model_name.capitalize()} replaces root controls with Vertex nodes", all_hidden(model["visibility"]["e8-roots"]) and all_hidden(model["visibility"]["e8-only"]) and all_visible(model["visibility"]["vertex-models"]), str(model))
+            restored_root_state = contextual_controls["restored"]["state"]
+            check("hidden E8 controls retain their choices across model changes", restored_root_state["subset"] == "dodecahedron" and not restored_root_state["highlightSubset"] and not restored_root_state["showContext"] and restored_root_state["showPetrie"] and restored_root_state["showMirrors"] and all_visible(contextual_controls["restored"]["visibility"]["e8-roots"]) and all_visible(contextual_controls["restored"]["visibility"]["e8-only"]), str(contextual_controls["restored"]))
+            page.evaluate("() => window.__mobileApp.setState({ subset: 'icosahedron', highlightSubset: true, showContext: true, showPetrie: false, showMirrors: false })")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.hideStatus(); }")
             page.wait_for_timeout(450)
 
@@ -884,7 +929,7 @@ def main() -> int:
             sdf_motion = page.evaluate("() => window.__mobileApp.getMetrics().lastDrawStats")
             check("SDF motion retains seam-free sampling and a full-resolution baseline", sdf_motion["sdfQuality"] == "motion" and sdf_motion["sdfMarchSteps"] == 38 and sdf_motion["sdfNeighborSpan"] == 1 and sdf_motion["sdfRasterScale"] >= 1.15 and sdf_motion["sdfMotionPixelBoost"] >= 1.15 and sdf_motion["sdfRasterSize"] >= 440 and sdf_motion["sdfPixels"] > 450000, str(sdf_motion))
             page.evaluate("() => { window.__mobileApp.setState({ autoRotate: false, cameraPath: 'manual' }); window.__mobileApp.forceRender(); }")
-            page.evaluate("() => { window.__mobileApp.setState({ quality: 'sharp', palette: 'magma', background: 'plasma', backgroundBrightness: 1.1, showRings: false, showContext: false, showPetrie: true, showMirrors: true, highlightSubset: false, pointScale: 1.6, pointOpacity: 0.4, autoColor: true, softFx: true, fxStrength: 1.4, sdfSphereR: 0.12, sdfBlend: 0.08, sdfBloom: 0.9, sdfAniso: 0.95, rotation: 1.1, cameraTilt: 0.8, cameraPath: 'dive', autoRotate: true, e8MorphT: 0.72, zoom: 2.7, panX: 135, panY: -95 }); window.__mobileApp.openSettings('view'); }")
+            page.evaluate("() => { window.__mobileApp.setState({ quality: 'sharp', palette: 'magma', background: 'plasma', backgroundBrightness: 1.1, showRings: false, showContext: false, showPetrie: true, showMirrors: true, highlightSubset: false, pointScale: 1.6, pointOpacity: 0.4, autoColor: true, softFx: true, fxMode: 'heat', fxStrength: 1.4, sdfSphereR: 0.12, sdfBlend: 0.08, sdfBloom: 0.9, sdfAniso: 0.95, rotation: 1.1, cameraTilt: 0.8, cameraPath: 'dive', autoRotate: true, e8MorphT: 0.72, zoom: 2.7, panX: 135, panY: -95 }); window.__mobileApp.openSettings('view'); }")
             page.locator('[data-action="reset-view"]').click()
             page.evaluate("() => window.__mobileApp.forceRender()")
             sdf_reset = page.evaluate("""() => ({
@@ -896,7 +941,7 @@ def main() -> int:
                 }
             })""")
             check("Reset gives persistent visual confirmation", sdf_reset["feedback"]["confirmed"] and sdf_reset["feedback"]["text"] == "Reset done", str(sdf_reset["feedback"]))
-            check("SDF Reset restores all visuals while preserving the selected model", sdf_reset["state"]["modelMode"] == "sdf" and sdf_reset["state"]["palette"] == "gold" and sdf_reset["state"]["background"] == "void" and sdf_reset["state"]["quality"] == "smooth" and sdf_reset["state"]["showRings"] and sdf_reset["state"]["showContext"] and not sdf_reset["state"]["showPetrie"] and not sdf_reset["state"]["showMirrors"] and sdf_reset["state"]["highlightSubset"] and sdf_reset["state"]["pointScale"] == 1 and abs(sdf_reset["state"]["pointOpacity"] - 0.72) < 0.001 and not sdf_reset["state"]["autoColor"] and not sdf_reset["state"]["softFx"] and abs(sdf_reset["state"]["sdfSphereR"] - 0.08) < 0.001 and abs(sdf_reset["state"]["sdfBlend"] - 0.03) < 0.001 and abs(sdf_reset["state"]["rotation"]) < 0.001 and abs(sdf_reset["state"]["cameraTilt"] - 0.28) < 0.001 and sdf_reset["state"]["cameraPath"] == "manual" and not sdf_reset["state"]["autoRotate"] and sdf_reset["state"]["e8MorphT"] == 0 and sdf_reset["state"]["zoom"] == 1 and sdf_reset["state"]["panX"] == 0 and sdf_reset["state"]["panY"] == 0 and sdf_reset["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_reset["metrics"]["lastInteractionType"] == "reset-view", str(sdf_reset))
+            check("SDF Reset restores all visuals while preserving the selected model", sdf_reset["state"]["modelMode"] == "sdf" and sdf_reset["state"]["palette"] == "gold" and sdf_reset["state"]["background"] == "void" and sdf_reset["state"]["quality"] == "smooth" and sdf_reset["state"]["showRings"] and sdf_reset["state"]["showContext"] and not sdf_reset["state"]["showPetrie"] and not sdf_reset["state"]["showMirrors"] and sdf_reset["state"]["highlightSubset"] and sdf_reset["state"]["pointScale"] == 1 and abs(sdf_reset["state"]["pointOpacity"] - 0.72) < 0.001 and not sdf_reset["state"]["autoColor"] and not sdf_reset["state"]["softFx"] and sdf_reset["state"]["fxMode"] == "none" and abs(sdf_reset["state"]["sdfSphereR"] - 0.08) < 0.001 and abs(sdf_reset["state"]["sdfBlend"] - 0.03) < 0.001 and abs(sdf_reset["state"]["rotation"]) < 0.001 and abs(sdf_reset["state"]["cameraTilt"] - 0.28) < 0.001 and sdf_reset["state"]["cameraPath"] == "manual" and not sdf_reset["state"]["autoRotate"] and sdf_reset["state"]["e8MorphT"] == 0 and sdf_reset["state"]["zoom"] == 1 and sdf_reset["state"]["panX"] == 0 and sdf_reset["state"]["panY"] == 0 and sdf_reset["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_reset["metrics"]["lastInteractionType"] == "reset-view", str(sdf_reset))
             page.evaluate("() => window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '120cell', palette: 'neon', background: 'vortex', quality: 'sharp', showVertices: true, rotation: 0.7, zoom: 2.2 })")
             page.locator('[data-action="reset-view"]').click()
             poly4d_reset = page.evaluate("() => window.__mobileApp.getState()")
@@ -1188,6 +1233,55 @@ def main() -> int:
             fx_ids = [button["id"] for button in fx_grid["buttons"]]
             check("Visuals section exposes compact FX presets", len(fx_grid["buttons"]) == 4 and fx_grid["metrics"]["fxPresetButtonCount"] == 4 and fx_ids == ["clean", "pulse", "color", "live"], str(fx_grid))
             check("FX presets mark active Clean state", fx_grid["output"] == "Clean" and any(button["id"] == "clean" and button["active"] and button["pressed"] == "true" for button in fx_grid["buttons"]), str(fx_grid))
+            fx_modes = page.evaluate("""() => ({
+                buttons: [...document.querySelectorAll('#fx-mode-grid [data-fx-treatment]')].map(button => ({
+                    id: button.dataset.fxTreatment,
+                    text: button.textContent.trim(),
+                    active: button.classList.contains('active'),
+                    pressed: button.getAttribute('aria-pressed')
+                })),
+                output: document.getElementById('fx-mode-output').textContent.trim(),
+                description: document.getElementById('fx-mode-description').textContent.trim(),
+                shellMode: document.querySelector('.mobile-shell').dataset.fxMode,
+                metrics: window.__mobileApp.getMetrics()
+            })""")
+            fx_mode_ids = [button["id"] for button in fx_modes["buttons"]]
+            check("Visuals exposes six mobile-safe desktop-style FX treatments", fx_mode_ids == ["none", "glow", "chromatic", "hologram", "heat", "crystal"] and fx_modes["metrics"]["fxModeButtonCount"] == 6 and fx_modes["output"] == "Clean" and fx_modes["shellMode"] == "none" and any(button["id"] == "none" and button["active"] and button["pressed"] == "true" for button in fx_modes["buttons"]), str(fx_modes))
+            fx_mode_before = page.evaluate("() => window.__mobileApp.getMetrics()")
+            page.locator('#fx-mode-grid [data-fx-treatment="hologram"]').click()
+            hologram_fx = page.evaluate("""() => {
+                const shell = document.querySelector('.mobile-shell');
+                return {
+                    state: window.__mobileApp.getState(),
+                    metrics: window.__mobileApp.getMetrics(),
+                    shellMode: shell.dataset.fxMode,
+                    canvasFilter: getComputedStyle(document.getElementById('mobile-canvas')).filter,
+                    sdfFilter: getComputedStyle(document.getElementById('mobile-sdf-canvas')).filter,
+                    overlayOpacity: Number(getComputedStyle(shell, '::after').opacity),
+                    output: document.getElementById('fx-mode-output').textContent.trim(),
+                    description: document.getElementById('fx-mode-description').textContent.trim(),
+                    active: document.querySelector('#fx-mode-grid button.active')?.dataset.fxTreatment,
+                    strength: shell.style.getPropertyValue('--mobile-fx-strength').trim()
+                };
+            }""")
+            check("Hologram FX applies to both Canvas and SDF surfaces", hologram_fx["state"]["fxMode"] == "hologram" and hologram_fx["shellMode"] == "hologram" and hologram_fx["canvasFilter"] != "none" and hologram_fx["sdfFilter"] != "none" and hologram_fx["overlayOpacity"] > 0 and hologram_fx["output"] == "Hologram" and "scanlines" in hologram_fx["description"] and hologram_fx["active"] == "hologram" and hologram_fx["strength"] == "1.25", str(hologram_fx))
+            check("FX treatment uses lightweight settings sync", hologram_fx["metrics"]["fxModeSelectCount"] > fx_mode_before["fxModeSelectCount"] and hologram_fx["metrics"]["fxModeSyncSkipCount"] > fx_mode_before["fxModeSyncSkipCount"] and hologram_fx["metrics"]["lastFxMode"] == "hologram" and hologram_fx["metrics"]["lastSettingsControlSyncSkip"] == "fx-mode-hologram" and hologram_fx["metrics"]["controlSyncCount"] == fx_mode_before["controlSyncCount"], str(hologram_fx["metrics"]))
+            page.evaluate("() => window.__mobileApp.selectModelShortcut('sdf')")
+            sdf_hologram = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                shellMode: document.querySelector('.mobile-shell').dataset.fxMode,
+                filter: getComputedStyle(document.getElementById('mobile-sdf-canvas')).filter
+            })""")
+            check("FX treatment persists when switching to SDF", sdf_hologram["state"]["modelMode"] == "sdf" and sdf_hologram["state"]["fxMode"] == "hologram" and sdf_hologram["shellMode"] == "hologram" and sdf_hologram["filter"] != "none", str(sdf_hologram))
+            page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_2d')")
+            page.locator('#fx-mode-grid [data-fx-treatment="none"]').click()
+            clean_treatment = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                mode: document.querySelector('.mobile-shell').dataset.fxMode,
+                filter: getComputedStyle(document.getElementById('mobile-canvas')).filter,
+                overlayOpacity: Number(getComputedStyle(document.querySelector('.mobile-shell'), '::after').opacity)
+            })""")
+            check("Clean treatment removes filters and overlays", clean_treatment["state"]["fxMode"] == "none" and clean_treatment["mode"] == "none" and clean_treatment["filter"] == "none" and clean_treatment["overlayOpacity"] == 0, str(clean_treatment))
             fx_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-preset-grid [data-fx-preset="live"]').click()
             fx_live = page.evaluate("""() => ({
