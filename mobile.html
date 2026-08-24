@@ -377,10 +377,7 @@
               <input id="camera-tilt" type="range" min="-60" max="60" step="1" value="16">
             </label>
             <div class="field">
-              <span class="field-heading">
-                <span>Zoom <output id="camera-zoom-output">100%</output></span>
-                <button id="camera-zoom-auto" class="motion-auto-toggle" type="button" data-motion-action="toggle-zoom-auto" aria-pressed="false" aria-label="Auto-animate Zoom">⟳ Auto</button>
-              </span>
+              <span class="field-heading">Zoom <output id="camera-zoom-output">100%</output></span>
               <input id="camera-zoom" type="range" min="0.55" max="25" step="0.05" value="1" aria-label="Zoom">
             </div>
             <div class="field">
@@ -396,6 +393,13 @@
                 <small>Off by default for battery and speed.</small>
               </span>
               <input id="motion-toggle" type="checkbox">
+            </label>
+            <label id="auto-zoom-row" class="toggle-row">
+              <span>
+                <strong>Auto-zoom</strong>
+                <small>Move smoothly in and out around the current view.</small>
+              </span>
+              <input id="camera-zoom-auto" type="checkbox" data-motion-action="toggle-zoom-auto" aria-label="Auto-zoom">
             </label>
             <label class="field">
               <span>Speed</span>

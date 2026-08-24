@@ -3502,8 +3502,7 @@ function syncCameraControls() {
   if (els.zoomOutput) els.zoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
   if (els.cameraZoomOutput) els.cameraZoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
   if (els.cameraZoomAuto) {
-    els.cameraZoomAuto.classList.toggle('active', state.autoZoom);
-    els.cameraZoomAuto.setAttribute('aria-pressed', state.autoZoom ? 'true' : 'false');
+    els.cameraZoomAuto.checked = state.autoZoom;
   }
   if (els.cameraExtrude) els.cameraExtrude.value = String(state.e8MorphT);
   if (els.cameraExtrudeOutput) els.cameraExtrudeOutput.textContent = state.e8MorphT.toFixed(2);

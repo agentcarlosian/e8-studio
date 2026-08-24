@@ -1632,21 +1632,21 @@ def main() -> int:
                 tilt: document.getElementById('camera-tilt-output').textContent,
                 zoom: document.getElementById('camera-zoom-output').textContent,
                 extrude: document.getElementById('camera-extrude-output').textContent,
-                zoomAuto: { pressed: document.getElementById('camera-zoom-auto').getAttribute('aria-pressed'), height: document.getElementById('camera-zoom-auto').getBoundingClientRect().height },
+                zoomAuto: { checked: document.getElementById('camera-zoom-auto').checked, rowHeight: document.getElementById('auto-zoom-row').getBoundingClientRect().height, label: document.querySelector('#auto-zoom-row strong').textContent.trim() },
                 extrudeAuto: { pressed: document.getElementById('camera-extrude-auto').getAttribute('aria-pressed'), height: document.getElementById('camera-extrude-auto').getBoundingClientRect().height },
                 path: document.getElementById('camera-path-output').textContent
             })""")
-            check("Motion exposes full camera paths and transforms", len(camera_controls["buttons"]) == 4 and all(button["height"] >= 40 for button in camera_controls["buttons"]) and camera_controls["rotation"] == "0°" and camera_controls["tilt"] == "16°" and camera_controls["zoom"] == "100%" and camera_controls["extrude"] == "0.00" and camera_controls["zoomAuto"]["pressed"] == "false" and camera_controls["extrudeAuto"]["pressed"] == "false" and camera_controls["zoomAuto"]["height"] >= 28 and camera_controls["extrudeAuto"]["height"] >= 28 and camera_controls["path"] == "Manual", str(camera_controls))
+            check("Motion exposes full camera paths and transforms", len(camera_controls["buttons"]) == 4 and all(button["height"] >= 40 for button in camera_controls["buttons"]) and camera_controls["rotation"] == "0°" and camera_controls["tilt"] == "16°" and camera_controls["zoom"] == "100%" and camera_controls["extrude"] == "0.00" and not camera_controls["zoomAuto"]["checked"] and camera_controls["extrudeAuto"]["pressed"] == "false" and camera_controls["zoomAuto"]["rowHeight"] >= 44 and camera_controls["zoomAuto"]["label"] == "Auto-zoom" and camera_controls["extrudeAuto"]["height"] >= 28 and camera_controls["path"] == "Manual", str(camera_controls))
             auto_transform_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator('[data-motion-action="toggle-zoom-auto"]').click()
             page.locator('[data-motion-action="toggle-extrude-auto"]').click()
             auto_transform_set = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
-                zoomPressed: document.getElementById('camera-zoom-auto').getAttribute('aria-pressed'),
+                zoomChecked: document.getElementById('camera-zoom-auto').checked,
                 extrudePressed: document.getElementById('camera-extrude-auto').getAttribute('aria-pressed'),
                 motionOutput: document.getElementById('motion-preset-output').textContent.trim()
             })""")
-            check("Zoom and Extrude expose independent desktop-style Auto controls", auto_transform_set["state"]["autoZoom"] and auto_transform_set["state"]["autoExtrude"] and auto_transform_set["zoomPressed"] == "true" and auto_transform_set["extrudePressed"] == "true" and auto_transform_set["motionOutput"] == "Custom", str(auto_transform_set))
+            check("Zoom and Extrude expose independent desktop-style Auto controls", auto_transform_set["state"]["autoZoom"] and auto_transform_set["state"]["autoExtrude"] and auto_transform_set["zoomChecked"] and auto_transform_set["extrudePressed"] == "true" and auto_transform_set["motionOutput"] == "Custom", str(auto_transform_set))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("before => { const m = window.__mobileApp.getMetrics(); return m.autoZoomFrameCount > before.zoom && m.autoExtrudeFrameCount > before.extrude; }", arg={"zoom": auto_transform_before["metrics"]["autoZoomFrameCount"], "extrude": auto_transform_before["metrics"]["autoExtrudeFrameCount"]}, timeout=1500)
             page.wait_for_timeout(420)
