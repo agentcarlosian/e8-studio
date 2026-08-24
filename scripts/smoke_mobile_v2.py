@@ -1236,7 +1236,9 @@ def main() -> int:
             fx_modes = page.evaluate("""() => ({
                 buttons: [...document.querySelectorAll('#fx-mode-grid [data-fx-treatment]')].map(button => ({
                     id: button.dataset.fxTreatment,
-                    text: button.textContent.trim(),
+                    label: button.querySelector('span')?.textContent.trim(),
+                    cost: button.dataset.fxCost,
+                    costText: button.querySelector('small')?.textContent.trim(),
                     active: button.classList.contains('active'),
                     pressed: button.getAttribute('aria-pressed')
                 })),
@@ -1246,7 +1248,30 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             fx_mode_ids = [button["id"] for button in fx_modes["buttons"]]
-            check("Visuals exposes six mobile-safe desktop-style FX treatments", fx_mode_ids == ["none", "glow", "chromatic", "hologram", "heat", "crystal"] and fx_modes["metrics"]["fxModeButtonCount"] == 6 and fx_modes["output"] == "Clean" and fx_modes["shellMode"] == "none" and any(button["id"] == "none" and button["active"] and button["pressed"] == "true" for button in fx_modes["buttons"]), str(fx_modes))
+            desktop_fx_ids = ["none", "glow", "pulse", "trail", "chromatic", "kaleidoscope", "ripple", "spiral", "fog", "heat", "edge-glow", "aura", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "dof", "nebula", "wireframe", "hologram", "xray", "crystal"]
+            check("Visuals exposes the complete 24-effect desktop catalog", fx_mode_ids == desktop_fx_ids and fx_modes["metrics"]["fxModeButtonCount"] == 24 and fx_modes["output"] == "Off" and fx_modes["shellMode"] == "none" and any(button["id"] == "none" and button["active"] and button["pressed"] == "true" for button in fx_modes["buttons"]), str(fx_modes))
+            fx_costs = {button["id"]: button["cost"] for button in fx_modes["buttons"]}
+            check("Effect buttons expose desktop-compatible GPU cost badges", all(button["cost"] in ["low", "medium", "high"] and button["costText"] == button["cost"] for button in fx_modes["buttons"]) and fx_costs["voronoi"] == "high" and fx_costs["trail"] == "medium" and fx_costs["glow"] == "low", str(fx_modes["buttons"]))
+            fx_rendering = page.evaluate("""ids => {
+                const shell = document.querySelector('.mobile-shell');
+                const canvas = document.getElementById('mobile-canvas');
+                const sdf = document.getElementById('mobile-sdf-canvas');
+                return ids.map(id => {
+                    window.__mobileApp.selectFxMode(id);
+                    const after = getComputedStyle(shell, '::after');
+                    const before = getComputedStyle(shell, '::before');
+                    return {
+                        id,
+                        state: window.__mobileApp.getState().fxMode,
+                        canvasFilter: getComputedStyle(canvas).filter,
+                        sdfFilter: getComputedStyle(sdf).filter,
+                        overlayOpacity: Math.max(Number(after.opacity) || 0, Number(before.opacity) || 0),
+                        overlayBackground: `${after.backgroundImage} ${before.backgroundImage}`
+                    };
+                });
+            }""", desktop_fx_ids)
+            check("Every mobile effect has a Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["canvasFilter"] != "none" or item["overlayOpacity"] > 0) and (item["id"] == "none" or item["sdfFilter"] != "none" or item["overlayOpacity"] > 0) for item in fx_rendering), str(fx_rendering))
+            page.evaluate("() => window.__mobileApp.selectFxMode('none')")
             fx_mode_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-mode-grid [data-fx-treatment="hologram"]').click()
             hologram_fx = page.evaluate("""() => {
@@ -1281,7 +1306,7 @@ def main() -> int:
                 filter: getComputedStyle(document.getElementById('mobile-canvas')).filter,
                 overlayOpacity: Number(getComputedStyle(document.querySelector('.mobile-shell'), '::after').opacity)
             })""")
-            check("Clean treatment removes filters and overlays", clean_treatment["state"]["fxMode"] == "none" and clean_treatment["mode"] == "none" and clean_treatment["filter"] == "none" and clean_treatment["overlayOpacity"] == 0, str(clean_treatment))
+            check("Off treatment removes filters and overlays", clean_treatment["state"]["fxMode"] == "none" and clean_treatment["mode"] == "none" and clean_treatment["filter"] == "none" and clean_treatment["overlayOpacity"] == 0, str(clean_treatment))
             fx_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-preset-grid [data-fx-preset="live"]').click()
             fx_live = page.evaluate("""() => ({
