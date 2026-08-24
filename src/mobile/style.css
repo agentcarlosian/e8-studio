@@ -567,12 +567,23 @@ button:disabled {
   padding-bottom: 28px;
 }
 
-.done-button {
+.wide-action.done-button {
   width: 100%;
   border-color: rgba(244, 210, 122, 0.62);
   background: var(--accent);
   color: #08080d;
   font-weight: 900;
+}
+
+.settings-done-action {
+  transition: border-color 100ms ease, background 100ms ease, color 100ms ease, transform 100ms ease;
+}
+
+.settings-done-action:active {
+  border-color: var(--accent);
+  background: rgba(244, 210, 122, 0.16);
+  color: var(--accent);
+  transform: scale(0.97);
 }
 
 .settings-section {

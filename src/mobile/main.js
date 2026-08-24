@@ -1226,7 +1226,7 @@ function cacheElements() {
   els.sheet = document.getElementById('settings-sheet');
   els.sheetBody = els.sheet.querySelector('.sheet-body');
   els.close = document.getElementById('settings-close');
-  els.done = document.getElementById('settings-done');
+  els.doneButtons = [...els.sheet.querySelectorAll('[data-settings-done]')];
   els.rootDrawer = document.getElementById('root-drawer');
   els.infoCopy = document.getElementById('info-copy');
   els.infoSelection = document.getElementById('info-selection');
@@ -1369,7 +1369,9 @@ function bindEvents() {
   els.sceneChip.addEventListener('contextmenu', (event) => event.preventDefault());
   els.qualityChip.addEventListener('click', cycleQuality);
   els.close.addEventListener('click', () => closeSettings('settings-close'));
-  els.done.addEventListener('click', () => closeSettings('settings-done'));
+  els.doneButtons.forEach(button => {
+    button.addEventListener('click', () => closeSettings('settings-done'));
+  });
   els.rootDrawer.addEventListener('click', (event) => {
     if (event.target.closest('[data-root-drawer-toggle]')) {
       toggleRootDrawer();
