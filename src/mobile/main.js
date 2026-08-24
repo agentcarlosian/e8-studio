@@ -69,7 +69,7 @@ const AUTO_ZOOM_MIN = 0.7;
 const AUTO_ZOOM_MAX = 1.65;
 const MANUAL_ZOOM_MIN = 0.55;
 const STANDARD_ZOOM_MAX = 3.2;
-const E8_COXETER_ZOOM_MAX = 8;
+const E8_COXETER_ZOOM_MAX = 10;
 const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
   { id: 'clean', label: 'Static', autoColor: false, softFx: false },
