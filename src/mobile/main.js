@@ -1332,11 +1332,6 @@ function bindEvents() {
       selectFxMode(fxMode);
       return;
     }
-    const styleAction = event.target.closest('[data-style-action]')?.dataset.styleAction;
-    if (styleAction) {
-      handleStyleAction(styleAction);
-      return;
-    }
     const paletteSwatch = event.target.closest('[data-palette-swatch]')?.dataset.paletteSwatch;
     if (paletteSwatch) {
       selectPaletteSwatch(paletteSwatch);
@@ -1528,6 +1523,7 @@ function handleViewAction(action) {
   if (action === 'zoom-out') return stepZoom(-1);
   if (action === 'zoom-in') return stepZoom(1);
   if (action === 'zoom-reset') return setZoom(1);
+  if (action === 'surprise') return mobileSurprise();
   if (action === 'fit-all') return fitAllRoots();
   return false;
 }
@@ -1538,12 +1534,6 @@ function handleSubsetAction(action) {
   if (action === 'prev') return selectSubsetRoot(-1);
   if (action === 'next') return selectSubsetRoot(1);
   if (action === 'frame') return frameSubset();
-  return false;
-}
-
-function handleStyleAction(action) {
-  if (!action) return false;
-  if (action === 'surprise') return mobileSurprise();
   return false;
 }
 

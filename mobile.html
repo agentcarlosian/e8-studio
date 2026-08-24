@@ -58,7 +58,8 @@
           <div class="control-stack">
             <div class="view-actions" aria-label="View framing">
               <button class="wide-action" type="button" data-action="reset-view">Reset</button>
-              <button class="wide-action" type="button" data-view-action="fit-all">Fit all</button>
+              <button id="surprise-button" class="wide-action" type="button" data-view-action="surprise">Surprise</button>
+              <button class="wide-action fit-all-action" type="button" data-view-action="fit-all">Fit all</button>
             </div>
             <div id="bloom-timeline-field" class="bloom-timeline-panel hidden" aria-label="Bloom timeline">
               <div class="browse-head">
@@ -338,13 +339,6 @@
               <span class="field-heading">FX strength <output id="fx-strength-output">100%</output></span>
               <input id="fx-strength" type="range" min="0.25" max="1.5" step="0.05">
             </label>
-            <div class="sheet-action" aria-label="Discovery">
-              <div>
-                <strong>Surprise</strong>
-                <small>Shuffle a safe mobile view.</small>
-              </div>
-              <button id="surprise-button" type="button" data-style-action="surprise">Surprise</button>
-            </div>
           </div>
         </section>
 
