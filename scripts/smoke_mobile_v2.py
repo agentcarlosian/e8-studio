@@ -1231,8 +1231,8 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             fx_ids = [button["id"] for button in fx_grid["buttons"]]
-            check("Visuals section exposes compact FX presets", len(fx_grid["buttons"]) == 4 and fx_grid["metrics"]["fxPresetButtonCount"] == 4 and fx_ids == ["clean", "pulse", "color", "live"], str(fx_grid))
-            check("FX presets mark active Clean state", fx_grid["output"] == "Clean" and any(button["id"] == "clean" and button["active"] and button["pressed"] == "true" for button in fx_grid["buttons"]), str(fx_grid))
+            check("Visuals section exposes compact color and motion presets", len(fx_grid["buttons"]) == 4 and fx_grid["metrics"]["fxPresetButtonCount"] == 4 and fx_ids == ["clean", "pulse", "color", "live"] and [button["text"] for button in fx_grid["buttons"]] == ["Static", "Breathe", "Color Shift", "Color + Breathe"], str(fx_grid))
+            check("Color and motion presets mark active Static state", fx_grid["output"] == "Static" and any(button["id"] == "clean" and button["active"] and button["pressed"] == "true" for button in fx_grid["buttons"]), str(fx_grid))
             fx_modes = page.evaluate("""() => ({
                 buttons: [...document.querySelectorAll('#fx-mode-grid [data-fx-treatment]')].map(button => ({
                     id: button.dataset.fxTreatment,
@@ -1414,8 +1414,8 @@ def main() -> int:
                     motionOutput: document.getElementById('motion-preset-output').textContent.trim()
                 }
             })""")
-            check("Live FX preset enables color and pulse", fx_live["state"]["autoColor"] and fx_live["state"]["softFx"] and fx_live["controls"]["autoColor"] and fx_live["controls"]["softFx"] and fx_live["controls"]["activeFx"] == "live" and fx_live["controls"]["fxOutput"] == "Live", str(fx_live))
-            check("Live FX preset uses lightweight settings sync", fx_live["metrics"]["fxPresetSelectCount"] > fx_before["fxPresetSelectCount"] and fx_live["metrics"]["fxPresetSyncSkipCount"] > fx_before["fxPresetSyncSkipCount"] and fx_live["metrics"]["settingsControlSyncSkipCount"] > fx_before["settingsControlSyncSkipCount"] and fx_live["metrics"]["lastSettingsControlSyncSkip"] == "fx-preset-live" and fx_live["metrics"]["controlSyncCount"] == fx_before["controlSyncCount"] and fx_live["metrics"]["lastFxPreset"] == "live", str(fx_live["metrics"]))
+            check("Color + Breathe preset enables color and pulse", fx_live["state"]["autoColor"] and fx_live["state"]["softFx"] and fx_live["controls"]["autoColor"] and fx_live["controls"]["softFx"] and fx_live["controls"]["activeFx"] == "live" and fx_live["controls"]["fxOutput"] == "Color + Breathe", str(fx_live))
+            check("Color + Breathe preset uses lightweight settings sync", fx_live["metrics"]["fxPresetSelectCount"] > fx_before["fxPresetSelectCount"] and fx_live["metrics"]["fxPresetSyncSkipCount"] > fx_before["fxPresetSyncSkipCount"] and fx_live["metrics"]["settingsControlSyncSkipCount"] > fx_before["settingsControlSyncSkipCount"] and fx_live["metrics"]["lastSettingsControlSyncSkip"] == "fx-preset-live" and fx_live["metrics"]["controlSyncCount"] == fx_before["controlSyncCount"] and fx_live["metrics"]["lastFxPreset"] == "live", str(fx_live["metrics"]))
             page.locator('#fx-preset-grid [data-fx-preset="clean"]').click()
             fx_clean = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -1428,7 +1428,7 @@ def main() -> int:
                     motionOutput: document.getElementById('motion-preset-output').textContent.trim()
                 }
             })""")
-            check("Clean FX preset disables runtime FX", not fx_clean["state"]["autoColor"] and not fx_clean["state"]["softFx"] and not fx_clean["controls"]["autoColor"] and not fx_clean["controls"]["softFx"] and fx_clean["controls"]["activeFx"] == "clean" and fx_clean["controls"]["fxOutput"] == "Clean" and fx_clean["controls"]["motionOutput"] == "Still", str(fx_clean))
+            check("Static preset disables supplemental color and breathing", not fx_clean["state"]["autoColor"] and not fx_clean["state"]["softFx"] and not fx_clean["controls"]["autoColor"] and not fx_clean["controls"]["softFx"] and fx_clean["controls"]["activeFx"] == "clean" and fx_clean["controls"]["fxOutput"] == "Static" and fx_clean["controls"]["motionOutput"] == "Still", str(fx_clean))
             style_anim_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator("#auto-color-toggle").check()
             page.locator("#soft-fx-toggle").check()
@@ -1439,7 +1439,7 @@ def main() -> int:
                 fxOutput: document.getElementById('fx-preset-output').textContent.trim()
             })""")
             check("Visuals section exposes color shift and soft FX toggles", style_anim_set["state"]["autoColor"] and style_anim_set["state"]["softFx"] and style_anim_set["metrics"]["lastSettingsControlSyncSkip"] == "soft-fx-toggle", str(style_anim_set))
-            check("FX preset chips sync from fallback toggles", style_anim_set["activeFx"] == "live" and style_anim_set["fxOutput"] == "Live", str(style_anim_set))
+            check("Color and motion chips sync from fallback toggles", style_anim_set["activeFx"] == "live" and style_anim_set["fxOutput"] == "Color + Breathe", str(style_anim_set))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("before => window.__mobileApp.getMetrics().motionFrameRenderCount > before", arg=style_anim_before["motionFrameRenderCount"], timeout=1500)
             style_anim_after = page.evaluate("() => window.__mobileApp.getMetrics()")

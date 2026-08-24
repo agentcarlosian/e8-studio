@@ -67,10 +67,10 @@ const AUTO_ZOOM_MIN = 0.7;
 const AUTO_ZOOM_MAX = 1.65;
 const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
-  { id: 'clean', label: 'Clean', autoColor: false, softFx: false },
-  { id: 'pulse', label: 'Pulse', autoColor: false, softFx: true },
-  { id: 'color', label: 'Color', autoColor: true, softFx: false },
-  { id: 'live', label: 'Live', autoColor: true, softFx: true },
+  { id: 'clean', label: 'Static', autoColor: false, softFx: false },
+  { id: 'pulse', label: 'Breathe', autoColor: false, softFx: true },
+  { id: 'color', label: 'Color Shift', autoColor: true, softFx: false },
+  { id: 'live', label: 'Color + Breathe', autoColor: true, softFx: true },
 ];
 const MOBILE_FX_MODES = [
   { id: 'none', label: 'Off', cost: 'low', description: 'Use clean, unmodified shading.' },
@@ -2963,7 +2963,7 @@ function activeFxPreset() {
 function renderFxPresets() {
   if (!els.fxPresetGrid) return false;
   els.fxPresetGrid.innerHTML = FX_PRESETS.map(preset => (
-    `<button type="button" data-fx-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(fxPresetLabel(preset))} FX preset">${escapeHtml(preset.label)}</button>`
+    `<button type="button" data-fx-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(fxPresetLabel(preset))} color and motion preset">${escapeHtml(preset.label)}</button>`
   )).join('');
   metrics.fxPresetButtonCount = FX_PRESETS.length;
   return true;
@@ -3027,7 +3027,7 @@ function selectFxPreset(id) {
   metrics.lastFxPreset = preset.id;
   metrics.lastFxPresetLabel = fxPresetLabel(preset);
   metrics.lastFxPresetMs = performance.now();
-  showStatus(`FX: ${metrics.lastFxPresetLabel}`);
+  showStatus(`Color & motion: ${metrics.lastFxPresetLabel}`);
   return result;
 }
 
