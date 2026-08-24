@@ -286,11 +286,9 @@ const SCENE_CHIP_SWIPE_SLOP_PX = 24;
 const SCENE_CHIP_LONG_PRESS_MS = 540;
 const STATUS_HIDE_MS = 1400;
 const MOTION_FRAME_INTERVAL_MS = 33;
-// The desktop McMullen overlay draws 21,840 chords across its two populated
-// E8 distance classes. Real-device profiling showed that the graph—not the
-// individual FX—is the dominant sustained cost.
-// Keep every effect available, but pace animated dense-graph frames so the
-// main thread retains enough headroom for touch and Android system UI.
+// Full chords use a dedicated WebGL line layer. Canvas-composited FX still
+// rebuild several full-screen images, so those combinations retain the lower
+// pacing budget while clean and shader-native Ripple can run at 30 fps.
 const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
@@ -305,6 +303,77 @@ const MOBILE_E8_CHORD_VALUES = [
 ];
 const DESKTOP_E8_CHORD_OPACITY = [0.10, 0.10, 0.10, 0.45, 0.10, 0.10, 0.10, 0.20];
 const MOBILE_E8_CHORD_ALPHA_SCALE = 0.19;
+const E8_CHORD_VERTEX_STRIDE_FLOATS = 7;
+const E8_CHORD_VERTEX_SHADER = `
+precision highp float;
+attribute vec3 aRoot;
+attribute vec4 aStyle;
+uniform vec2 uResolution;
+uniform vec2 uOrigin;
+uniform float uScale;
+uniform float uRotation;
+uniform float uPitch;
+uniform float uPathZoom;
+uniform float uExtrude;
+uniform float uRipple;
+uniform float uRipplePhase;
+uniform vec3 uPalette0;
+uniform vec3 uPalette1;
+uniform vec3 uPalette2;
+uniform vec3 uPalette3;
+uniform vec3 uPalette4;
+varying vec4 vColor;
+
+vec3 paletteAt(float value) {
+  float scaled = clamp(value, 0.0, 1.0) * 4.0;
+  if (scaled < 1.0) return mix(uPalette0, uPalette1, scaled);
+  if (scaled < 2.0) return mix(uPalette1, uPalette2, scaled - 1.0);
+  if (scaled < 3.0) return mix(uPalette2, uPalette3, scaled - 2.0);
+  return mix(uPalette3, uPalette4, scaled - 3.0);
+}
+
+void main() {
+  float yawCos = cos(uRotation);
+  float yawSin = sin(uRotation);
+  vec2 flatRoot = vec2(
+    aRoot.x * yawCos - aRoot.y * yawSin,
+    aRoot.x * yawSin + aRoot.y * yawCos
+  );
+  vec2 flatScreen = uOrigin + flatRoot * uScale;
+
+  float depthSource = aRoot.z * 0.62;
+  float rotatedX = aRoot.x * yawCos - depthSource * yawSin;
+  float rotatedZ = aRoot.x * yawSin + depthSource * yawCos;
+  float pitchCos = cos(uPitch);
+  float pitchSin = sin(uPitch);
+  float rotatedY = aRoot.y * pitchCos - rotatedZ * pitchSin;
+  float finalDepth = aRoot.y * pitchSin + rotatedZ * pitchCos;
+  float perspective = 4.2 / max(1.8, 4.2 + finalDepth);
+  vec2 extrudedScreen = uOrigin + vec2(rotatedX, rotatedY) * uScale * perspective * uPathZoom;
+  vec2 screen = mix(flatScreen, extrudedScreen, uExtrude);
+  vec2 clip = vec2(
+    screen.x / max(1.0, uResolution.x) * 2.0 - 1.0,
+    1.0 - screen.y / max(1.0, uResolution.y) * 2.0
+  );
+  gl_Position = vec4(clip, 0.0, 1.0);
+
+  float rotatedRippleColor = fract(aStyle.w + uRotation * 0.0732113);
+  float colorT = mix(aStyle.x, rotatedRippleColor, uRipple);
+  float wave = sin(aStyle.z * 8.0 - uRipplePhase);
+  float wave01 = clamp(0.5 + wave * 0.5, 0.0, 1.0);
+  // The Canvas version received a second energy contribution from shadowBlur.
+  // WebGL lines have no portable glow width, so carry that energy in alpha to
+  // keep Rainbow Ripple legible without adding another 21,840-line pass.
+  float rippleBrightness = 0.34 + wave01 * 1.16;
+  float alpha = mix(aStyle.y, 0.12 * rippleBrightness, uRipple);
+  vColor = vec4(paletteAt(colorT), alpha);
+}`;
+const E8_CHORD_FRAGMENT_SHADER = `
+precision mediump float;
+varying vec4 vColor;
+void main() {
+  gl_FragColor = vColor;
+}`;
 const RIPPLE_COLOR_BANDS = 12;
 const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
@@ -504,6 +573,14 @@ let metrics = {
   canvasTransformSkipCount: 0,
   lastCanvasTransformSetMs: null,
   lastCanvasTransformScale: null,
+  e8ChordWebglInitCount: 0,
+  e8ChordWebglFallbackCount: 0,
+  e8ChordWebglDrawCount: 0,
+  e8ChordWebglContextLossCount: 0,
+  e8ChordWebglContextRestoreCount: 0,
+  lastE8ChordRenderer: null,
+  lastE8ChordWebglDrawMs: null,
+  lastE8ChordVertexCount: 0,
   settingsCanvasResizeDeferredCount: 0,
   lastSettingsCanvasResizeDeferredMs: null,
   lastSettingsCanvasResizeDeferredScale: null,
@@ -880,6 +957,15 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let e8ChordCanvas;
+let e8ChordGl;
+let e8ChordProgram;
+let e8ChordBuffer;
+let e8ChordAttributes;
+let e8ChordUniforms;
+let e8ChordVertexCount = 0;
+let e8ChordWebglUnavailable = false;
+let e8ChordContextHandlersInstalled = false;
 let fxSourceCanvas;
 let fxSourceContext;
 let fxTintCanvas;
@@ -1128,6 +1214,7 @@ function cacheElements() {
   els.shell = document.querySelector('.mobile-shell');
   backgroundCanvas = document.getElementById('mobile-background-canvas');
   backgroundCtx = backgroundCanvas.getContext('2d', { alpha: false });
+  e8ChordCanvas = document.getElementById('mobile-e8-chord-canvas');
   canvas = document.getElementById('mobile-canvas');
   ctx = canvas.getContext('2d', { alpha: true });
   sdfCanvas = document.getElementById('mobile-sdf-canvas');
@@ -1954,6 +2041,9 @@ function compositeRenderCanvas() {
   composite.height = Math.max(1, canvas.height);
   const target = composite.getContext('2d', { alpha: false });
   target.drawImage(backgroundCanvas, 0, 0, backgroundCanvas.width, backgroundCanvas.height, 0, 0, composite.width, composite.height);
+  if (isE8ChordGpuActive() && !e8ChordCanvas.classList.contains('fx-composited')) {
+    target.drawImage(e8ChordCanvas, 0, 0, e8ChordCanvas.width, e8ChordCanvas.height, 0, 0, composite.width, composite.height);
+  }
   target.drawImage(canvas, 0, 0, composite.width, composite.height);
   if (state.modelMode === 'sdf' && sdfCanvas?.classList.contains('active') && sdfGl) {
     target.drawImage(sdfCanvas, 0, 0, sdfCanvas.width, sdfCanvas.height, 0, 0, composite.width, composite.height);
@@ -2302,6 +2392,13 @@ function buildDiagnostics() {
       css: { width: canvasCssWidth, height: canvasCssHeight },
       renderScale: metrics.renderScale,
       quality: state.quality,
+      e8Chords: {
+        type: metrics.lastE8ChordRenderer || 'none',
+        canvas: e8ChordCanvas ? { width: e8ChordCanvas.width, height: e8ChordCanvas.height } : null,
+        vertices: e8ChordVertexCount,
+        contextLosses: metrics.e8ChordWebglContextLossCount,
+        fallbacks: metrics.e8ChordWebglFallbackCount,
+      },
     },
     state: getState(),
     metrics: getMetrics(),
@@ -4534,9 +4631,9 @@ function renderScale() {
   // in Smooth mode; its own raster still follows the selected quality tier.
   if (state.modelMode === 'sdf') return Math.max(1, scale);
   // Smooth mode intentionally uses a small backing store, but sub-pixel
-  // Coxeter chords become visibly stair-stepped when magnified.  Raise the
-  // floor only for close E8 edge inspection; interaction frames already skip
-  // the dense edge graph, so pinch gestures remain responsive.
+  // Coxeter chords become visibly stair-stepped when magnified. Raise the
+  // floor only for close E8 edge inspection; the chord layer remains a single
+  // GPU draw during pinch and orbit gestures.
   if (state.modelMode === 'e8_2d' && state.showEdges && state.zoom > 1.15) {
     return Math.max(1, scale);
   }
@@ -4637,6 +4734,253 @@ function buildMobileE8ChordTopology(roots) {
     }
   }
   return chordClasses;
+}
+
+function compileE8ChordShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'E8 chord shader compilation failed';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function resetE8ChordWebglResources() {
+  e8ChordProgram = null;
+  e8ChordBuffer = null;
+  e8ChordAttributes = null;
+  e8ChordUniforms = null;
+  e8ChordVertexCount = 0;
+}
+
+function buildE8ChordVertexData() {
+  const data = new Float32Array(e8ChordEdges.length * 2 * E8_CHORD_VERTEX_STRIDE_FLOATS);
+  let offset = 0;
+  for (let chordClass = 0; chordClass < e8ChordClasses.length; chordClass++) {
+    const classT = chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1);
+    const alpha = DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE;
+    for (const edge of e8ChordClasses[chordClass]) {
+      const a = points[edge[0]];
+      const b = points[edge[1]];
+      if (!a || !b) continue;
+      const midpointX = (a.x + b.x) * 0.5;
+      const midpointY = (a.y + b.y) * 0.5;
+      const rippleRadius = Math.hypot(midpointX, midpointY);
+      const angleT = (Math.atan2(midpointY, midpointX) + Math.PI) / TAU;
+      const topologyT = ((edge[0] * 37 + edge[1] * 17) % 97) / 96;
+      const rippleColorT = ((angleT * 0.46 + topologyT * 0.54) % 1 + 1) % 1;
+      for (const point of [a, b]) {
+        data[offset++] = point.x;
+        data[offset++] = point.y;
+        data[offset++] = point.norm;
+        data[offset++] = classT;
+        data[offset++] = alpha;
+        data[offset++] = rippleRadius;
+        data[offset++] = rippleColorT;
+      }
+    }
+  }
+  return offset === data.length ? data : data.slice(0, offset);
+}
+
+function setE8ChordCanvasActive(active) {
+  if (!e8ChordCanvas) return false;
+  e8ChordCanvas.classList.toggle('active', !!active);
+  if (!active) e8ChordCanvas.classList.remove('fx-composited');
+  // The semantic visualization remains the labelled interaction canvas; this
+  // implementation layer must never become a second accessibility target.
+  e8ChordCanvas.setAttribute('aria-hidden', 'true');
+  return !!active;
+}
+
+function setE8ChordCanvasComposited(composited) {
+  if (!e8ChordCanvas) return false;
+  e8ChordCanvas.classList.toggle('fx-composited', !!composited);
+  return !!composited;
+}
+
+function isE8ChordGpuActive() {
+  return !!(e8ChordGl && e8ChordCanvas?.classList.contains('active'));
+}
+
+function ensureE8ChordWebgl() {
+  if (!e8ChordCanvas || e8ChordWebglUnavailable || !e8ChordEdges.length || !points.length) return false;
+  if (e8ChordGl && e8ChordProgram && e8ChordBuffer && e8ChordUniforms && e8ChordAttributes) return true;
+  try {
+    e8ChordGl = e8ChordCanvas.getContext('webgl', {
+      alpha: true,
+      antialias: true,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: true,
+      // Canvas FX and image exports read this layer after WebGL submits it.
+      // Chromium may clear a non-preserved buffer before drawImage observes it,
+      // which makes composited effects lose the chord mesh.
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    if (!e8ChordGl) {
+      e8ChordWebglUnavailable = true;
+      metrics.e8ChordWebglFallbackCount++;
+      metrics.lastE8ChordRenderer = 'canvas-fallback';
+      return false;
+    }
+    if (!e8ChordContextHandlersInstalled) {
+      e8ChordContextHandlersInstalled = true;
+      e8ChordCanvas.addEventListener('webglcontextlost', event => {
+        event.preventDefault();
+        metrics.e8ChordWebglContextLossCount++;
+        metrics.lastE8ChordWebglContextLossMs = performance.now();
+        e8ChordGl = null;
+        resetE8ChordWebglResources();
+        setE8ChordCanvasActive(false);
+        requestRender('e8-chord-context-lost');
+      });
+      e8ChordCanvas.addEventListener('webglcontextrestored', () => {
+        metrics.e8ChordWebglContextRestoreCount++;
+        metrics.lastE8ChordWebglContextRestoreMs = performance.now();
+        e8ChordGl = null;
+        e8ChordWebglUnavailable = false;
+        resetE8ChordWebglResources();
+        requestRender('e8-chord-context-restored');
+      });
+    }
+
+    const gl = e8ChordGl;
+    const vertex = compileE8ChordShader(gl, gl.VERTEX_SHADER, E8_CHORD_VERTEX_SHADER);
+    const fragment = compileE8ChordShader(gl, gl.FRAGMENT_SHADER, E8_CHORD_FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const message = gl.getProgramInfoLog(program) || 'E8 chord shader linking failed';
+      gl.deleteProgram(program);
+      throw new Error(message);
+    }
+
+    const vertexData = buildE8ChordVertexData();
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
+    e8ChordProgram = program;
+    e8ChordBuffer = buffer;
+    e8ChordVertexCount = vertexData.length / E8_CHORD_VERTEX_STRIDE_FLOATS;
+    e8ChordAttributes = {
+      root: gl.getAttribLocation(program, 'aRoot'),
+      style: gl.getAttribLocation(program, 'aStyle'),
+    };
+    const uniformNames = [
+      'uResolution', 'uOrigin', 'uScale', 'uRotation', 'uPitch', 'uPathZoom',
+      'uExtrude', 'uRipple', 'uRipplePhase',
+      'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
+    ];
+    e8ChordUniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
+    metrics.e8ChordWebglInitCount++;
+    metrics.lastE8ChordWebglInitMs = performance.now();
+    metrics.lastE8ChordVertexCount = e8ChordVertexCount;
+    metrics.lastE8ChordRenderer = 'webgl-lines';
+    return true;
+  } catch (error) {
+    e8ChordWebglUnavailable = true;
+    metrics.e8ChordWebglFallbackCount++;
+    metrics.lastE8ChordWebglError = error?.message || String(error);
+    metrics.lastE8ChordRenderer = 'canvas-fallback';
+    e8ChordGl = null;
+    resetE8ChordWebglResources();
+    setE8ChordCanvasActive(false);
+    return false;
+  }
+}
+
+function drawE8ChordWebglField(layout, paletteSet) {
+  if (!ensureE8ChordWebgl()) return null;
+  try {
+    const started = performance.now();
+    const gl = e8ChordGl;
+    if (e8ChordCanvas.width !== canvas.width || e8ChordCanvas.height !== canvas.height) {
+      e8ChordCanvas.width = canvas.width;
+      e8ChordCanvas.height = canvas.height;
+    }
+    e8ChordCanvas.style.width = `${canvasCssWidth}px`;
+    e8ChordCanvas.style.height = `${canvasCssHeight}px`;
+    gl.viewport(0, 0, e8ChordCanvas.width, e8ChordCanvas.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(e8ChordProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, e8ChordBuffer);
+    const stride = E8_CHORD_VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+    gl.enableVertexAttribArray(e8ChordAttributes.root);
+    gl.vertexAttribPointer(e8ChordAttributes.root, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(e8ChordAttributes.style);
+    gl.vertexAttribPointer(e8ChordAttributes.style, 4, gl.FLOAT, false, stride, 3 * Float32Array.BYTES_PER_ELEMENT);
+
+    const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+    const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+    const pathZoom = state.cameraPath === 'dive' && state.autoRotate
+      ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+      : 1;
+    gl.uniform2f(e8ChordUniforms.uResolution, window.innerWidth, window.innerHeight);
+    gl.uniform2f(e8ChordUniforms.uOrigin, layout.cx + state.panX, layout.cy + state.panY);
+    gl.uniform1f(e8ChordUniforms.uScale, layout.scale);
+    gl.uniform1f(e8ChordUniforms.uRotation, state.rotation);
+    gl.uniform1f(e8ChordUniforms.uPitch, pitch);
+    gl.uniform1f(e8ChordUniforms.uPathZoom, pathZoom);
+    gl.uniform1f(e8ChordUniforms.uExtrude, state.e8MorphT);
+    gl.uniform1f(e8ChordUniforms.uRipple, state.fxMode === 'ripple' ? 1 : 0);
+    gl.uniform1f(e8ChordUniforms.uRipplePhase, ripplePhaseAngle());
+    for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
+      const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
+      gl.uniform3f(
+        e8ChordUniforms[`uPalette${paletteIndex}`],
+        channels[0] / 255,
+        channels[1] / 255,
+        channels[2] / 255,
+      );
+    }
+    const lineRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) || [1, 1];
+    gl.lineWidth(clamp(0.62 * renderScale(), lineRange[0], lineRange[1]));
+    gl.drawArrays(gl.LINES, 0, e8ChordVertexCount);
+    setE8ChordCanvasActive(true);
+
+    const classCounts = e8ChordClasses.map(edges => edges.length);
+    const classes = classCounts.filter(Boolean).length;
+    const ripple = state.fxMode === 'ripple';
+    metrics.e8ChordWebglDrawCount++;
+    metrics.lastE8ChordWebglDrawMs = performance.now() - started;
+    metrics.lastE8ChordRenderer = 'webgl-lines';
+    return {
+      segments: e8ChordEdges.length,
+      strokes: classes,
+      classes,
+      classCounts,
+      colorBands: ripple ? RIPPLE_COLOR_BANDS : classes,
+      brightnessBands: ripple ? RIPPLE_BRIGHTNESS_BANDS : 1,
+      ripple,
+      renderer: 'webgl-lines',
+      gpuDrawCalls: 1,
+      vertices: e8ChordVertexCount,
+    };
+  } catch (error) {
+    e8ChordWebglUnavailable = true;
+    metrics.e8ChordWebglFallbackCount++;
+    metrics.lastE8ChordWebglError = error?.message || String(error);
+    metrics.lastE8ChordRenderer = 'canvas-fallback';
+    e8ChordGl = null;
+    resetE8ChordWebglResources();
+    setE8ChordCanvasActive(false);
+    return null;
+  }
 }
 
 function preparePoints() {
@@ -4816,6 +5160,7 @@ function render() {
     const t0 = performance.now();
     resizeCanvas();
     setSdfCanvasActive(state.modelMode === 'sdf');
+    setE8ChordCanvasActive(false);
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
@@ -4901,6 +5246,9 @@ function render() {
       e8ChordEdgeStrokes: 0,
       e8ChordClassCount: 0,
       e8ChordClassCounts: [],
+      e8ChordRenderer: 'none',
+      e8ChordGpuDrawCalls: 0,
+      e8ChordGpuVertices: 0,
       e8EdgesSkippedForInteraction: 0,
       ripplePointCount: 0,
       rippleEdgeSegments: 0,
@@ -4970,18 +5318,28 @@ function render() {
     projectPointsIntoCache(layout, drawStats);
     const projectedAllFrame = projectedPointFrameMetrics(allRootList);
 
-    if (state.showEdges && !interactionLiteFrame) {
-      const edgeStats = drawDesktopE8ChordField(points, e8ChordClasses, layout, paletteSet);
+    if (state.showEdges) {
+      let edgeStats = drawE8ChordWebglField(layout, paletteSet);
+      if (!edgeStats && !interactionLiteFrame) {
+        edgeStats = drawDesktopE8ChordField(points, e8ChordClasses, layout, paletteSet);
+        edgeStats.renderer = 'canvas-fallback';
+        edgeStats.gpuDrawCalls = 0;
+        edgeStats.vertices = 0;
+      }
+      if (edgeStats) {
       drawStats.e8ChordEdges = edgeStats.segments;
       drawStats.e8ChordEdgeStrokes = edgeStats.strokes;
       drawStats.e8ChordClassCount = edgeStats.classes;
       drawStats.e8ChordClassCounts = edgeStats.classCounts;
+      drawStats.e8ChordRenderer = edgeStats.renderer;
+      drawStats.e8ChordGpuDrawCalls = edgeStats.gpuDrawCalls;
+      drawStats.e8ChordGpuVertices = edgeStats.vertices;
       drawStats.modelEdges += edgeStats.segments;
       drawStats.modelEdgeStrokes += edgeStats.strokes;
       recordRippleEdgeStats(drawStats, edgeStats);
-    }
-    else if (state.showEdges) {
-      drawStats.e8EdgesSkippedForInteraction = e8ChordEdges.length;
+      } else {
+        drawStats.e8EdgesSkippedForInteraction = e8ChordEdges.length;
+      }
     }
 
     if (state.showMirrors) {
@@ -5080,6 +5438,9 @@ function captureCanvasFxSource() {
   fxSourceContext.globalCompositeOperation = 'source-over';
   fxSourceContext.filter = 'none';
   fxSourceContext.clearRect(0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
+  if (isE8ChordGpuActive()) {
+    fxSourceContext.drawImage(e8ChordCanvas, 0, 0, e8ChordCanvas.width, e8ChordCanvas.height, 0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
+  }
   fxSourceContext.drawImage(canvas, 0, 0);
   return true;
 }
@@ -5478,6 +5839,7 @@ function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
 
 function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) {
   const canvasFxPass = applyNativeCanvasFx(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
+  setE8ChordCanvasComposited(isE8ChordGpuActive() && canvasFxPass.applied);
   drawStats.canvasFxPassApplied = canvasFxPass.applied;
   drawStats.canvasFxPassPrimitives = canvasFxPass.primitives;
   drawStats.canvasFxPassRenderer = canvasFxPass.renderer;
@@ -7964,9 +8326,10 @@ function syncMotionLoop() {
 }
 
 function mobileMotionFrameIntervalMs() {
-  return state.modelMode === 'e8_2d' && state.showEdges
-    ? DENSE_E8_MOTION_FRAME_INTERVAL_MS
-    : MOTION_FRAME_INTERVAL_MS;
+  const denseCanvasFx = state.modelMode === 'e8_2d' && state.showEdges && (
+    !e8ChordGl || (state.fxMode !== 'none' && state.fxMode !== 'ripple')
+  );
+  return denseCanvasFx ? DENSE_E8_MOTION_FRAME_INTERVAL_MS : MOTION_FRAME_INTERVAL_MS;
 }
 
 function syncAutoMotionPhase(kind) {

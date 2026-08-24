@@ -109,7 +109,7 @@ def main() -> int:
     html = re.sub(r"\s*frame-ancestors[^;]*;", "", html)
     DIST_INDEX.write_text(html, encoding="utf-8", newline="\n")
     print(f"Mobile V2 dist written: {DIST_INDEX.relative_to(ROOT)} ({DIST_INDEX.stat().st_size:,} bytes)")
-    print("Mobile bundle uses Canvas 2D + raw WebGL SDF, inlined E8 data, and no PWA service worker.")
+    print("Mobile bundle uses Canvas 2D + raw WebGL E8 chords/SDF, inlined E8 data, and no PWA service worker.")
     return 0
 
 
