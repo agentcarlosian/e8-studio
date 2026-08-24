@@ -250,12 +250,30 @@ let lastPaletteShiftAt = 0;
 let lastFxShiftAt = 0;
 let lastModelShiftAt = 0;
 let autoModelIndex = 0;
+let autoZoomStartedAt = 0;
+let autoZoomStartPhase = -Math.PI / 2;
 
 let weylPathTimer = null;  // interval id for the Weyl-path reflection animation
 
 let isDragging = false;  // module-scope so animate() can check it
 function clampCameraDistance(value, fallback = CAMERA_DEFAULT_DISTANCE) {
   return cameraController.clampDistance(value, fallback);
+}
+
+function autoZoomBounds(view = params?.view) {
+  return {
+    near: ['e8coxeter', 'raymarched', 'bloom'].includes(view) ? 0.45 : 0.75,
+    far: view === 'dynkin' ? 9 : 12,
+  };
+}
+
+function beginAutoZoom(nowSeconds = performance.now() / 1000) {
+  const { near, far } = autoZoomBounds();
+  const current = Math.min(far, Math.max(near,
+    Number(cameraController.distance) || Number(params?.cameraDistance) || CAMERA_DEFAULT_DISTANCE));
+  const wave = (Math.log(current) - Math.log(far)) / (Math.log(near) - Math.log(far));
+  autoZoomStartPhase = Math.asin(Math.min(1, Math.max(-1, wave * 2 - 1)));
+  autoZoomStartedAt = nowSeconds;
 }
 
 function updateCameraFromSpherical() {
@@ -1443,8 +1461,13 @@ function normalizeParams(target) {
 }
 
 function updateParam(k, v, options = {}) {
+  const previousValue = params[k];
   params[k] = v;
   normalizeParams(params);
+  if (k === 'autoZoom') {
+    if (params.autoZoom && !previousValue) beginAutoZoom();
+    else if (!params.autoZoom) autoZoomStartedAt = 0;
+  }
   if (options.save !== false) saveConfig(params);
   if (k === 'fxMode' && fxRuntime) fxRuntime.setMode(params.fxMode || 'none');
   if (k === 'fxIntensity' && fxRuntime) fxRuntime.setIntensity(params.fxIntensity ?? 0.5);
@@ -3929,9 +3952,10 @@ function animate() {
   // retain a little more near-plane margin.
   if (currentView && params.autoZoom && !isDragging) {
     const speed = (params.cameraSpeed || 1) * recScale;
-    const near = ['e8coxeter', 'raymarched', 'bloom'].includes(params.view) ? 0.45 : 0.75;
-    const far = params.view === 'dynkin' ? 9 : 12;
-    const wave = 0.5 + 0.5 * Math.sin(t * 0.22 * speed - Math.PI / 2);
+    const { near, far } = autoZoomBounds();
+    if (!autoZoomStartedAt) beginAutoZoom(t);
+    const elapsed = Math.max(0, t - autoZoomStartedAt);
+    const wave = 0.5 + 0.5 * Math.sin(autoZoomStartPhase + elapsed * 0.22 * speed);
     cameraController.distance = Math.exp(Math.log(far) + (Math.log(near) - Math.log(far)) * wave);
     cameraController.distanceTarget = cameraController.distance;
     cameraController.autoZoomFactor = 1;
@@ -3950,6 +3974,7 @@ function animate() {
     cameraDrivenByMode = true;
   } else {
     cameraController.autoZoomFactor = 1;
+    autoZoomStartedAt = 0;
   }
   const cameraPathActive = updateCinematicCamera(now);
   if (cameraPathActive) cameraDrivenByMode = true;
