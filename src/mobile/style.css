@@ -481,7 +481,7 @@ button:disabled {
   inset: 0;
   z-index: 50;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 1fr;
   padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background: rgba(7, 7, 12, 0.98);
 }
@@ -530,10 +530,6 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   padding-bottom: 28px;
-}
-
-.sheet-footer {
-  padding-top: 12px;
 }
 
 .done-button {
@@ -601,7 +597,7 @@ button:disabled {
   transition: border-color 100ms ease, background 100ms ease, color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
 }
 
-.view-actions .fit-all-action {
+.view-actions .view-done-action {
   grid-column: 1 / -1;
 }
 

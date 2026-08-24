@@ -746,12 +746,12 @@ def main() -> int:
                 app.openSettings('view');
             }""")
             manual_view_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('[data-view-action="fit-all"]').click()
+            page.locator('[data-action="reset-view"]').click()
             manual_view_stop = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics()
             })""")
-            check("Manual view action stops active tour", not manual_view_stop["metrics"]["mobileTourActive"] and not manual_view_stop["metrics"]["mobileTourTimerActive"] and manual_view_stop["metrics"]["mobileTourStopCount"] > manual_view_before["mobileTourStopCount"] and manual_view_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-explore-stop" and manual_view_stop["metrics"]["lastInteractionType"] == "fit-all", str(manual_view_stop))
+            check("Manual view action stops active tour", not manual_view_stop["metrics"]["mobileTourActive"] and not manual_view_stop["metrics"]["mobileTourTimerActive"] and manual_view_stop["metrics"]["mobileTourStopCount"] > manual_view_before["mobileTourStopCount"] and manual_view_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-explore-stop" and manual_view_stop["metrics"]["lastInteractionType"] == "reset-view", str(manual_view_stop))
             page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.openSettings('info'); }")
             cartan_select_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#cartan-matrix [data-cartan-root="3"]').first.click()
@@ -818,7 +818,7 @@ def main() -> int:
             check("View settings body can scroll", scrolled_view > 0, str(scrolled_view))
             page.get_by_role("button", name="Done", exact=True).click()
             done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("bottom Done closes scrolled settings", not done_metrics["settingsOpen"] and done_metrics["lastInteractionType"] == "settings-done", str(done_metrics))
+            check("View Done closes scrolled settings", not done_metrics["settingsOpen"] and done_metrics["lastInteractionType"] == "settings-done", str(done_metrics))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.get_by_role("button", name="Visuals", exact=True).click()
             style_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -983,10 +983,10 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'sdf', rotation: 0.9, cameraTilt: 0.65, cameraPath: 'dive', autoRotate: true, e8MorphT: 0.9, zoom: 2.9, panX: -160, panY: 120 }); window.__mobileApp.forceRender(); }")
             sdf_dirty_frame = page.evaluate("() => window.__mobileApp.getMetrics().lastRenderAllFrame")
             check("SDF dirty camera begins outside the usable view", not sdf_dirty_frame["withinView"], str(sdf_dirty_frame))
-            page.locator('[data-view-action="fit-all"]').click()
+            page.evaluate("() => window.__mobileApp.fitAllRoots()")
             page.evaluate("() => window.__mobileApp.forceRender()")
             sdf_fit = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("SDF Fit all uses ray-marched bounds and stops the moving camera", sdf_fit["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_fit["state"]["cameraPath"] == "manual" and not sdf_fit["state"]["autoRotate"] and abs(sdf_fit["state"]["panX"]) < 0.001 and abs(sdf_fit["state"]["panY"]) < 0.001 and sdf_fit["state"]["zoom"] < 1.1 and sdf_fit["metrics"]["lastInteractionType"] == "fit-all", str(sdf_fit))
+            check("SDF framing engine uses ray-marched bounds and stops the moving camera", sdf_fit["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_fit["state"]["cameraPath"] == "manual" and not sdf_fit["state"]["autoRotate"] and abs(sdf_fit["state"]["panX"]) < 0.001 and abs(sdf_fit["state"]["panY"]) < 0.001 and sdf_fit["state"]["zoom"] < 1.1 and sdf_fit["metrics"]["lastInteractionType"] == "fit-all", str(sdf_fit))
             page.locator('[data-action="reset-view"]').click()
             page.evaluate("() => window.__mobileApp.closeSettings()")
             sdf_snapshot = page.evaluate("() => window.__mobileApp.shareSnapshot({ share: false, download: false })")
@@ -1611,18 +1611,21 @@ def main() -> int:
             surprise_layout = page.evaluate("""() => {
                 const surprise = document.getElementById('surprise-button');
                 const reset = document.querySelector('[data-action="reset-view"]');
-                const fit = document.querySelector('[data-view-action="fit-all"]');
+                const done = document.getElementById('settings-done');
                 const rect = element => element?.getBoundingClientRect();
                 return {
                     surprise: rect(surprise),
                     reset: rect(reset),
-                    fit: rect(fit),
+                    done: rect(done),
                     parentClass: surprise?.parentElement?.className,
                     visualDuplicates: document.querySelectorAll('[data-section="style"] #surprise-button').length,
-                    action: surprise?.dataset.viewAction
+                    action: surprise?.dataset.viewAction,
+                    fitAllCount: document.querySelectorAll('[data-view-action="fit-all"]').length,
+                    footerCount: document.querySelectorAll('.sheet-footer').length
                 };
             }""")
-            check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1 and surprise_layout["fit"]["width"] > surprise_layout["surprise"]["width"] * 1.8, str(surprise_layout))
+            check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1, str(surprise_layout))
+            check("Done replaces Fit all above the mobile navigation area", surprise_layout["fitAllCount"] == 0 and surprise_layout["footerCount"] == 0 and surprise_layout["done"]["height"] >= 40 and surprise_layout["done"]["width"] > surprise_layout["surprise"]["width"] * 1.8 and surprise_layout["done"]["y"] > surprise_layout["surprise"]["y"], str(surprise_layout))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
             surprise_after = page.evaluate("""() => ({
@@ -1976,7 +1979,7 @@ def main() -> int:
             page.evaluate("() => window.__mobileApp.setState({ zoom: 2.4, panX: -260, panY: 180, rotation: 0.4, selectedRoot: null })")
             before_fit_all = page.evaluate("() => window.__mobileApp.getMetrics().allFrame")
             check("dirty all-roots frame starts outside view", not before_fit_all["withinView"], str(before_fit_all))
-            page.locator('[data-view-action="fit-all"]').click()
+            page.evaluate("() => window.__mobileApp.fitAllRoots()")
             page.evaluate("() => window.__mobileApp.forceRender()")
             fit_all = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             check("fit all fits visible bounds", fit_all["metrics"]["allFrame"]["withinView"], str(fit_all["metrics"]["allFrame"]))
