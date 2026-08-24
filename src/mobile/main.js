@@ -1,7 +1,9 @@
 const STORAGE_KEY = 'e8_mobile_v2_config';
 const PROGRESS_KEY = 'e8_progress_v1';
+const MOBILE_CONFIG_REVISION = 1;
 
 const DEFAULT_STATE = {
+  configRevision: MOBILE_CONFIG_REVISION,
   view: 'e8coxeter',
   modelMode: 'e8_2d',
   shape: 'icosahedron',
@@ -16,7 +18,7 @@ const DEFAULT_STATE = {
   showContext: true,
   showPetrie: false,
   showMirrors: false,
-  showEdges: false,
+  showEdges: true,
   showVertices: false,
   highlightSubset: true,
   subset: 'icosahedron',
@@ -284,20 +286,25 @@ const SCENE_CHIP_SWIPE_SLOP_PX = 24;
 const SCENE_CHIP_LONG_PRESS_MS = 540;
 const STATUS_HIDE_MS = 1400;
 const MOTION_FRAME_INTERVAL_MS = 33;
-// The complete 56-neighbor E8 graph draws 6,720 chords. Real-device profiling
-// showed that the graph—not the individual FX—is the dominant sustained cost.
+// The desktop McMullen overlay draws 21,840 chords across its two populated
+// E8 distance classes. Real-device profiling showed that the graph—not the
+// individual FX—is the dominant sustained cost.
 // Keep every effect available, but pace animated dense-graph frames so the
 // main thread retains enough headroom for touch and Android system UI.
 const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
-// The desktop Coxeter overlay's principal line family is the complete
-// distance-squared-2 root graph: every root has exactly 56 neighbours.  Keep
-// that topology intact on mobile.  Subsampling the pair list by array order
-// gave different roots between 4 and 17 lines and produced an asymmetric,
-// visibly incorrect web when the user zoomed in.
-const MOBILE_E8_CHORD_DISTANCE_SQUARED = 2;
+// Keep these values aligned with e8coxeter.view.js. With the canonical E8 data,
+// classes 3 and 7 are populated (6,720 + 15,120 chords); retaining all eight
+// slots keeps mobile topology and palette classification identical to desktop.
+const PHI = (1 + Math.sqrt(5)) / 2;
+const MOBILE_E8_CHORD_VALUES = [
+  Math.sqrt(2 - PHI), 1, Math.sqrt(3 - PHI), Math.sqrt(2),
+  PHI, Math.sqrt(3), Math.sqrt(2 + PHI), 2,
+];
+const DESKTOP_E8_CHORD_OPACITY = [0.10, 0.10, 0.10, 0.45, 0.10, 0.10, 0.10, 0.20];
+const MOBILE_E8_CHORD_ALPHA_SCALE = 0.19;
 const RIPPLE_COLOR_BANDS = 12;
 const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
@@ -864,6 +871,7 @@ let subsetSets = {};
 let subsetLists = {};
 let petrieCycle = [];
 let petrieSet = EMPTY_SET;
+let e8ChordClasses = Array.from({ length: MOBILE_E8_CHORD_VALUES.length }, () => []);
 let e8ChordEdges = [];
 let simpleRootIndices = [];
 let simpleRootOrdinalByIndex = new Map();
@@ -973,7 +981,13 @@ function setMobileLessonComplete(lessonId, complete = true) {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return normalizeState({ ...DEFAULT_STATE, ...JSON.parse(raw) });
+    if (raw) {
+      const stored = JSON.parse(raw);
+      // Full desktop chord parity became the E8 default in revision 1. Migrate
+      // existing mobile installs once; later user toggles remain persistent.
+      if ((Number(stored.configRevision) || 0) < MOBILE_CONFIG_REVISION) stored.showEdges = true;
+      return normalizeState({ ...DEFAULT_STATE, ...stored, configRevision: MOBILE_CONFIG_REVISION });
+    }
   } catch (error) {
     recordError(error);
   }
@@ -1021,6 +1035,7 @@ function flushSave() {
 }
 
 function normalizeState(next) {
+  next.configRevision = MOBILE_CONFIG_REVISION;
   if (LEGACY_MODEL_MODE_MAP[next.modelMode]) next.modelMode = LEGACY_MODEL_MODE_MAP[next.modelMode];
   if (LEGACY_BACKGROUND_MAP[next.background]) next.background = LEGACY_BACKGROUND_MAP[next.background];
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
@@ -1064,7 +1079,7 @@ function normalizeState(next) {
   if (typeof next.showContext !== 'boolean') next.showContext = true;
   if (typeof next.showPetrie !== 'boolean') next.showPetrie = false;
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
-  if (typeof next.showEdges !== 'boolean') next.showEdges = false;
+  if (typeof next.showEdges !== 'boolean') next.showEdges = DEFAULT_STATE.showEdges;
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
@@ -4594,9 +4609,9 @@ function deferSettingsCanvasResize() {
   return false;
 }
 
-function buildMobileE8ChordEdges(roots) {
-  if (!Array.isArray(roots) || roots.length < 2) return [];
-  const edges = [];
+function buildMobileE8ChordTopology(roots) {
+  const chordClasses = Array.from({ length: MOBILE_E8_CHORD_VALUES.length }, () => []);
+  if (!Array.isArray(roots) || roots.length < 2) return chordClasses;
   for (let i = 0; i < roots.length; i++) {
     const a = roots[i];
     if (!Array.isArray(a)) continue;
@@ -4608,19 +4623,30 @@ function buildMobileE8ChordEdges(roots) {
         const delta = a[axis] - b[axis];
         distanceSquared += delta * delta;
       }
-      if (Math.abs(distanceSquared - MOBILE_E8_CHORD_DISTANCE_SQUARED) < 0.01) {
-        edges.push([i, j]);
+      const distance = Math.sqrt(distanceSquared);
+      let bestIndex = 0;
+      let bestError = Math.abs(distance - MOBILE_E8_CHORD_VALUES[0]);
+      for (let chordClass = 1; chordClass < MOBILE_E8_CHORD_VALUES.length; chordClass++) {
+        const error = Math.abs(distance - MOBILE_E8_CHORD_VALUES[chordClass]);
+        if (error < bestError) {
+          bestError = error;
+          bestIndex = chordClass;
+        }
       }
+      if (bestError < 0.05) chordClasses[bestIndex].push([i, j]);
     }
   }
-  return edges;
+  return chordClasses;
 }
 
 function preparePoints() {
   const proj = data.e8.proj2d;
   const roots = data.e8.roots8d || [];
-  e8ChordEdges = buildMobileE8ChordEdges(roots);
+  e8ChordClasses = buildMobileE8ChordTopology(roots);
+  e8ChordEdges = e8ChordClasses.flat();
   metrics.e8ChordEdgeCount = e8ChordEdges.length;
+  metrics.e8ChordClassCounts = e8ChordClasses.map(edges => edges.length);
+  metrics.e8ChordClassCount = e8ChordClasses.filter(edges => edges.length).length;
   const e8ChordDegrees = Array.from({ length: roots.length }, () => 0);
   for (const [a, b] of e8ChordEdges) {
     e8ChordDegrees[a]++;
@@ -4873,6 +4899,8 @@ function render() {
       modelEdgeStrokes: 0,
       e8ChordEdges: 0,
       e8ChordEdgeStrokes: 0,
+      e8ChordClassCount: 0,
+      e8ChordClassCounts: [],
       e8EdgesSkippedForInteraction: 0,
       ripplePointCount: 0,
       rippleEdgeSegments: 0,
@@ -4943,18 +4971,11 @@ function render() {
     const projectedAllFrame = projectedPointFrameMetrics(allRootList);
 
     if (state.showEdges && !interactionLiteFrame) {
-      const edgeStats = drawPaletteEdgeField(points, e8ChordEdges, layout, paletteSet, {
-        // Match the desktop's transparent LineSegments treatment.  The full
-        // 56-neighbour graph needs much less per-chord energy than the former
-        // 1,080-line sample, especially where many chords cross the centre.
-        baseAlpha: 0.085,
-        baseWidth: 0.62,
-        shadowBlur: 0.65,
-        alwaysPalette: true,
-        composite: 'source-over',
-      });
+      const edgeStats = drawDesktopE8ChordField(points, e8ChordClasses, layout, paletteSet);
       drawStats.e8ChordEdges = edgeStats.segments;
       drawStats.e8ChordEdgeStrokes = edgeStats.strokes;
+      drawStats.e8ChordClassCount = edgeStats.classes;
+      drawStats.e8ChordClassCounts = edgeStats.classCounts;
       drawStats.modelEdges += edgeStats.segments;
       drawStats.modelEdgeStrokes += edgeStats.strokes;
       recordRippleEdgeStats(drawStats, edgeStats);
@@ -6703,6 +6724,77 @@ function projectedRadius(point, layout) {
   const originX = layout.cx + state.panX;
   const originY = layout.cy + state.panY;
   return Math.hypot((x || 0) - originX, (y || 0) - originY) / Math.max(1, layout.scale);
+}
+
+function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
+  const populated = Array.isArray(chordClasses)
+    ? chordClasses.map((edges, chordClass) => ({ chordClass, edges })).filter(entry => entry.edges?.length)
+    : [];
+  const classCounts = Array.from(
+    { length: MOBILE_E8_CHORD_VALUES.length },
+    (_, index) => chordClasses?.[index]?.length || 0,
+  );
+  if (!populated.length) {
+    return { segments: 0, strokes: 0, classes: 0, classCounts, colorBands: 0, brightnessBands: 0, ripple: false };
+  }
+
+  // Ripple needs per-chord radial buckets. All other treatments use the
+  // desktop's chord classes directly, which renders 21,840 segments in only
+  // two Canvas strokes for the canonical E8 data.
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, e8ChordEdges, layout, paletteSet, {
+      baseAlpha: 0.06,
+      baseWidth: 0.58,
+      shadowBlur: 0.55,
+      alwaysPalette: true,
+      composite: 'source-over',
+    });
+    return { ...edgeStats, classes: populated.length, classCounts };
+  }
+
+  let segments = 0;
+  let strokes = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.62;
+  for (const { chordClass, edges } of populated) {
+    const color = paletteColorAt(paletteSet, chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1));
+    ctx.globalAlpha = DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 0.45;
+    ctx.beginPath();
+    let classSegments = 0;
+    for (const edge of edges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+      const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+      const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+      const by = Number.isFinite(b.sy) ? b.sy : b.y;
+      if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      classSegments++;
+    }
+    if (!classSegments) continue;
+    ctx.stroke();
+    segments += classSegments;
+    strokes++;
+  }
+  ctx.restore();
+  return {
+    segments,
+    strokes,
+    classes: populated.length,
+    classCounts,
+    colorBands: populated.length,
+    brightnessBands: 1,
+    ripple: false,
+  };
 }
 
 function drawPaletteEdgeField(projected, edges, layout, paletteSet, options = {}) {
