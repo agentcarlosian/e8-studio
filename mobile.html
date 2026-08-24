@@ -12,6 +12,7 @@
 <body>
   <main class="mobile-shell">
     <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots and 12 rings"></canvas>
+    <canvas id="mobile-sdf-canvas" aria-hidden="true"></canvas>
 
     <div class="topbar" aria-label="E8 Coxeter, 240 roots, 12 rings">
       <button id="scene-chip" class="scene-chip" type="button" aria-label="Scene: E8 Coxeter, tap to switch">
@@ -98,6 +99,28 @@
                 <option value="dynkin">Dynkin diagram</option>
               </select>
             </label>
+            <div id="sdf-field" class="model-control-panel hidden" aria-label="SDF surface controls">
+              <div class="browse-head">
+                <strong>SDF surface</strong>
+                <small>Ray-marched in WebGL</small>
+              </div>
+              <label class="field">
+                <span class="field-heading">Sphere radius <output id="sdf-radius-output">0.080</output></span>
+                <input id="sdf-radius" type="range" min="0.04" max="0.13" step="0.005" value="0.08">
+              </label>
+              <label class="field">
+                <span class="field-heading">Smooth blend <output id="sdf-blend-output">0.030</output></span>
+                <input id="sdf-blend" type="range" min="0" max="0.10" step="0.005" value="0.03">
+              </label>
+              <label class="field">
+                <span class="field-heading">Highlight glow <output id="sdf-bloom-output">50%</output></span>
+                <input id="sdf-bloom" type="range" min="0" max="1" step="0.05" value="0.5">
+              </label>
+              <label class="field">
+                <span class="field-heading">Metallic sheen <output id="sdf-aniso-output">60%</output></span>
+                <input id="sdf-aniso" type="range" min="0" max="1" step="0.05" value="0.6">
+              </label>
+            </div>
             <label id="shape-field" class="field hidden">
               <span>Shape</span>
               <select id="shape-select">
@@ -316,6 +339,34 @@
         <section class="settings-section" data-section="motion">
           <h2>Motion</h2>
           <div class="control-stack">
+            <div class="motion-camera-panel" aria-label="Camera paths">
+              <div class="browse-head">
+                <strong>Camera path</strong>
+                <output id="camera-path-output">Manual</output>
+              </div>
+              <div class="camera-path-grid">
+                <button type="button" data-motion-action="camera-orbit">Orbit</button>
+                <button type="button" data-motion-action="camera-dive">Dive</button>
+                <button type="button" data-motion-action="camera-spiral">Spiral</button>
+                <button type="button" data-motion-action="camera-reset">Reset</button>
+              </div>
+            </div>
+            <label class="field">
+              <span class="field-heading">Rotation <output id="camera-rotation-output">0°</output></span>
+              <input id="camera-rotation" type="range" min="-180" max="180" step="1" value="0">
+            </label>
+            <label class="field">
+              <span class="field-heading">Tilt <output id="camera-tilt-output">16°</output></span>
+              <input id="camera-tilt" type="range" min="-60" max="60" step="1" value="16">
+            </label>
+            <label class="field">
+              <span class="field-heading">Zoom <output id="camera-zoom-output">100%</output></span>
+              <input id="camera-zoom" type="range" min="0.55" max="3.2" step="0.05" value="1">
+            </label>
+            <label class="field">
+              <span class="field-heading">Extrude <output id="camera-extrude-output">0.00</output></span>
+              <input id="camera-extrude" type="range" min="0" max="1" step="0.01" value="0">
+            </label>
             <label class="toggle-row">
               <span>
                 <strong>Auto-rotate</strong>

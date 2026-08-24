@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build dist/ for the Android-first Mobile V2 shell.
 
-The desktop Studio keeps using index.html/src/main.js. Native Android now ships
-a small Canvas 2D mobile entrypoint so the phone UX is fast, minimal, and fully
-local. This build inlines Mobile V2 CSS/JS plus the E8 data it needs into
+The desktop Studio keeps using index.html/src/main.js. Native Android ships a
+small hybrid mobile entrypoint: Canvas 2D handles the lightweight scenes and a
+raw WebGL raymarcher handles E8 SDF. This build inlines Mobile V2 CSS/JS plus the E8 data it needs into
 dist/index.html and removes stale browser/PWA artifacts from previous builds.
 Shareable standalone files in dist/ are preserved so Android/mobile builds do
 not erase files intended for manual sharing.
@@ -109,7 +109,7 @@ def main() -> int:
     html = re.sub(r"\s*frame-ancestors[^;]*;", "", html)
     DIST_INDEX.write_text(html, encoding="utf-8", newline="\n")
     print(f"Mobile V2 dist written: {DIST_INDEX.relative_to(ROOT)} ({DIST_INDEX.stat().st_size:,} bytes)")
-    print("Mobile bundle uses Canvas 2D, inlined E8 data, and no PWA service worker.")
+    print("Mobile bundle uses Canvas 2D + raw WebGL SDF, inlined E8 data, and no PWA service worker.")
     return 0
 
 
