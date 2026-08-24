@@ -847,13 +847,23 @@ def main() -> int:
             )
             scrolled_view = page.evaluate("() => document.querySelector('.sheet-body').scrollTop")
             check("View settings body can scroll", scrolled_view > 0, str(scrolled_view))
-            page.get_by_role("button", name="Done", exact=True).click()
+            page.locator("#settings-done").click()
             done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("View Done closes scrolled settings", not done_metrics["settingsOpen"] and done_metrics["lastInteractionType"] == "settings-done", str(done_metrics))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.get_by_role("button", name="Visuals", exact=True).click()
             style_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("section switch resets settings scroll", style_metrics["settingsSection"] == "style" and style_metrics["settingsScrollTop"] == 0, str(style_metrics))
+            visuals_done_box = page.locator("#visuals-done").bounding_box()
+            page.locator("#visuals-done").click()
+            visuals_done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Visuals exposes a top Done action", bool(visuals_done_box) and visuals_done_box["height"] >= 40 and not visuals_done_metrics["settingsOpen"] and visuals_done_metrics["lastInteractionType"] == "settings-done", str({"box": visuals_done_box, "metrics": visuals_done_metrics}))
+            page.evaluate("() => window.__mobileApp.openSettings('motion')")
+            motion_done_box = page.locator("#motion-done").bounding_box()
+            page.locator("#motion-done").click()
+            motion_done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Motion exposes a top Done action", bool(motion_done_box) and motion_done_box["height"] >= 40 and not motion_done_metrics["settingsOpen"] and motion_done_metrics["lastInteractionType"] == "settings-done", str({"box": motion_done_box, "metrics": motion_done_metrics}))
+            page.evaluate("() => window.__mobileApp.openSettings('style')")
             page.evaluate("""() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))""")
             escape_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Escape closes settings sheet", not escape_metrics["settingsOpen"] and escape_metrics["lastInteractionType"] == "back-close-settings", str(escape_metrics))
@@ -1656,6 +1666,13 @@ def main() -> int:
                 const done = document.getElementById('settings-done');
                 const rect = element => element?.getBoundingClientRect();
                 const doneStyle = getComputedStyle(done);
+                const sectionDoneButtons = [...document.querySelectorAll('[data-settings-done]')].map(button => ({
+                    id: button.id,
+                    label: button.textContent.trim(),
+                    section: button.closest('[data-section]')?.dataset.section,
+                    background: getComputedStyle(button).backgroundColor,
+                    color: getComputedStyle(button).color
+                }));
                 return {
                     surprise: rect(surprise),
                     reset: rect(reset),
@@ -1667,12 +1684,18 @@ def main() -> int:
                     footerCount: document.querySelectorAll('.sheet-footer').length,
                     doneLabel: done?.textContent.trim(),
                     doneBackground: doneStyle.backgroundColor,
-                    doneColor: doneStyle.color
+                    doneColor: doneStyle.color,
+                    sectionDoneButtons
                 };
             }""")
             check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1, str(surprise_layout))
             check("Done replaces Fit all above the mobile navigation area", surprise_layout["fitAllCount"] == 0 and surprise_layout["footerCount"] == 0 and surprise_layout["done"]["height"] >= 40 and surprise_layout["done"]["width"] > surprise_layout["surprise"]["width"] * 1.8 and surprise_layout["done"]["y"] > surprise_layout["surprise"]["y"], str(surprise_layout))
             check("Done has a visible yellow treatment", surprise_layout["doneLabel"] == "Done" and surprise_layout["doneBackground"] == "rgb(244, 210, 122)" and surprise_layout["doneColor"] == "rgb(8, 8, 13)", str(surprise_layout))
+            check("View, Visuals, and Motion share the Done treatment", surprise_layout["sectionDoneButtons"] == [
+                {"id": "settings-done", "label": "Done", "section": "view", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
+                {"id": "visuals-done", "label": "Done", "section": "style", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
+                {"id": "motion-done", "label": "Done", "section": "motion", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"}
+            ], str(surprise_layout["sectionDoneButtons"]))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
             surprise_after = page.evaluate("""() => ({

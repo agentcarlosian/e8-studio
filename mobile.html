@@ -60,7 +60,7 @@
             <div class="view-actions" aria-label="View actions">
               <button class="wide-action" type="button" data-action="reset-view">Reset</button>
               <button id="surprise-button" class="wide-action" type="button" data-view-action="surprise">Surprise</button>
-              <button id="settings-done" class="wide-action done-button view-done-action" type="button">Done</button>
+              <button id="settings-done" class="wide-action done-button view-done-action settings-done-action" type="button" data-settings-done>Done</button>
             </div>
             <div id="bloom-timeline-field" class="bloom-timeline-panel hidden" aria-label="Bloom timeline">
               <div class="browse-head">
@@ -255,6 +255,7 @@
         <section class="settings-section" data-section="style">
           <h2>Visuals</h2>
           <div class="control-stack">
+            <button id="visuals-done" class="wide-action done-button settings-done-action" type="button" data-settings-done>Done</button>
             <label class="field">
               <span>Background</span>
               <select id="background-select">
@@ -346,6 +347,7 @@
         <section class="settings-section" data-section="motion">
           <h2>Motion</h2>
           <div class="control-stack">
+            <button id="motion-done" class="wide-action done-button settings-done-action" type="button" data-settings-done>Done</button>
             <div class="motion-camera-panel" aria-label="Camera paths">
               <div class="browse-head">
                 <strong>Camera path</strong>
