@@ -9,6 +9,8 @@ const DEFAULT_STATE = {
   dynkinDiagram: 'E8',
   learnTopic: 'auto',
   palette: 'gold',
+  background: 'void',
+  backgroundBrightness: 0.7,
   quality: 'smooth',
   showRings: true,
   showContext: true,
@@ -17,10 +19,13 @@ const DEFAULT_STATE = {
   highlightSubset: true,
   subset: 'icosahedron',
   pointScale: 1.0,
+  pointOpacity: 0.72,
   autoRotate: false,
   autoModel: false,
   autoColor: false,
+  colorSpeed: 0.72,
   softFx: false,
+  fxStrength: 1,
   rotationSpeed: 0.7,
   rotation: 0,
   panX: 0,
@@ -52,32 +57,82 @@ const MOTION_PRESETS = [
 ];
 
 const PALETTES = {
-  gold: ['#f4d27a', '#f0a04b', '#fff4b8'],
+  gold: ['#fff2b2', '#f4d27a', '#f0a04b', '#9b4f18'],
+  ember: ['#ffd08a', '#ff9550', '#e44b24', '#7f1818'],
+  ice: ['#ffffff', '#d6e8ff', '#7fb8ff', '#6076d9'],
   cyan: ['#6affe8', '#3ca7ff', '#ecfffb'],
-  mono: ['#f4f1ea', '#9d9789', '#ffffff'],
-  ember: ['#ffb36c', '#ff6d43', '#ffe2bd'],
+  ocean: ['#5ec9ff', '#9b4dff'],
+  forest: ['#7df9c8', '#00d68f'],
+  sunset: ['#ff6b9d', '#ff9550'],
+  cosmic: ['#4dffff', '#9b4dff'],
+  lavender: ['#c8a2ff', '#ff6b9d'],
+  amber: ['#ffb000', '#ff5500'],
+  jade: ['#00d68f', '#1e90ff'],
+  rainbow: ['#ff3300', '#ffcc00', '#00d68f', '#4dffff', '#9b4dff'],
+  fire: ['#ff0066', '#ff3300', '#ffb000'],
+  ocean_deep: ['#001f3f', '#0074d9', '#7fdbff'],
+  neon: ['#ff00d4', '#00ffea', '#c8ff00'],
+  prism: ['#ff0040', '#ffaa00', '#40ff00', '#00aaff', '#aa00ff'],
+  aurora: ['#00d68f', '#4dffff', '#c8a2ff', '#ff6b9d'],
+  plum: ['#9b4dff', '#ff00d4', '#ff6b9d', '#ff9550'],
+  bronze: ['#ffb000', '#ff5500', '#cc3a1a', '#660033'],
+  sakura: ['#ffb3d1', '#c8a2ff', '#7fb8ff', '#7fffaf'],
+  mono: ['#f0f0f0', '#808080', '#1a1a1a'],
+  void: ['#ffffff', '#aaaaaa', '#444444'],
+  golden: ['#ffd700', '#ffb000', '#ff7700', '#cc4400'],
+  prime: ['#ff0066', '#00ddaa', '#4488ff', '#aa44ff'],
+  binary: ['#ffffff', '#000000'],
+  terra: ['#8b4513', '#cd853f', '#daa520', '#556b2f'],
+  abyss: ['#0fffc0', '#1a8aaa', '#0a3d62', '#4ecdc4'],
+  coral: ['#ff6b6b', '#ff9ff3', '#feca57', '#48dbfb'],
+  magma: ['#fff200', '#ff8c00', '#ff3300', '#7a0010'],
+  obsidian: ['#9b59b6', '#34495e', '#2c3e50', '#000000'],
+  cotton: ['#ffb3d9', '#b3d9ff', '#d9ffb3', '#ffffb3'],
+  spectral: ['#e1bee7', '#b2dfdb', '#fff9c4', '#ffccbc'],
+  synthwave: ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec'],
+  cyberpunk: ['#00f5ff', '#ff00ff', '#fffc00', '#ff0080'],
+  ultraviolet: ['#1b103f', '#643cff', '#d83cff', '#ff6b9d', '#ffb45e'],
+  biolume: ['#062f38', '#00a896', '#00ffd5', '#b8ff70', '#eaffc7'],
+  opal: ['#e8ffff', '#9de7ee', '#c5b8ff', '#ffbad2', '#ffd6a0'],
+  solar_flare: ['#fffbd1', '#ffe66d', '#ff9f1c', '#ff3d00', '#7a0019'],
+  rose_gold: ['#fff0ea', '#f3b6ad', '#c77b6b', '#8e4560', '#3e1738'],
+  electric: ['#071a52', '#0066ff', '#00d9ff', '#e8ffff', '#8c7bff'],
+  viridian: ['#052e2b', '#087f5b', '#20c997', '#a9e34b', '#ffe066'],
+  midnight: ['#050816', '#152b65', '#3f60d9', '#9a7cff', '#ff82bd'],
+  petrie: ['#0000ff', '#00ff00', '#ff0000', '#7f7f7f'],
+  thread: ['#e0e0f0', '#d0e0e0', '#e0d0d0', '#d0d0e0'],
+  vintage: ['#b09090', '#a09090', '#c0a0a0', '#a0a0a0'],
 };
-const PALETTE_LABELS = {
-  gold: 'Gold',
-  cyan: 'Cyan',
-  mono: 'Mono',
-  ember: 'Ember',
+const BACKGROUNDS = {
+  void: { label: 'Void', color: '#090912' },
+  space: { label: 'Space', color: '#082546' },
+  eclipse: { label: 'Eclipse', color: '#351020' },
+  cloud: { label: 'Cloud', color: '#343342' },
 };
 
+function paletteLabel(name) {
+  return String(name || '').split('_').map(word => word ? `${word[0].toUpperCase()}${word.slice(1)}` : '').join(' ');
+}
+
 const RENDER_PALETTES = Object.fromEntries(
-  Object.entries(PALETTES).map(([name, colors]) => [name, {
-    name,
-    colors,
-    ringStroke: colorWithAlpha(colors[1], 0.18),
-    rayStroke: colorWithAlpha(colors[2], 0.22),
-    mirrorStroke: colorWithAlpha('#6affe8', 0.34),
-    petrieStroke: colorWithAlpha(colors[2], 0.56),
-    glowPetrie: colorWithAlpha(colors[2], 0.12),
-    glowSelected: colorWithAlpha(colors[2], 0.34),
-    glowNeighbor: colorWithAlpha(colors[2], 0.2),
-    glowAntipode: colorWithAlpha(colors[1], 0.18),
-    glowSubset: colorWithAlpha(colors[2], 0.14),
-  }])
+  Object.entries(PALETTES).map(([name, colors]) => {
+    const secondary = colors[1] || colors[0];
+    const highlight = colors[2] || colors[colors.length - 1] || colors[0];
+    const renderColors = colors.length >= 3 ? colors : [colors[0], secondary, highlight];
+    return [name, {
+      name,
+      colors: renderColors,
+      ringStroke: colorWithAlpha(secondary, 0.18),
+      rayStroke: colorWithAlpha(highlight, 0.22),
+      mirrorStroke: colorWithAlpha('#6affe8', 0.34),
+      petrieStroke: colorWithAlpha(highlight, 0.56),
+      glowPetrie: colorWithAlpha(highlight, 0.12),
+      glowSelected: colorWithAlpha(highlight, 0.34),
+      glowNeighbor: colorWithAlpha(highlight, 0.2),
+      glowAntipode: colorWithAlpha(secondary, 0.18),
+      glowSubset: colorWithAlpha(highlight, 0.14),
+    }];
+  })
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
@@ -155,7 +210,7 @@ const DRAW_SELECTED = 2;
 const DRAW_NEIGHBOR = 4;
 const DRAW_ANTIPODE = 8;
 const DRAW_PETRIE = 16;
-const BASE_POINT_BUCKET_COUNT = 2;
+const BASE_POINT_BUCKET_COUNT = 5;
 const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'e8_2d', shape: 'icosahedron' },
   { modelMode: 'e8_3d', shape: 'icosahedron' },
@@ -364,6 +419,7 @@ let metrics = {
   modelProjectedVertices: 0,
   modelEdgeStrokes: 0,
   modelFaceFills: 0,
+  modelVertexFills: 0,
   e8Projection3DCount: 0,
   platonicDrawCount: 0,
   polytope4DDrawCount: 0,
@@ -833,6 +889,7 @@ function flushSave() {
 
 function normalizeState(next) {
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
+  if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
   if (!QUALITY[next.quality]) next.quality = DEFAULT_STATE.quality;
   if (!SUPPORTED_MODEL_MODES.has(next.modelMode)) next.modelMode = DEFAULT_STATE.modelMode;
   if (!SUPPORTED_SHAPES.has(next.shape)) next.shape = DEFAULT_STATE.shape;
@@ -841,6 +898,10 @@ function normalizeState(next) {
   if (LEARN_TOPIC_IDS.size > 1 && !LEARN_TOPIC_IDS.has(next.learnTopic)) next.learnTopic = DEFAULT_STATE.learnTopic;
   if (!SUPPORTED_SUBSETS.has(next.subset)) next.subset = DEFAULT_STATE.subset;
   next.pointScale = clamp(Number(next.pointScale) || 1, 0.7, 1.8);
+  next.pointOpacity = clamp(Number(next.pointOpacity) || DEFAULT_STATE.pointOpacity, 0.3, 1);
+  next.backgroundBrightness = clamp(Number(next.backgroundBrightness) || DEFAULT_STATE.backgroundBrightness, 0.3, 1.2);
+  next.colorSpeed = clamp(Number(next.colorSpeed) || DEFAULT_STATE.colorSpeed, 0.25, 1.5);
+  next.fxStrength = clamp(Number(next.fxStrength) || DEFAULT_STATE.fxStrength, 0.25, 1.5);
   next.rotationSpeed = clamp(Number(next.rotationSpeed) || 0.7, 0.2, 2);
   next.rotation = Number(next.rotation) || 0;
   next.panX = Number(next.panX) || 0;
@@ -951,12 +1012,22 @@ function cacheElements() {
   els.paletteSwatchGrid = document.getElementById('palette-swatch-grid');
   els.paletteOutput = document.getElementById('palette-output');
   els.paletteSelect = document.getElementById('palette-select');
+  els.backgroundSelect = document.getElementById('background-select');
+  els.backgroundBrightness = document.getElementById('background-brightness');
+  els.backgroundBrightnessOutput = document.getElementById('background-brightness-output');
   els.fxPresetGrid = document.getElementById('fx-preset-grid');
   els.fxPresetOutput = document.getElementById('fx-preset-output');
   els.pointSize = document.getElementById('point-size');
+  els.pointSizeOutput = document.getElementById('point-size-output');
+  els.pointOpacity = document.getElementById('point-opacity');
+  els.pointOpacityOutput = document.getElementById('point-opacity-output');
   els.ringsToggle = document.getElementById('rings-toggle');
   els.autoColorToggle = document.getElementById('auto-color-toggle');
+  els.colorSpeed = document.getElementById('color-speed');
+  els.colorSpeedOutput = document.getElementById('color-speed-output');
   els.softFxToggle = document.getElementById('soft-fx-toggle');
+  els.fxStrength = document.getElementById('fx-strength');
+  els.fxStrengthOutput = document.getElementById('fx-strength-output');
   els.motionToggle = document.getElementById('motion-toggle');
   els.autoModelToggle = document.getElementById('auto-model-toggle');
   els.motionSpeed = document.getElementById('motion-speed');
@@ -1144,11 +1215,35 @@ function bindEvents() {
   els.rootRange.addEventListener('input', () => selectRoot(Number(els.rootRange.value), { save: false, interactionType: 'root-scrub' }));
   els.rootRange.addEventListener('change', () => selectRoot(Number(els.rootRange.value), { interactionType: 'root-commit' }));
   els.paletteSelect.addEventListener('change', () => setSettingState({ palette: els.paletteSelect.value }, 'palette-select', { syncPalette: true }));
-  els.pointSize.addEventListener('input', () => previewState({ pointScale: Number(els.pointSize.value) }, 'point-size'));
+  els.backgroundSelect.addEventListener('change', () => setSettingState({ background: els.backgroundSelect.value }, 'background-select'));
+  els.backgroundBrightness.addEventListener('input', () => {
+    previewState({ backgroundBrightness: Number(els.backgroundBrightness.value) }, 'background-brightness');
+    syncVisualRangeOutputs();
+  });
+  els.backgroundBrightness.addEventListener('change', () => commitLiveControl('background-brightness'));
+  els.pointSize.addEventListener('input', () => {
+    previewState({ pointScale: Number(els.pointSize.value) }, 'point-size');
+    syncVisualRangeOutputs();
+  });
   els.pointSize.addEventListener('change', () => commitLiveControl('point-size'));
+  els.pointOpacity.addEventListener('input', () => {
+    previewState({ pointOpacity: Number(els.pointOpacity.value) }, 'point-opacity');
+    syncVisualRangeOutputs();
+  });
+  els.pointOpacity.addEventListener('change', () => commitLiveControl('point-opacity'));
   els.ringsToggle.addEventListener('change', () => setSettingState({ showRings: els.ringsToggle.checked }, 'rings-toggle'));
   els.autoColorToggle.addEventListener('change', () => setManualRuntimeState({ autoColor: els.autoColorToggle.checked }, 'auto-color-toggle', { syncFx: true, syncMotionPreset: true }));
+  els.colorSpeed.addEventListener('input', () => {
+    previewState({ colorSpeed: Number(els.colorSpeed.value) }, 'color-speed', { render: false });
+    syncVisualRangeOutputs();
+  });
+  els.colorSpeed.addEventListener('change', () => commitLiveControl('color-speed', { render: false }));
   els.softFxToggle.addEventListener('change', () => setManualRuntimeState({ softFx: els.softFxToggle.checked }, 'soft-fx-toggle', { syncFx: true, syncMotionPreset: true }));
+  els.fxStrength.addEventListener('input', () => {
+    previewState({ fxStrength: Number(els.fxStrength.value) }, 'fx-strength');
+    syncVisualRangeOutputs();
+  });
+  els.fxStrength.addEventListener('change', () => commitLiveControl('fx-strength'));
   els.motionToggle.addEventListener('change', () => setManualRuntimeState({ autoRotate: els.motionToggle.checked }, 'motion-toggle', { syncMotionPreset: true }));
   els.autoModelToggle.addEventListener('change', () => setManualRuntimeState({ autoModel: els.autoModelToggle.checked }, 'auto-model-toggle', { syncMotionPreset: true }));
   els.motionSpeed.addEventListener('input', () => {
@@ -2545,17 +2640,22 @@ function selectModelShortcut(id) {
 function renderPaletteSwatches() {
   if (!els.paletteSwatchGrid) return false;
   els.paletteSwatchGrid.innerHTML = Object.entries(PALETTES).map(([name, colors]) => {
-    const label = PALETTE_LABELS[name] || name;
+    const label = paletteLabel(name);
     const dots = colors.map(color => `<i style="--dot:${escapeHtml(color)}"></i>`).join('');
     return `<button type="button" data-palette-swatch="${escapeHtml(name)}" aria-label="${escapeHtml(label)} palette"><span class="palette-dots" aria-hidden="true">${dots}</span><span>${escapeHtml(label)}</span></button>`;
   }).join('');
+  if (els.paletteSelect) {
+    els.paletteSelect.innerHTML = Object.keys(PALETTES).map(name => (
+      `<option value="${escapeHtml(name)}">${escapeHtml(paletteLabel(name))}</option>`
+    )).join('');
+  }
   metrics.paletteSwatchButtonCount = Object.keys(PALETTES).length;
   return true;
 }
 
 function syncPaletteControls() {
   if (els.paletteSelect) els.paletteSelect.value = state.palette;
-  const label = PALETTE_LABELS[state.palette] || state.palette;
+  const label = paletteLabel(state.palette);
   if (els.paletteOutput) els.paletteOutput.textContent = label;
   if (els.paletteSwatchGrid) {
     els.paletteSwatchGrid.querySelectorAll('[data-palette-swatch]').forEach(button => {
@@ -2575,7 +2675,7 @@ function selectPaletteSwatch(name) {
   metrics.paletteSwatchSelectCount++;
   metrics.paletteSwatchSyncSkipCount++;
   metrics.lastPaletteSwatch = state.palette;
-  metrics.lastPaletteSwatchLabel = PALETTE_LABELS[state.palette] || state.palette;
+  metrics.lastPaletteSwatchLabel = paletteLabel(state.palette);
   metrics.lastPaletteSwatchMs = performance.now();
   showStatus(`Palette: ${metrics.lastPaletteSwatchLabel}`);
   return result;
@@ -2610,6 +2710,32 @@ function syncFxPresetControls() {
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
+  return true;
+}
+
+function colorSpeedLabel(value) {
+  if (value < 0.5) return 'Slow';
+  if (value < 1) return 'Medium';
+  return 'Fast';
+}
+
+function syncVisualRangeOutputs() {
+  if (els.backgroundBrightnessOutput) els.backgroundBrightnessOutput.textContent = `${Math.round(state.backgroundBrightness * 100)}%`;
+  if (els.pointSizeOutput) els.pointSizeOutput.textContent = `${Math.round(state.pointScale * 100)}%`;
+  if (els.pointOpacityOutput) els.pointOpacityOutput.textContent = `${Math.round(state.pointOpacity * 100)}%`;
+  if (els.colorSpeedOutput) els.colorSpeedOutput.textContent = colorSpeedLabel(state.colorSpeed);
+  if (els.fxStrengthOutput) els.fxStrengthOutput.textContent = `${Math.round(state.fxStrength * 100)}%`;
+  return true;
+}
+
+function syncVisualControls() {
+  if (els.backgroundSelect) els.backgroundSelect.value = state.background;
+  if (els.backgroundBrightness) els.backgroundBrightness.value = String(state.backgroundBrightness);
+  if (els.pointSize) els.pointSize.value = String(state.pointScale);
+  if (els.pointOpacity) els.pointOpacity.value = String(state.pointOpacity);
+  if (els.colorSpeed) els.colorSpeed.value = String(state.colorSpeed);
+  if (els.fxStrength) els.fxStrength.value = String(state.fxStrength);
+  syncVisualRangeOutputs();
   return true;
 }
 
@@ -3110,7 +3236,7 @@ function syncControlValues() {
   els.rootOutput.textContent = state.selectedRoot == null ? 'None' : `#${state.selectedRoot}`;
   syncRootJumpControls();
   els.zoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
-  els.pointSize.value = String(state.pointScale);
+  syncVisualControls();
   els.ringsToggle.checked = state.showRings;
   syncFxPresetControls();
   syncMotionPresetControls();
@@ -3985,7 +4111,7 @@ function preparePoints() {
       ring: p.ring,
       norm,
       baseSize: 3.4 + (1 - norm) * 5.2,
-      baseFillSlot: p.ring / ringBucketCount < 0.5 ? 0 : 1,
+      baseFillSlot: Math.min(BASE_POINT_BUCKET_COUNT - 1, Math.floor((p.ring / ringBucketCount) * BASE_POINT_BUCKET_COUNT)),
       drawMask: 0,
       sx: 0,
       sy: 0,
@@ -4091,7 +4217,7 @@ function render() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#07070c';
+    ctx.fillStyle = backgroundPaint(w, h);
     ctx.fillRect(0, 0, w, h);
 
     const layout = layoutForCanvas();
@@ -4160,6 +4286,7 @@ function render() {
       modelEdgeStrokes: 0,
       modelFaces: 0,
       modelFaceFills: 0,
+      modelVertexFills: 0,
     };
 
     if (state.modelMode === 'platonic') {
@@ -4299,6 +4426,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.modelProjectedVertices = drawStats.modelProjectedVertices || 0;
   metrics.modelEdgeStrokes = drawStats.modelEdgeStrokes || 0;
   metrics.modelFaceFills = drawStats.modelFaceFills || 0;
+  metrics.modelVertexFills = drawStats.modelVertexFills || 0;
   if (state.modelMode !== 'e8_2d') metrics.modelRenderCount++;
   if (state.modelMode === 'e8_3d') metrics.e8Projection3DCount++;
   if (state.modelMode === 'platonic') metrics.platonicDrawCount++;
@@ -4497,19 +4625,6 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   drawStats.modelEdgeStrokes = shape.edges?.length ? 1 : 0;
   ctx.restore();
 
-  const ordered = projected
-    .map((point, idx) => ({ point, idx }))
-    .sort((a, b) => a.point.z - b.point.z);
-  ctx.save();
-  for (const entry of ordered) {
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.07 : 1;
-    const radius = Math.max(3.2, 5.8 * (0.8 + entry.point.perspective * 0.3) * state.pointScale * pulse);
-    ctx.beginPath();
-    ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
-    ctx.fillStyle = paletteSet.colors[entry.idx % paletteSet.colors.length];
-    ctx.fill();
-  }
-  ctx.restore();
   return frame;
 }
 
@@ -4588,7 +4703,7 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   ctx.save();
   for (const entry of ordered) {
     const cls = classes ? classes[entry.idx] || 0 : entry.idx;
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 : 1;
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
     const baseRadius = polyName === '600cell' ? 3.1 : 4.8;
     const radius = Math.max(2.4, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
     ctx.beginPath();
@@ -4682,7 +4797,7 @@ function drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   ctx.font = '700 13px system-ui, sans-serif';
   for (const point of projected) {
     const isSelected = point.index === selectedNode;
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.5) * 0.06 : 1;
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.5) * 0.06 * state.fxStrength : 1;
     const radius = (isSelected ? 17 : 14) * state.pointScale * pulse;
     if (isSelected && !interactionLiteFrame) {
       ctx.beginPath();
@@ -4853,7 +4968,7 @@ function drawPetrieCycle(paletteSet) {
 function drawBasePointBatches(palette) {
   const stats = { points: 0, fills: 0, buckets: 0 };
   ctx.save();
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = state.pointOpacity;
   for (let slot = 0; slot < basePointBuckets.length; slot++) {
     const batch = basePointBuckets[slot];
     if (!batch.length) continue;
@@ -4863,7 +4978,7 @@ function drawBasePointBatches(palette) {
       ctx.arc(p.sx, p.sy, p.size, 0, TAU);
       stats.points++;
     }
-    ctx.fillStyle = palette[slot] || palette[0];
+    ctx.fillStyle = palette[slot % palette.length] || palette[0];
     ctx.fill();
     stats.fills++;
     stats.buckets++;
@@ -4873,7 +4988,7 @@ function drawBasePointBatches(palette) {
 }
 
 function basePointFill(p, palette) {
-  return palette[p.baseFillSlot] || palette[0];
+  return palette[p.baseFillSlot % palette.length] || palette[0];
 }
 
 function drawPoint(p, paletteSet, mask, skipGlow = false) {
@@ -4884,20 +4999,22 @@ function drawPoint(p, paletteSet, mask, skipGlow = false) {
   const antipode = !!(mask & DRAW_ANTIPODE);
   const inPetrie = !!(mask & DRAW_PETRIE);
   const fill = selected || neighbor ? palette[2] : antipode ? palette[1] : inSubset || inPetrie ? palette[2] : basePointFill(p, palette);
-  const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.06 : 1;
+  const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.06 * state.fxStrength : 1;
   const radius = (selected ? p.size + 5 : neighbor ? p.size + 2.5 : inSubset ? p.size + 2 : antipode ? p.size + 1.5 : inPetrie ? p.size + 1 : p.size) * pulse;
   let fills = 0;
   if (!skipGlow && (inSubset || selected || neighbor || antipode || inPetrie)) {
     ctx.beginPath();
     ctx.arc(p.sx, p.sy, radius + 5, 0, TAU);
     ctx.fillStyle = selected ? paletteSet.glowSelected : neighbor ? paletteSet.glowNeighbor : antipode ? paletteSet.glowAntipode : inSubset ? paletteSet.glowSubset : paletteSet.glowPetrie;
+    ctx.globalAlpha = Math.min(1, state.fxStrength);
     ctx.fill();
+    ctx.globalAlpha = 1;
     fills++;
   }
   ctx.beginPath();
   ctx.arc(p.sx, p.sy, radius, 0, TAU);
   ctx.fillStyle = fill;
-  ctx.globalAlpha = selected ? 1 : neighbor ? 0.96 : inSubset ? 0.92 : antipode ? 0.88 : inPetrie ? 0.9 : 0.72;
+  ctx.globalAlpha = selected ? 1 : neighbor ? 0.96 : inSubset ? 0.92 : antipode ? 0.88 : inPetrie ? 0.9 : state.pointOpacity;
   ctx.fill();
   fills++;
   ctx.globalAlpha = 1;
@@ -4910,6 +5027,21 @@ function colorWithAlpha(hex, alpha) {
   const g = parseInt(c.slice(2, 4), 16);
   const b = parseInt(c.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function scaleHexColor(hex, factor) {
+  const c = String(hex || '#000000').replace('#', '');
+  const channels = [0, 2, 4].map(offset => clamp(Math.round(parseInt(c.slice(offset, offset + 2), 16) * factor), 0, 255));
+  return `rgb(${channels[0]},${channels[1]},${channels[2]})`;
+}
+
+function backgroundPaint(width, height) {
+  const preset = BACKGROUNDS[state.background] || BACKGROUNDS[DEFAULT_STATE.background];
+  const brightness = state.backgroundBrightness;
+  const gradient = ctx.createRadialGradient(width * 0.5, height * 0.4, 0, width * 0.5, height * 0.45, Math.max(width, height) * 0.82);
+  gradient.addColorStop(0, scaleHexColor(preset.color, brightness * 1.45));
+  gradient.addColorStop(1, scaleHexColor(preset.color, brightness * 0.52));
+  return gradient;
 }
 
 function requestRender(reason = 'render') {
@@ -5081,7 +5213,7 @@ function startMotion() {
       }
     }
     if (state.autoColor || state.softFx) {
-      stylePhase = (stylePhase + dt * (state.autoColor ? 0.72 : 0.42)) % 4096;
+      stylePhase = (stylePhase + dt * (state.autoColor ? state.colorSpeed : 0.42 * state.fxStrength)) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
       if (state.softFx) metrics.softFxFrameCount++;
     }

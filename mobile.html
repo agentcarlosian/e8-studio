@@ -44,7 +44,7 @@
 
       <nav class="sheet-tabs" aria-label="Settings sections">
         <button class="active" type="button" data-section-tab="view">View</button>
-        <button type="button" data-section-tab="style">Style</button>
+        <button type="button" data-section-tab="style">Visuals</button>
         <button type="button" data-section-tab="motion">Motion</button>
         <button type="button" data-section-tab="quality">Quality</button>
         <button type="button" data-section-tab="info">Info</button>
@@ -200,7 +200,7 @@
         </section>
 
         <section class="settings-section" data-section="style">
-          <h2>Style</h2>
+          <h2>Visuals</h2>
           <div class="control-stack">
             <div class="palette-panel" aria-label="Palette swatches">
               <div class="browse-head">
@@ -210,17 +210,40 @@
               <div id="palette-swatch-grid" class="palette-swatch-grid"></div>
             </div>
             <label class="field">
-              <span>Palette</span>
-              <select id="palette-select">
-                <option value="gold">Gold</option>
-                <option value="cyan">Cyan</option>
-                <option value="mono">Mono</option>
-                <option value="ember">Ember</option>
+              <span>All palettes</span>
+              <select id="palette-select"></select>
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Color shift</strong>
+                <small>Move automatically through the full palette catalog.</small>
+              </span>
+              <input id="auto-color-toggle" type="checkbox">
+            </label>
+            <label class="field">
+              <span class="field-heading">Shift speed <output id="color-speed-output">Medium</output></span>
+              <input id="color-speed" type="range" min="0.25" max="1.5" step="0.05">
+            </label>
+            <label class="field">
+              <span>Background</span>
+              <select id="background-select">
+                <option value="void">Void</option>
+                <option value="space">Space</option>
+                <option value="eclipse">Eclipse</option>
+                <option value="cloud">Cloud</option>
               </select>
             </label>
             <label class="field">
-              <span>Point size</span>
+              <span class="field-heading">Background brightness <output id="background-brightness-output">70%</output></span>
+              <input id="background-brightness" type="range" min="0.3" max="1.2" step="0.05">
+            </label>
+            <label class="field">
+              <span class="field-heading">Point size <output id="point-size-output">100%</output></span>
               <input id="point-size" type="range" min="0.7" max="1.8" step="0.1">
+            </label>
+            <label class="field">
+              <span class="field-heading">Opacity <output id="point-opacity-output">72%</output></span>
+              <input id="point-opacity" type="range" min="0.3" max="1" step="0.05">
             </label>
             <label class="toggle-row">
               <span>
@@ -238,17 +261,14 @@
             </div>
             <label class="toggle-row">
               <span>
-                <strong>Color cycle</strong>
-                <small>Auto-shift the palette while the canvas is idle.</small>
-              </span>
-              <input id="auto-color-toggle" type="checkbox">
-            </label>
-            <label class="toggle-row">
-              <span>
                 <strong>Soft FX</strong>
                 <small>Add a lightweight pulse to points and models.</small>
               </span>
               <input id="soft-fx-toggle" type="checkbox">
+            </label>
+            <label class="field">
+              <span class="field-heading">FX strength <output id="fx-strength-output">100%</output></span>
+              <input id="fx-strength" type="range" min="0.25" max="1.5" step="0.05">
             </label>
             <div class="sheet-action" aria-label="Discovery">
               <div>
