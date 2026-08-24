@@ -146,7 +146,8 @@ const RENDER_PALETTES = Object.fromEntries(
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
-const SUPPORTED_MODEL_MODES = new Set(['e8_2d', 'e8_3d', 'platonic', 'poly4d', 'dynkin']);
+const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'dynkin']);
+const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
 const STAR_SHAPES = new Set([
   'stellated_dodecahedron',
   'great_dodecahedron',
@@ -164,8 +165,9 @@ const SUPPORTED_SHAPES = new Set([
 const SUPPORTED_POLYTOPES4D = new Set(['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell']);
 const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['E6', 'E7', 'E8']);
 const MODEL_LABELS = {
+  bloom: 'Bloom',
   e8_2d: 'E8',
-  e8_3d: 'E8 3D',
+  sdf: 'SDF',
   platonic: 'Solid',
   poly4d: '4D',
   dynkin: 'Dynkin',
@@ -234,7 +236,8 @@ const DRAW_PETRIE = 16;
 const BASE_POINT_BUCKET_COUNT = 5;
 const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'e8_2d', shape: 'icosahedron' },
-  { modelMode: 'e8_3d', shape: 'icosahedron' },
+  { modelMode: 'bloom', shape: 'icosahedron' },
+  { modelMode: 'sdf', shape: 'icosahedron' },
   { modelMode: 'platonic', shape: 'tetrahedron' },
   { modelMode: 'platonic', shape: 'cube' },
   { modelMode: 'platonic', shape: 'octahedron' },
@@ -250,17 +253,14 @@ const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'dynkin', dynkinDiagram: 'E8' },
 ];
 const SCENE_PRESETS = [
+  { id: 'bloom', label: 'Bloom', target: { modelMode: 'bloom' } },
   { id: 'e8_2d', label: 'E8', target: { modelMode: 'e8_2d' } },
-  { id: 'e8_3d', label: 'E8 3D', target: { modelMode: 'e8_3d' } },
+  { id: 'sdf', label: 'SDF', target: { modelMode: 'sdf' } },
   { id: 'tetrahedron', label: 'Tet', target: { modelMode: 'platonic', shape: 'tetrahedron' } },
   { id: 'cube', label: 'Cube', target: { modelMode: 'platonic', shape: 'cube' } },
   { id: 'octahedron', label: 'Oct', target: { modelMode: 'platonic', shape: 'octahedron' } },
   { id: 'dodecahedron', label: 'Dod', target: { modelMode: 'platonic', shape: 'dodecahedron' } },
   { id: 'icosahedron', label: 'Ico', target: { modelMode: 'platonic', shape: 'icosahedron' } },
-  { id: 'stellated-dodecahedron', label: 'sDod', target: { modelMode: 'platonic', shape: 'stellated_dodecahedron' } },
-  { id: 'great-dodecahedron', label: 'gDod', target: { modelMode: 'platonic', shape: 'great_dodecahedron' } },
-  { id: 'great-icosahedron', label: 'gIco', target: { modelMode: 'platonic', shape: 'great_icosahedron' } },
-  { id: 'great-stellated-dodecahedron', label: 'gsDod', target: { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' } },
   { id: '5cell', label: '5-cell', target: { modelMode: 'poly4d', polytope4d: '5cell' } },
   { id: 'tesseract', label: 'Tess', target: { modelMode: 'poly4d', polytope4d: 'tesseract' } },
   { id: '16cell', label: '16', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
@@ -279,12 +279,20 @@ const MOBILE_TOUR_STEPS = [
     detail: 'This is the fast default phone scene.',
   },
   {
-    id: 'e8-depth',
-    label: 'E8 3D',
-    target: { modelMode: 'e8_3d' },
-    title: 'E8 depth view',
-    body: 'The same roots are projected with depth so the lattice structure feels spatial without WebGL.',
-    detail: 'Drag or enable Orbit after the tour for movement.',
+    id: 'designed-bloom',
+    label: 'Bloom',
+    target: { modelMode: 'bloom' },
+    title: 'Designed Bloom',
+    body: 'Fine E8 root filaments open into a luminous depth cloud, echoing the desktop Bloom without its heavier shader stack.',
+    detail: 'Drag or enable Motion to turn the bloom through depth.',
+  },
+  {
+    id: 'distance-field',
+    label: 'SDF',
+    target: { modelMode: 'sdf' },
+    title: 'E8 distance field',
+    body: 'All 240 Coxeter-plane roots become smoothly joined, shaded spheres in an implicit surface.',
+    detail: 'This preserves the desktop SDF composition on a lightweight phone height field.',
   },
   {
     id: 'platonic-bridge',
@@ -313,11 +321,12 @@ const MOBILE_TOUR_STEPS = [
 ];
 const MODEL_SHORTCUT_GROUPS = [
   {
-    id: 'e8',
-    label: 'E8',
+    id: 'views',
+    label: 'Views',
     items: [
-      { id: 'e8_2d', label: '2D', name: 'E8 Coxeter', target: { modelMode: 'e8_2d' } },
-      { id: 'e8_3d', label: '3D', name: 'E8 3D roots', target: { modelMode: 'e8_3d' } },
+      { id: 'bloom', label: 'Bloom', name: 'Designed Bloom', target: { modelMode: 'bloom' } },
+      { id: 'e8_2d', label: 'E8', name: 'E8 Coxeter', target: { modelMode: 'e8_2d' } },
+      { id: 'sdf', label: 'SDF', name: 'E8 distance field', target: { modelMode: 'sdf' } },
     ],
   },
   {
@@ -457,6 +466,8 @@ let metrics = {
   modelFaceFills: 0,
   modelVertexFills: 0,
   e8Projection3DCount: 0,
+  bloomDrawCount: 0,
+  sdfDrawCount: 0,
   platonicDrawCount: 0,
   polytope4DDrawCount: 0,
   dynkinDrawCount: 0,
@@ -797,6 +808,12 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let sdfRasterCanvas;
+let sdfRasterContext;
+let sdfRasterImageData;
+let sdfHeightField;
+let sdfCoverageField;
+let sdfRingField;
 let canvasCssWidth = 0;
 let canvasCssHeight = 0;
 let canvasTransformScale = null;
@@ -924,6 +941,7 @@ function flushSave() {
 }
 
 function normalizeState(next) {
+  if (LEGACY_MODEL_MODE_MAP[next.modelMode]) next.modelMode = LEGACY_MODEL_MODE_MAP[next.modelMode];
   if (LEGACY_BACKGROUND_MAP[next.background]) next.background = LEGACY_BACKGROUND_MAP[next.background];
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
   if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
@@ -958,7 +976,7 @@ function normalizeState(next) {
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
   if (typeof next.autoColor !== 'boolean') next.autoColor = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
-  if (next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
+  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
   return next;
 }
 
@@ -1354,7 +1372,7 @@ function handleInfoAction(action) {
 }
 
 function selectedRootForModelMode(modelMode) {
-  if (modelMode === 'platonic' || modelMode === 'poly4d') return null;
+  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d') return null;
   if (modelMode === 'dynkin') return simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null;
   return state.selectedRoot;
 }
@@ -1596,11 +1614,16 @@ function activeGeometryRecord() {
   const e8 = data?.e8;
   if (!e8) return null;
   const subset = [...rootSubset()];
+  const presentation = state.modelMode === 'bloom'
+    ? { name: 'e8-designed-bloom', label: 'Designed Bloom' }
+    : state.modelMode === 'sdf'
+      ? { name: 'e8-distance-field', label: 'E8 SDF' }
+      : { name: 'e8-coxeter', label: 'E8 Coxeter' };
   return {
     ...base,
     kind: 'e8-root-system',
-    name: state.modelMode === 'e8_3d' ? 'e8-3d-roots' : 'e8-coxeter',
-    label: state.modelMode === 'e8_3d' ? 'E8 3D roots' : 'E8 Coxeter',
+    name: presentation.name,
+    label: presentation.label,
     dimension: 8,
     count: points.length,
     roots8d: cloneJson(e8.roots8d || []),
@@ -1674,7 +1697,7 @@ function activeObjRecord() {
   }
 
   if (!points.length) return null;
-  const isDepth = state.modelMode === 'e8_3d';
+  const isDepth = state.modelMode === 'bloom';
   const vertices = points.map(point => {
     if (isDepth) {
       const v = e8ModelVector(point.idx);
@@ -1684,12 +1707,16 @@ function activeObjRecord() {
   });
   const record = {
     kind: isDepth ? 'e8-root-point-cloud-3d-obj' : 'e8-root-point-cloud-2d-obj',
-    name: isDepth ? 'e8-3d-roots' : 'e8-coxeter',
+    name: state.modelMode === 'bloom' ? 'e8-designed-bloom' : state.modelMode === 'sdf' ? 'e8-distance-field' : 'e8-coxeter',
     vertices,
     lines: state.showPetrie ? petrieCycle.map((idx, order) => [idx, petrieCycle[(order + 1) % petrieCycle.length]]) : [],
     faces: [],
     pointsOnly: true,
-    note: isDepth ? 'E8 roots exported with the mobile depth coordinate.' : 'E8 Coxeter roots exported on the z=0 plane.',
+    note: isDepth
+      ? 'E8 roots exported with the mobile depth coordinate underlying this presentation.'
+      : state.modelMode === 'sdf'
+        ? 'The 240 Coxeter-plane centres underlying the mobile SDF, exported on z=0.'
+        : 'E8 Coxeter roots exported on the z=0 plane.',
   };
   record.text = objTextFromParts(record);
   return record;
@@ -2576,8 +2603,9 @@ function resetView() {
 
 function scenePresetLabel(preset) {
   const target = preset?.target || {};
+  if (target.modelMode === 'bloom') return 'Designed Bloom';
   if (target.modelMode === 'e8_2d') return 'E8 Coxeter';
-  if (target.modelMode === 'e8_3d') return 'E8 3D roots';
+  if (target.modelMode === 'sdf') return 'E8 distance field';
   if (target.modelMode === 'platonic') return SHAPE_LABELS[target.shape] || preset.label;
   if (target.modelMode === 'poly4d') return POLYTOPE4D_LABELS[target.polytope4d] || preset.label;
   if (target.modelMode === 'dynkin') return `${DYNKIN_LABELS[target.dynkinDiagram] || preset.label} Dynkin`;
@@ -3359,13 +3387,22 @@ function activeSceneSummary() {
       infoCopy: `${label} shows simple roots as nodes and Cartan dot -1 relationships as edges. ${action}`,
     };
   }
-  if (state.modelMode === 'e8_3d') {
+  if (state.modelMode === 'bloom') {
     return {
-      chipStrong: MODEL_LABELS.e8_3d,
-      chipSmall: '240 roots / depth',
-      topbarLabel: 'E8 3D roots, 240 roots, depth projection',
-      canvasLabel: 'E8 3D root visualization with 240 roots and depth projection',
-      infoCopy: 'The same 240 E8 root vectors are given a lightweight depth coordinate for phone inspection. Tap a root for McKay, Cartan, neighbor, opposite-root, and 8D coordinate context.',
+      chipStrong: MODEL_LABELS.bloom,
+      chipSmall: '240 / bloom',
+      topbarLabel: 'Designed Bloom, 240 E8 roots and luminous filaments',
+      canvasLabel: 'Designed Bloom visualization with 240 E8 roots in a luminous depth cloud',
+      infoCopy: 'Designed Bloom opens the 240 E8 roots into a fine depth cloud with luminous root filaments. It keeps the desktop Bloom identity on the lightweight mobile Canvas path, and roots remain tappable for mathematical context.',
+    };
+  }
+  if (state.modelMode === 'sdf') {
+    return {
+      chipStrong: MODEL_LABELS.sdf,
+      chipSmall: 'implicit surface',
+      topbarLabel: 'E8 SDF, 240 smoothly joined root spheres',
+      canvasLabel: 'E8 signed-distance-field visualization with 240 fused Coxeter-plane root spheres',
+      infoCopy: 'The SDF view smoothly joins all 240 Coxeter-plane root spheres into one shaded implicit surface. It preserves the desktop raymarcher composition at a conservative internal resolution for phone performance.',
     };
   }
   return {
@@ -3460,11 +3497,17 @@ function activeCuriosityNotes() {
       body: 'The 240 E8 roots land in eight rings of 30 in this projection.',
       detail: 'Petrie and mirror overlays expose different slices of the same root system.',
     });
-  } else if (state.modelMode === 'e8_3d') {
+  } else if (state.modelMode === 'bloom') {
     notes.push({
-      title: 'Depth view',
-      body: 'E8 3D reuses the same 240 roots and gives them a phone-friendly depth coordinate.',
-      detail: 'Tap still selects roots; drag and Motion rotate the depth cue.',
+      title: 'Designed Bloom',
+      body: 'The same 240 roots become a luminous depth cloud joined by a restrained sample of Cartan filaments.',
+      detail: 'Tap still selects roots; drag and Motion rotate the bloom.',
+    });
+  } else if (state.modelMode === 'sdf') {
+    notes.push({
+      title: 'Distance field',
+      body: 'The 240 Coxeter roots blend into a continuously shaded implicit surface rather than another point rendering.',
+      detail: 'A compact height field mirrors the desktop sphere union while remaining responsive.',
     });
   } else if (state.modelMode === 'platonic') {
     notes.push({
@@ -3528,6 +3571,8 @@ function learnTopicById(id) {
 }
 
 function sceneLearnTopicId() {
+  if (state.modelMode === 'bloom') return 'designed-bloom';
+  if (state.modelMode === 'sdf') return 'distance-fields';
   if (state.modelMode === 'platonic') return 'why-five-solids';
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
   if (state.modelMode === 'dynkin') return 'roots-reflections';
@@ -4157,7 +4202,10 @@ function preparePoints() {
       r: p.r,
       ring: p.ring,
       norm,
-      baseSize: 3.4 + (1 - norm) * 5.2,
+      // Keep the dense inner Coxeter rings legible on a narrow screen. The
+      // former inverse-radius sizing made inner roots almost three times the
+      // diameter of outer roots, merging the centre into a bright disc.
+      baseSize: 1.9 + norm * 1.15,
       baseFillSlot: Math.min(BASE_POINT_BUCKET_COUNT - 1, Math.floor((p.ring / ringBucketCount) * BASE_POINT_BUCKET_COUNT)),
       drawMask: 0,
       sx: 0,
@@ -4336,6 +4384,11 @@ function render() {
       modelFaces: 0,
       modelFaceFills: 0,
       modelVertexFills: 0,
+      minPointRadius: null,
+      maxPointRadius: null,
+      sdfRasterSize: 0,
+      sdfPixels: 0,
+      sdfSpheres: 0,
     };
 
     if (state.modelMode === 'platonic') {
@@ -4356,10 +4409,16 @@ function render() {
       return;
     }
 
-    if (state.modelMode === 'e8_3d') {
-      projectE83DIntoCache(layout, drawStats);
+    if (state.modelMode === 'bloom') {
+      projectBloomIntoCache(layout, drawStats);
       const projectedAllFrame = projectedPointFrameMetrics(allRootList);
-      drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
+      drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
+      completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
+      return;
+    }
+
+    if (state.modelMode === 'sdf') {
+      const projectedAllFrame = drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -4457,7 +4516,13 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.lastRenderAllFrame = projectedAllFrame;
   metrics.lastRenderFrameSource = state.modelMode === 'e8_2d' ? 'projected-points' : state.modelMode;
   metrics.renderFrameReuseCount++;
-  metrics.lastProjectionSource = state.modelMode === 'e8_2d' ? 'direct-point-fields' : 'model-projection';
+  metrics.lastProjectionSource = state.modelMode === 'e8_2d'
+    ? 'direct-point-fields'
+    : state.modelMode === 'bloom'
+      ? 'bloom-depth-points'
+      : state.modelMode === 'sdf'
+        ? 'sdf-raster'
+        : 'model-projection';
   metrics.lastProjectionCount = drawStats.projectedPoints || drawStats.modelProjectedVertices || 0;
   metrics.lastAllFrameWithinView = !!projectedAllFrame?.withinView;
   metrics.lastModelMode = state.modelMode;
@@ -4477,7 +4542,11 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.modelFaceFills = drawStats.modelFaceFills || 0;
   metrics.modelVertexFills = drawStats.modelVertexFills || 0;
   if (state.modelMode !== 'e8_2d') metrics.modelRenderCount++;
-  if (state.modelMode === 'e8_3d') metrics.e8Projection3DCount++;
+  if (state.modelMode === 'bloom') {
+    metrics.e8Projection3DCount++;
+    metrics.bloomDrawCount++;
+  }
+  if (state.modelMode === 'sdf') metrics.sdfDrawCount++;
   if (state.modelMode === 'platonic') metrics.platonicDrawCount++;
   if (state.modelMode === 'poly4d') metrics.polytope4DDrawCount++;
   if (state.modelMode === 'dynkin') metrics.dynkinDrawCount++;
@@ -4509,6 +4578,8 @@ function projectPointsIntoCache(layout, drawStats) {
     p.sx = originX + x * scale;
     p.sy = originY + y * scale;
     p.size = p.baseSize * pointScale;
+    drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
+    drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.baseSizeCacheHits++;
   }
@@ -4548,22 +4619,24 @@ function e8ModelVector(index) {
   return { x: (p?.x || 0) * 0.92, y: (p?.y || 0) * 0.92, z };
 }
 
-function projectE83DIntoCache(layout, drawStats) {
+function projectBloomIntoCache(layout, drawStats) {
   const pointScale = state.pointScale;
   for (const p of points) {
     const v = e8ModelVector(p.idx);
-    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.92);
+    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.98);
     p.sx = projected.x;
     p.sy = projected.y;
     p.depth = projected.z;
-    p.size = Math.max(2.3, p.baseSize * pointScale * (0.72 + projected.perspective * 0.38));
+    p.size = Math.max(1.15, (1.15 + p.norm * 0.72) * pointScale * (0.74 + projected.perspective * 0.34));
+    drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
+    drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.modelProjectedVertices++;
     drawStats.baseSizeCacheHits++;
   }
 }
 
-function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
+function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
   if (visibleContext && !interactionLiteFrame) {
     const rayStats = drawNeighborRays(visibleContext, paletteSet);
     drawStats.rays = rayStats.rays;
@@ -4573,7 +4646,33 @@ function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactio
   else if (visibleContext) {
     drawStats.raysSkippedForInteraction = visibleContext.neighborCount;
   }
+
+  // A restrained sample of Cartan-neighbor links supplies the filament
+  // structure that distinguishes Bloom from a generic 3D point cloud.
+  let filaments = 0;
+  if (!interactionLiteFrame) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.13;
+    ctx.strokeStyle = paletteSet.colors[1] || paletteSet.colors[0];
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    for (let index = 0; index < points.length; index += 2) {
+      const point = points[index];
+      const neighbors = point.neighbors || [];
+      const neighbor = points[neighbors[(index * 13) % Math.max(1, neighbors.length)]];
+      if (!neighbor) continue;
+      ctx.moveTo(point.sx, point.sy);
+      ctx.lineTo(neighbor.sx, neighbor.sy);
+      filaments++;
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   const ordered = [...points].sort((a, b) => (a.depth || 0) - (b.depth || 0));
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
   for (const p of ordered) {
     const mask =
       (state.highlightSubset && subset.has(p.idx) ? DRAW_SUBSET : 0) |
@@ -4593,12 +4692,162 @@ function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactio
     if (mask && !interactionLiteFrame) {
       drawStats.glowFills++;
       drawStats.alphaColorCacheHits++;
+      ctx.globalAlpha = 0.12 * state.fxStrength;
+      ctx.fillStyle = paletteSet.colors[2] || paletteSet.colors[0];
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, p.size + 4.5, 0, TAU);
+      ctx.fill();
     }
     drawStats.directPoints++;
     if (interactionLiteFrame && mask) drawStats.glowsSkippedForInteraction++;
-    drawStats.directPointFills += drawPoint(p, paletteSet, mask, interactionLiteFrame);
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + p.idx * 0.17) * 0.08 * state.fxStrength : 1;
+    ctx.globalAlpha = mask ? 0.96 : state.pointOpacity * (0.58 + (p.depth || 0) * 0.045);
+    ctx.fillStyle = paletteSet.colors[p.baseFillSlot % paletteSet.colors.length];
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(0.85, p.size * pulse), 0, TAU);
+    ctx.fill();
+    drawStats.directPointFills++;
   }
+  ctx.restore();
   drawStats.modelVertices = points.length;
+  drawStats.modelEdges = filaments;
+  drawStats.modelEdgeStrokes = filaments ? 1 : 0;
+}
+
+function ensureSdfRaster(size) {
+  if (!sdfRasterCanvas) {
+    sdfRasterCanvas = document.createElement('canvas');
+    sdfRasterContext = sdfRasterCanvas.getContext('2d', { alpha: true });
+  }
+  if (sdfRasterCanvas.width !== size || sdfRasterCanvas.height !== size || !sdfRasterImageData) {
+    sdfRasterCanvas.width = size;
+    sdfRasterCanvas.height = size;
+    sdfRasterImageData = sdfRasterContext.createImageData(size, size);
+    sdfHeightField = new Float32Array(size * size);
+    sdfCoverageField = new Float32Array(size * size);
+    sdfRingField = new Uint8Array(size * size);
+  }
+  return !!sdfRasterContext;
+}
+
+function colorChannels(hex) {
+  const value = String(hex || '#ffffff').replace('#', '').padEnd(6, 'f');
+  return [0, 2, 4].map(offset => parseInt(value.slice(offset, offset + 2), 16));
+}
+
+function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  const qualitySize = state.quality === 'sharp' ? 220 : state.quality === 'balanced' ? 168 : 132;
+  const rasterSize = interactionLiteFrame ? Math.min(104, qualitySize) : qualitySize;
+  if (!ensureSdfRaster(rasterSize)) return null;
+
+  const pixels = sdfRasterImageData.data;
+  sdfHeightField.fill(0);
+  sdfCoverageField.fill(0);
+  sdfRingField.fill(0);
+
+  // The desktop raymarcher is a smooth union of the 240 root spheres, not a
+  // generic decorative blob. Build the same Coxeter-plane surface as a small
+  // reusable height field: each root contributes a shaded spherical cap and
+  // nearby caps blend at their intersections. This keeps the view faithful
+  // while avoiding a costly 240-sphere raymarch in a phone WebView.
+  const phase = state.rotation + stylePhase * 0.015;
+  const cos = Math.cos(phase);
+  const sin = Math.sin(phase);
+  const half = rasterSize * 0.5;
+  const rootScale = rasterSize * 0.338;
+  const sphereRadius = rasterSize * 0.047;
+  const sphereRadius2 = sphereRadius * sphereRadius;
+  const smoothK = Math.max(0.8, sphereRadius * 0.22);
+  for (const point of points) {
+    const rotatedX = point.x * cos - point.y * sin;
+    const rotatedY = point.x * sin + point.y * cos;
+    const cx = half + rotatedX * rootScale;
+    const cy = half + rotatedY * rootScale;
+    const minX = Math.max(0, Math.floor(cx - sphereRadius - 1));
+    const maxX = Math.min(rasterSize - 1, Math.ceil(cx + sphereRadius + 1));
+    const minY = Math.max(0, Math.floor(cy - sphereRadius - 1));
+    const maxY = Math.min(rasterSize - 1, Math.ceil(cy + sphereRadius + 1));
+    for (let py = minY; py <= maxY; py++) {
+      const dy = py + 0.5 - cy;
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px + 0.5 - cx;
+        const distance2 = dx * dx + dy * dy;
+        if (distance2 > sphereRadius2) continue;
+        const offset = py * rasterSize + px;
+        const height = Math.sqrt(Math.max(0, sphereRadius2 - distance2));
+        const previous = sdfHeightField[offset];
+        if (previous <= 0) sdfHeightField[offset] = height;
+        else {
+          const difference = Math.abs(previous - height);
+          const blend = Math.max(0, smoothK - difference);
+          sdfHeightField[offset] = Math.max(previous, height) + blend * blend / (4 * smoothK);
+        }
+        const edgeDistance = sphereRadius - Math.sqrt(distance2);
+        sdfCoverageField[offset] = Math.max(sdfCoverageField[offset], clamp(edgeDistance * 1.7, 0, 1));
+        if (height >= previous) sdfRingField[offset] = point.ring;
+      }
+    }
+  }
+
+  const low = colorChannels(paletteSet.colors[0]);
+  const high = colorChannels(paletteSet.colors[Math.min(2, paletteSet.colors.length - 1)]);
+  let filledPixels = 0;
+  for (let py = 0; py < rasterSize; py++) {
+    for (let px = 0; px < rasterSize; px++) {
+      const offset = (py * rasterSize + px) * 4;
+      const fieldOffset = py * rasterSize + px;
+      const coverage = sdfCoverageField[fieldOffset];
+      if (coverage <= 0) {
+        pixels[offset] = 0;
+        pixels[offset + 1] = 0;
+        pixels[offset + 2] = 0;
+        pixels[offset + 3] = 0;
+        continue;
+      }
+      const leftHeight = sdfHeightField[py * rasterSize + Math.max(0, px - 1)];
+      const rightHeight = sdfHeightField[py * rasterSize + Math.min(rasterSize - 1, px + 1)];
+      const topHeight = sdfHeightField[Math.max(0, py - 1) * rasterSize + px];
+      const bottomHeight = sdfHeightField[Math.min(rasterSize - 1, py + 1) * rasterSize + px];
+      const normalX = clamp(leftHeight - rightHeight, -4.5, 4.5);
+      const normalY = clamp(topHeight - bottomHeight, -4.5, 4.5);
+      const normalZ = 2.4;
+      const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
+      const nx = normalX / normalLength;
+      const ny = normalY / normalLength;
+      const nz = normalZ / normalLength;
+      const diffuse = clamp(nx * -0.42 + ny * -0.58 + nz * 0.7, 0, 1);
+      const rim = clamp(1 - nz, 0, 1);
+      const contour = clamp(1 - coverage, 0, 1);
+      const paletteMix = clamp((sdfRingField[fieldOffset] / 7) * 0.78 + nx * 0.14 + 0.08, 0, 1);
+      const light = 0.24 + diffuse * 0.72 + rim * 0.24;
+      for (let channel = 0; channel < 3; channel++) {
+        const base = low[channel] + (high[channel] - low[channel]) * paletteMix;
+        pixels[offset + channel] = clamp(Math.round(base * light + 255 * contour * 0.22), 0, 255);
+      }
+      pixels[offset + 3] = Math.round(coverage * 255);
+      filledPixels++;
+    }
+  }
+  sdfRasterContext.putImageData(sdfRasterImageData, 0, 0);
+
+  const diameter = layout.scale * 2.42;
+  const left = layout.cx + state.panX - diameter * 0.5;
+  const top = layout.cy + state.panY - diameter * 0.5;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(sdfRasterCanvas, left, top, diameter, diameter);
+  ctx.restore();
+
+  drawStats.modelVertices = points.length;
+  drawStats.modelFaces = 1;
+  drawStats.modelFaceFills = 1;
+  drawStats.sdfRasterSize = rasterSize;
+  drawStats.sdfPixels = filledPixels;
+  drawStats.sdfSpheres = points.length;
+  return projectedModelFrameMetrics([
+    { x: left, y: top },
+    { x: left + diameter, y: top + diameter },
+  ]);
 }
 
 function normalizedPlatonicVerts(shape) {
@@ -5883,7 +6132,7 @@ function selectNearest(x, y) {
     selectDynkinNode(x, y);
     return;
   }
-  if (state.modelMode === 'platonic' || state.modelMode === 'poly4d') {
+  if (state.modelMode === 'sdf' || state.modelMode === 'platonic' || state.modelMode === 'poly4d') {
     clearSelection();
     return;
   }
@@ -6258,7 +6507,7 @@ function screenPointFor(point, layout = layoutForCanvas()) {
       };
     }
   }
-  if (state.modelMode === 'e8_3d') {
+  if (state.modelMode === 'bloom') {
     const v = e8ModelVector(point.idx);
     const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.92);
     return {
@@ -6349,8 +6598,11 @@ function modelInfoHtml() {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     return `<strong>${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin diagram</strong><small>${diagram?.nodes?.length || 0} simple roots | ${diagram?.edges?.length || 0} Cartan edges</small><small>Tap an E8 node to select its simple root context.</small>`;
   }
-  if (state.modelMode === 'e8_3d') {
-    return '<strong>E8 3D roots</strong><small>240 roots | depth projection from the E8 vectors</small><small>Tap a root to inspect McKay, Cartan, and neighbor context.</small>';
+  if (state.modelMode === 'bloom') {
+    return '<strong>Designed Bloom</strong><small>240 roots | luminous depth filaments</small><small>Tap a root to inspect McKay, Cartan, and neighbor context.</small>';
+  }
+  if (state.modelMode === 'sdf') {
+    return '<strong>E8 SDF</strong><small>240 smoothly joined root spheres</small><small>A lightweight mobile counterpart to the desktop raymarcher.</small>';
   }
   return 'No root selected.';
 }

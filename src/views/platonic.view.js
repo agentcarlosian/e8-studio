@@ -17,6 +17,15 @@ import { LineFXMaterial } from '../fx/fx-line-shader.js';
 // coordinates as the icosahedron/dodecahedron. See math/stellations.js.
 const STELLATION_SET = new Set(STELLATION_NAMES);
 
+// Self-intersecting star faces contain coplanar overlapping triangles. If
+// those transparent triangles write depth, tiny precision changes while the
+// model rotates decide which overlap wins and the flat regions visibly flash.
+// Convex solids still benefit from normal depth writes; stars must blend their
+// overlaps without modifying the depth buffer.
+export function shouldWritePlatonicFaceDepth(shapeName) {
+  return !STELLATION_SET.has(shapeName);
+}
+
 // ── Convex-hull face triangulation ─────────────────────────────────────────
 // The five convex Platonic solids are centred on the origin. Rather than trust
 // the `faces` arrays baked into data/platonic.json (which were generated wrong —
@@ -180,7 +189,8 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
         transparent: true,
         opacity: 0.7,  // high enough that each face is clearly distinct
         side: THREE.DoubleSide,
-        depthWrite: true,  // write to depth so back-faces don't bleed through
+        depthWrite: shouldWritePlatonicFaceDepth(shapeName),
+        depthTest: true,
       });
       group.add(new THREE.Mesh(faceGeo, faceMat));
     }

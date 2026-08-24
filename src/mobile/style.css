@@ -574,8 +574,8 @@ button:disabled {
   gap: 7px;
 }
 
-.model-shortcut-group[data-model-shortcut-group="e8"] .model-shortcut-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.model-shortcut-group[data-model-shortcut-group="views"] .model-shortcut-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .model-shortcut-group[data-model-shortcut-group="stars"] .model-shortcut-grid {
