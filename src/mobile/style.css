@@ -599,6 +599,10 @@ button:disabled {
 
 .view-actions .view-done-action {
   grid-column: 1 / -1;
+  border-color: rgba(244, 210, 122, 0.72);
+  background: var(--accent);
+  color: #08080d;
+  font-weight: 900;
 }
 
 .view-actions .wide-action:active {

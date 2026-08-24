@@ -1613,6 +1613,7 @@ def main() -> int:
                 const reset = document.querySelector('[data-action="reset-view"]');
                 const done = document.getElementById('settings-done');
                 const rect = element => element?.getBoundingClientRect();
+                const doneStyle = getComputedStyle(done);
                 return {
                     surprise: rect(surprise),
                     reset: rect(reset),
@@ -1621,11 +1622,15 @@ def main() -> int:
                     visualDuplicates: document.querySelectorAll('[data-section="style"] #surprise-button').length,
                     action: surprise?.dataset.viewAction,
                     fitAllCount: document.querySelectorAll('[data-view-action="fit-all"]').length,
-                    footerCount: document.querySelectorAll('.sheet-footer').length
+                    footerCount: document.querySelectorAll('.sheet-footer').length,
+                    doneLabel: done?.textContent.trim(),
+                    doneBackground: doneStyle.backgroundColor,
+                    doneColor: doneStyle.color
                 };
             }""")
             check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1, str(surprise_layout))
             check("Done replaces Fit all above the mobile navigation area", surprise_layout["fitAllCount"] == 0 and surprise_layout["footerCount"] == 0 and surprise_layout["done"]["height"] >= 40 and surprise_layout["done"]["width"] > surprise_layout["surprise"]["width"] * 1.8 and surprise_layout["done"]["y"] > surprise_layout["surprise"]["y"], str(surprise_layout))
+            check("Done has a visible yellow treatment", surprise_layout["doneLabel"] == "Done" and surprise_layout["doneBackground"] == "rgb(244, 210, 122)" and surprise_layout["doneColor"] == "rgb(8, 8, 13)", str(surprise_layout))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
             surprise_after = page.evaluate("""() => ({
