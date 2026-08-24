@@ -67,6 +67,9 @@ const MOTION_SPEED_PRESETS = [
 // cropped far beyond a phone screen.
 const AUTO_ZOOM_MIN = 0.7;
 const AUTO_ZOOM_MAX = 1.65;
+const MANUAL_ZOOM_MIN = 0.55;
+const STANDARD_ZOOM_MAX = 3.2;
+const E8_COXETER_ZOOM_MAX = 8;
 const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
   { id: 'clean', label: 'Static', autoColor: false, softFx: false },
@@ -1156,7 +1159,7 @@ function normalizeState(next) {
   next.sdfAniso = clamp(Number.isFinite(sdfAniso) ? sdfAniso : DEFAULT_STATE.sdfAniso, 0, 1);
   next.panX = Number(next.panX) || 0;
   next.panY = Number(next.panY) || 0;
-  next.zoom = clamp(Number(next.zoom) || 1, 0.55, 3.2);
+  next.zoom = clamp(Number(next.zoom) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(next.modelMode));
   if (next.selectedRoot != null) {
     const selected = Number(next.selectedRoot);
     next.selectedRoot = Number.isInteger(selected) && selected >= 0 && selected < 240 ? selected : null;
@@ -3410,7 +3413,12 @@ function syncCameraControls() {
   if (els.cameraRotationOutput) els.cameraRotationOutput.textContent = `${Math.round(rotationDegrees)}°`;
   if (els.cameraTilt) els.cameraTilt.value = String(Math.round(state.cameraTilt * 180 / Math.PI));
   if (els.cameraTiltOutput) els.cameraTiltOutput.textContent = `${Math.round(state.cameraTilt * 180 / Math.PI)}°`;
-  if (els.cameraZoom) els.cameraZoom.value = String(state.zoom);
+  if (els.cameraZoom) {
+    els.cameraZoom.min = String(MANUAL_ZOOM_MIN);
+    els.cameraZoom.max = String(zoomMaxForModel(state.modelMode));
+    els.cameraZoom.value = String(state.zoom);
+  }
+  if (els.zoomOutput) els.zoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
   if (els.cameraZoomOutput) els.cameraZoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
   if (els.cameraZoomAuto) {
     els.cameraZoomAuto.classList.toggle('active', state.autoZoom);
@@ -8648,7 +8656,11 @@ function updateGesture() {
   }
   gesture.moved = true;
   state.autoZoom = false;
-  state.zoom = clamp(gesture.zoom * (snap.distance / gesture.distance), 0.55, 3.2);
+  state.zoom = clamp(
+    gesture.zoom * (snap.distance / gesture.distance),
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   const zoomRatio = state.zoom / Math.max(0.001, gesture.zoom);
   const anchorX = gesture.centerX - gesture.originX - gesture.panX;
   const anchorY = gesture.centerY - gesture.originY - gesture.panY;
@@ -8671,14 +8683,18 @@ function gestureSnapshot() {
 
 function onWheel(event) {
   event.preventDefault();
-  const next = clamp(state.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.55, 3.2);
+  const next = clamp(
+    state.zoom * (event.deltaY > 0 ? 0.92 : 1.08),
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   markInteraction('wheel-zoom');
   setZoom(next);
 }
 
 function setZoom(value) {
   state.autoZoom = false;
-  state.zoom = clamp(Number(value) || 1, 0.55, 3.2);
+  state.zoom = clamp(Number(value) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(state.modelMode));
   markInteraction('zoom-control');
   saveState();
   syncControls();
@@ -8855,7 +8871,11 @@ function frameSdfModel(interactionType, options = {}) {
   const worldRadius = sdfWorldBoundsRadius();
   const focalPixels = window.innerHeight / (2 * Math.tan(SDF_FOV_RADIANS * 0.5));
   const requiredDistance = worldRadius * Math.sqrt(1 + (focalPixels / fitRadius) ** 2) + 0.02;
-  const nextZoom = clamp((SDF_BASE_CAMERA_DISTANCE / requiredDistance) ** 2, 0.55, 3.2);
+  const nextZoom = clamp(
+    (SDF_BASE_CAMERA_DISTANCE / requiredDistance) ** 2,
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   motionPhase = 0;
   setState({
     cameraPath: 'manual',
@@ -8906,7 +8926,11 @@ function frameModelBounds(modelBounds, interactionType, options = {}) {
   const fitH = Math.max(120, view.bottom - view.top);
   // Leave a small visual and floating-point margin. An exact edge-to-edge fit
   // can be reported outside the view by sub-pixel rounding and feels cramped.
-  const nextZoom = clamp(Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)) * 0.96, 0.55, 3.2);
+  const nextZoom = clamp(
+    Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)) * 0.96,
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   const nextLayout = layoutForCanvas(nextZoom);
   const targetX = (view.left + view.right) / 2;
   const targetY = (view.top + view.bottom) / 2;
@@ -9437,6 +9461,10 @@ function innerProduct(a, b) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function zoomMaxForModel(modelMode) {
+  return modelMode === 'e8_2d' ? E8_COXETER_ZOOM_MAX : STANDARD_ZOOM_MAX;
 }
 
 async function init() {
