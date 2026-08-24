@@ -33,6 +33,7 @@ const DEFAULT_STATE = {
   autoExtrude: false,
   autoModel: false,
   autoColor: false,
+  autoFx: false,
   colorSpeed: 0.72,
   softFx: false,
   fxMode: 'none',
@@ -70,6 +71,7 @@ const AUTO_ZOOM_MAX = 1.65;
 const MANUAL_ZOOM_MIN = 0.55;
 const STANDARD_ZOOM_MAX = 3.2;
 const E8_COXETER_ZOOM_MAX = 25;
+const FX_SHIFT_INTERVAL_S = 3.2;
 const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
   { id: 'clean', label: 'Static', autoColor: false, softFx: false },
@@ -552,6 +554,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'autoRotate',
   'autoModel',
   'autoColor',
+  'autoFx',
   'softFx',
   'fxMode',
   'showVertices',
@@ -696,6 +699,9 @@ let metrics = {
   paletteSwatchButtonCount: 0,
   paletteSwatchSelectCount: 0,
   paletteSwatchSyncSkipCount: 0,
+  paletteExpandToggleCount: 0,
+  lastPaletteExpanded: false,
+  lastPaletteExpandMs: null,
   lastPaletteSwatch: null,
   lastPaletteSwatchLabel: null,
   lastPaletteSwatchMs: null,
@@ -797,6 +803,10 @@ let metrics = {
   lastAutoModelSwitchMs: null,
   lastAutoModelTarget: null,
   autoColorFrameCount: 0,
+  autoFxFrameCount: 0,
+  fxShiftCount: 0,
+  lastFxShiftMode: null,
+  lastFxShiftMs: null,
   softFxFrameCount: 0,
   autoZoomFrameCount: 0,
   autoExtrudeFrameCount: 0,
@@ -1003,6 +1013,7 @@ let resetFeedbackTimer = null;
 let savePending = false;
 let saveRequestedAt = 0;
 let stylePhase = 0;
+let fxShiftElapsed = 0;
 let motionPhase = 0;
 let autoZoomPhaseOffset = 0;
 let autoExtrudePhaseOffset = 0;
@@ -1018,6 +1029,7 @@ let liveControlLiteRenderReason = null;
 let settingsDeferredRenderReason = null;
 let selectionUiDetailsDeferred = false;
 let lastSelectionDetailHtml = null;
+let paletteExpanded = false;
 let settingsCanvasResizeDeferred = false;
 let lastTap = null;
 let nativeBackHandlerInstalled = false;
@@ -1178,6 +1190,7 @@ function normalizeState(next) {
   if (typeof next.bloomTwinH4 !== 'boolean') next.bloomTwinH4 = true;
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
   if (typeof next.autoColor !== 'boolean') next.autoColor = false;
+  if (typeof next.autoFx !== 'boolean') next.autoFx = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
   if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
   if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
@@ -1291,6 +1304,7 @@ function cacheElements() {
   els.rootJumpOutput = document.getElementById('root-jump-output');
   els.zoomOutput = document.getElementById('zoom-output');
   els.paletteSwatchGrid = document.getElementById('palette-swatch-grid');
+  els.paletteExpandButton = document.getElementById('palette-expand-button');
   els.paletteOutput = document.getElementById('palette-output');
   els.paletteSelect = document.getElementById('palette-select');
   els.backgroundSelect = document.getElementById('background-select');
@@ -1307,6 +1321,7 @@ function cacheElements() {
   els.pointOpacityOutput = document.getElementById('point-opacity-output');
   els.ringsToggle = document.getElementById('rings-toggle');
   els.autoColorToggle = document.getElementById('auto-color-toggle');
+  els.autoFxToggle = document.getElementById('auto-fx-toggle');
   els.colorSpeed = document.getElementById('color-speed');
   els.colorSpeedOutput = document.getElementById('color-speed-output');
   els.softFxToggle = document.getElementById('soft-fx-toggle');
@@ -1444,6 +1459,11 @@ function bindEvents() {
       selectPaletteSwatch(paletteSwatch);
       return;
     }
+    const paletteAction = event.target.closest('[data-palette-action]')?.dataset.paletteAction;
+    if (paletteAction === 'toggle') {
+      togglePaletteExpanded();
+      return;
+    }
     const learnTopic = event.target.closest('[data-learn-topic]')?.dataset.learnTopic;
     if (learnTopic) {
       selectLearnTopic(learnTopic);
@@ -1563,6 +1583,7 @@ function bindEvents() {
   els.pointOpacity.addEventListener('change', () => commitLiveControl('point-opacity'));
   els.ringsToggle.addEventListener('change', () => setSettingState({ showRings: els.ringsToggle.checked }, 'rings-toggle'));
   els.autoColorToggle.addEventListener('change', () => setManualRuntimeState({ autoColor: els.autoColorToggle.checked }, 'auto-color-toggle', { syncFx: true, syncMotionPreset: true }));
+  els.autoFxToggle.addEventListener('change', () => setFxShiftEnabled(els.autoFxToggle.checked));
   els.colorSpeed.addEventListener('input', () => {
     previewState({ colorSpeed: Number(els.colorSpeed.value) }, 'color-speed', { render: false });
     syncVisualRangeOutputs();
@@ -2698,6 +2719,7 @@ function mobileSurprise() {
     autoExtrude: false,
     autoModel: false,
     autoColor: false,
+    autoFx: false,
     softFx: false,
     fxMode: randomDifferent(fxModes, state.fxMode),
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
@@ -2742,6 +2764,7 @@ function setAutoPreset(mode) {
       autoExtrude: false,
       autoModel: true,
       autoColor: true,
+      autoFx: false,
       softFx: true,
       cameraPath: 'spiral',
     };
@@ -2751,6 +2774,7 @@ function setAutoPreset(mode) {
       autoZoom: false,
       autoExtrude: false,
       autoModel: false,
+      autoFx: false,
       cameraPath: 'orbit',
     };
   } else {
@@ -2760,6 +2784,7 @@ function setAutoPreset(mode) {
       autoExtrude: false,
       autoModel: false,
       autoColor: false,
+      autoFx: false,
       softFx: false,
       cameraPath: 'manual',
     };
@@ -3038,7 +3063,27 @@ function renderPaletteSwatches() {
     )).join('');
   }
   metrics.paletteSwatchButtonCount = Object.keys(PALETTES).length;
+  syncPaletteExpansion();
   return true;
+}
+
+function syncPaletteExpansion() {
+  if (els.paletteSwatchGrid) els.paletteSwatchGrid.classList.toggle('expanded', paletteExpanded);
+  if (els.paletteExpandButton) {
+    els.paletteExpandButton.textContent = paletteExpanded ? 'Collapse' : 'Expand';
+    els.paletteExpandButton.setAttribute('aria-expanded', paletteExpanded ? 'true' : 'false');
+    els.paletteExpandButton.setAttribute('aria-label', paletteExpanded ? 'Collapse palette catalog' : 'Expand palette catalog');
+  }
+  return paletteExpanded;
+}
+
+function togglePaletteExpanded(force = null) {
+  paletteExpanded = typeof force === 'boolean' ? force : !paletteExpanded;
+  metrics.paletteExpandToggleCount++;
+  metrics.lastPaletteExpanded = paletteExpanded;
+  metrics.lastPaletteExpandMs = performance.now();
+  syncPaletteExpansion();
+  return paletteExpanded;
 }
 
 function syncPaletteControls() {
@@ -3180,6 +3225,7 @@ function syncFxSurface() {
 
 function syncFxModeControls() {
   const active = activeFxMode();
+  if (els.autoFxToggle) els.autoFxToggle.checked = state.autoFx;
   if (els.fxModeOutput) els.fxModeOutput.textContent = fxModeLabel(active);
   if (els.fxModeDescription) els.fxModeDescription.textContent = active.description;
   if (els.fxModeGrid) {
@@ -3204,8 +3250,30 @@ function selectFxMode(id) {
   metrics.lastFxMode = mode.id;
   metrics.lastFxModeLabel = fxModeLabel(mode);
   metrics.lastFxModeMs = performance.now();
+  fxShiftElapsed = 0;
   showStatus(`Effect: ${metrics.lastFxModeLabel}`);
   return result;
+}
+
+function setFxShiftEnabled(enabled) {
+  fxShiftElapsed = 0;
+  return setManualRuntimeState({ autoFx: !!enabled }, 'auto-fx-toggle', {
+    syncFxMode: true,
+    syncMotionPreset: true,
+  });
+}
+
+function advanceFxShift() {
+  const modes = MOBILE_FX_MODES.filter(mode => mode.id !== 'none');
+  const current = modes.findIndex(mode => mode.id === state.fxMode);
+  const next = modes[(current + 1 + modes.length) % modes.length] || modes[0];
+  if (!next) return false;
+  state.fxMode = next.id;
+  metrics.fxShiftCount++;
+  metrics.lastFxShiftMode = next.id;
+  metrics.lastFxShiftMs = performance.now();
+  syncFxModeControls();
+  return next.id;
 }
 
 function subsetChipLabel(name) {
@@ -3390,13 +3458,13 @@ function motionPresetLabel(preset) {
 }
 
 function activeMotionPreset() {
-  if (state.autoRotate && state.autoModel && state.autoColor && state.softFx && !state.autoZoom && !state.autoExtrude) {
+  if (state.autoRotate && state.autoModel && state.autoColor && !state.autoFx && state.softFx && !state.autoZoom && !state.autoExtrude) {
     return MOTION_PRESETS.find(preset => preset.id === 'showcase') || null;
   }
-  if (state.autoRotate && !state.autoModel && !state.autoZoom && !state.autoExtrude && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
+  if (state.autoRotate && !state.autoModel && !state.autoFx && !state.autoZoom && !state.autoExtrude && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
     return MOTION_PRESETS.find(preset => preset.id === 'orbit') || null;
   }
-  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.softFx) {
+  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.autoFx && !state.softFx) {
     return MOTION_PRESETS.find(preset => preset.id === 'still') || null;
   }
   return null;
@@ -3516,6 +3584,7 @@ function selectMotionPreset(id) {
     autoExtrude: state.autoExtrude,
     autoModel: state.autoModel,
     autoColor: state.autoColor,
+    autoFx: state.autoFx,
     softFx: state.softFx,
   };
   const result = setAutoPreset(preset.interaction);
@@ -3524,6 +3593,7 @@ function selectMotionPreset(id) {
     || previous.autoExtrude !== state.autoExtrude
     || previous.autoModel !== state.autoModel
     || previous.autoColor !== state.autoColor
+    || previous.autoFx !== state.autoFx
     || previous.softFx !== state.softFx;
   if (!changed) return result;
   metrics.motionPresetSelectCount++;
@@ -3651,6 +3721,7 @@ function scenePatchForTarget(target) {
     autoExtrude: false,
     autoModel: false,
     autoColor: false,
+    autoFx: false,
     softFx: false,
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
     rotation: 0,
@@ -3732,6 +3803,7 @@ function setScenePreset(targetOrIndex, options = {}) {
   // Keep those already-rendered controls truthful while the settings sheet is
   // open without paying for a full settings synchronization.
   syncFxPresetControls();
+  syncFxModeControls();
   syncMotionPresetControls();
   syncMotionSpeedControls();
   updateSelectionUI({ reason: interactionType });
@@ -4304,6 +4376,7 @@ function mobileTourPatchForTarget(target) {
     autoRotate: false,
     autoModel: false,
     autoColor: false,
+    autoFx: false,
     softFx: false,
     fxMode: DEFAULT_STATE.fxMode,
     bloomAuto: false,
@@ -4531,8 +4604,10 @@ function syncSubsetControls() {
   metrics.lastSubsetControlSyncMs = performance.now();
 }
 
-function openSettings(section = 'view') {
-  const target = SETTINGS_SECTIONS.has(section) ? section : 'view';
+function openSettings(section = null) {
+  const target = section == null
+    ? (activeSettingsSection() || 'view')
+    : (SETTINGS_SECTIONS.has(section) ? section : 'view');
   const wasOpen = isSettingsOpen();
   cancelQueuedRenderForSettings('settings-open');
   if (wasOpen) {
@@ -5245,6 +5320,7 @@ function render() {
       dynkinLabel: DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram,
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
+      autoFx: state.autoFx,
       softFx: state.softFx,
       fxMode: state.fxMode,
       stylePhase,
@@ -8361,7 +8437,7 @@ function autoMotionValue(min, max, phaseOffset) {
 
 function hasRuntimeAnimation() {
   const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -8411,9 +8487,17 @@ function startMotion() {
         advanceAutoModel();
       }
     }
+    if (state.autoFx) {
+      fxShiftElapsed += dt * state.colorSpeed;
+      metrics.autoFxFrameCount++;
+      if (fxShiftElapsed >= FX_SHIFT_INTERVAL_S) {
+        fxShiftElapsed %= FX_SHIFT_INTERVAL_S;
+        advanceFxShift();
+      }
+    }
     const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-    if (state.autoColor || state.softFx || nativeFxAnimation) {
-      const styleRate = state.autoColor ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
+    if (state.autoColor || state.autoFx || state.softFx || nativeFxAnimation) {
+      const styleRate = state.autoColor || state.autoFx ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
       stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
       if (state.softFx) metrics.softFxFrameCount++;
@@ -9510,6 +9594,9 @@ async function init() {
     selectModelShortcut,
     selectFxPreset,
     selectFxMode,
+    setFxShiftEnabled,
+    advanceFxShift,
+    togglePaletteExpanded,
     selectMotionPreset,
     selectLearnTopic,
     nextLearnTopic,

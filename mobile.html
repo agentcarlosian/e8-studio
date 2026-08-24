@@ -281,6 +281,7 @@
               <div class="browse-head">
                 <strong>Palette</strong>
                 <output id="palette-output">Gold</output>
+                <button id="palette-expand-button" class="panel-expand-button" type="button" data-palette-action="toggle" aria-expanded="false" aria-controls="palette-swatch-grid">Expand</button>
               </div>
               <div id="palette-swatch-grid" class="palette-swatch-grid"></div>
             </div>
@@ -321,6 +322,13 @@
               </div>
               <div id="fx-preset-grid" class="fx-preset-grid"></div>
             </div>
+            <label class="toggle-row">
+              <span>
+                <strong>FX shift</strong>
+                <small>Cycle automatically through effects using Shift speed.</small>
+              </span>
+              <input id="auto-fx-toggle" type="checkbox">
+            </label>
             <div class="fx-mode-panel" aria-label="Effects">
               <div class="browse-head">
                 <strong>Effects</strong>

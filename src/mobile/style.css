@@ -716,6 +716,14 @@ button:disabled {
   font-weight: 800;
 }
 
+.panel-expand-button {
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 900;
+}
+
 .field-heading {
   display: flex;
   align-items: center;
@@ -863,6 +871,10 @@ button:disabled {
   border-color: var(--accent);
   color: var(--ink);
   background: rgba(244, 210, 122, 0.12);
+}
+
+.palette-swatch-grid:not(.expanded) button:nth-child(n+7):not(.active) {
+  display: none;
 }
 
 .palette-dots {
