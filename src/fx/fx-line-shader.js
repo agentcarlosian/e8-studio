@@ -86,6 +86,13 @@ const LINE_FS = /* glsl */`
       // Glow: brighten the whole stroke and add a warm lift.
       col += col * uFXIntensity * 1.4 + vec3(0.15, 0.12, 0.05) * uFXIntensity;
     }
+    if (uFXMode == ${(FX_MODE.TRAIL)}) {
+      // Trail: a moving directional afterimage band along every chord.
+      float band = 0.5 + 0.5 * sin(dot(vWorldPos, vec3(3.2, 2.1, 1.3)) - uTime * 3.2);
+      vec3 echo = hsv2rgb(vec3(fract(band * 0.22 + uTime * 0.04), 0.72, 1.0));
+      col = mix(col * (0.45 + 0.55 * band), col + echo * 0.65, uFXIntensity);
+      a *= mix(1.0, 0.48 + 0.52 * band, uFXIntensity);
+    }
     if (uFXMode == ${(FX_MODE.PULSE)}) {
       // Pulse: breathing brightness along world radius.
       float p = 0.5 + 0.5 * sin(uTime * 3.14159);
@@ -115,6 +122,13 @@ const LINE_FS = /* glsl */`
       float s = sin(vWorldPos.x * 3.0 + vWorldPos.y * 2.0 + uTime * 2.0);
       col += vec3(s, sin(s + 2.094), sin(s + 4.188)) * ca;
     }
+    if (uFXMode == ${(FX_MODE.FOG)}) {
+      // Fog: retain structural visibility while receding chords cool and fade.
+      float depth = smoothstep(0.15, 2.8, abs(vWorldPos.z));
+      col = mix(col, vec3(0.34, 0.62, 0.82), depth * uFXIntensity * 0.65);
+      a *= 1.0 - depth * uFXIntensity * 0.62;
+      a = max(a, uOpacity * 0.22);
+    }
     if (uFXMode == ${(FX_MODE.HEAT)}) {
       // Heat: warm near origin, cool far.
       float dist = length(vWorldPos);
@@ -122,6 +136,12 @@ const LINE_FS = /* glsl */`
       vec3 cool = vec3(0.3, 0.5, 1.0);
       vec3 warm = vec3(1.0, 0.55, 0.15);
       col = mix(warm, cool, t) * (0.6 + length(col) * 0.5) * uFXIntensity + col * (1.0 - uFXIntensity);
+    }
+    if (uFXMode == ${(FX_MODE.EDGE_GLOW)}) {
+      // Lines are the model's edges: make this mode a direct structural lift.
+      float sweep = 0.65 + 0.35 * sin(length(vWorldPos.xy) * 7.0 - uTime * 2.0);
+      col = mix(col, vec3(0.75, 0.96, 1.0) * (1.15 + sweep), uFXIntensity * 0.72);
+      a = min(1.0, a + uFXIntensity * 0.25);
     }
     if (uFXMode == ${(FX_MODE.AURA)}) {
       // Aura: cool ethereal lift on strokes.
@@ -172,6 +192,15 @@ const LINE_FS = /* glsl */`
       vec3 k6 = 0.5 + 0.5 * cos(6.2831 * (h + vec3(0.0, 0.33, 0.67)));
       col = mix(col, col * k6 * 1.4, uFXIntensity);
     }
+    if (uFXMode == ${(FX_MODE.DOF)}) {
+      // Depth of field: an animated focal plane keeps some chords crisp while
+      // near/far chords soften through opacity and cool tint.
+      float focus = sin(uTime * 0.35) * 0.7;
+      float blur = smoothstep(0.25, 2.2, abs(vWorldPos.z - focus));
+      col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))) * vec3(0.72, 0.86, 1.0), blur * uFXIntensity * 0.72);
+      a *= 1.0 - blur * uFXIntensity * 0.7;
+      a = max(a, uOpacity * 0.18);
+    }
     if (uFXMode == ${(FX_MODE.NEBULA)}) {
       // Nebula: warm/cool gas tint from a noise-ish field.
       float d = 0.5 + 0.5 * sin(vWorldPos.x * 1.4 + uTime * 0.4) * cos(vWorldPos.y * 1.7 - uTime * 0.3);
@@ -200,9 +229,6 @@ const LINE_FS = /* glsl */`
       vec3 prism = 0.5 + 0.5 * cos(6.2831 * (band + vec3(0.0, 0.33, 0.67)));
       col = mix(col, col * prism * 1.5, uFXIntensity);
     }
-    // FOG (mode 8) handled on points via alpha-depth; lines keep full opacity so
-    // the structure stays visible — only the point field recedes into depth.
-
     gl_FragColor = vec4(col, a);
   }
 `;

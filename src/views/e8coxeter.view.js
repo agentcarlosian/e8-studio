@@ -191,6 +191,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
   const pointsMat = new THREE.ShaderMaterial({
     uniforms: {
       uPixelRatio: { value: window.devicePixelRatio || 1 },
+      uPointScale: { value: 1 },
       uOpacity: { value: 0.95 },
       uTime: { value: 0 },
       uFXMode: { value: 0 },     // 0=none, 1=glow, 2=trail, 3=kaleidoscope, 4=ripple, 5=spiral
@@ -209,6 +210,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       varying vec3 vWorldPos;
       varying vec4 vClipPos;  // clip-space position passed to fragment for fog/edge-glow
       uniform float uPixelRatio;
+      uniform float uPointScale;
       uniform float uTime;
       uniform int uFXMode;
       uniform float uFXIntensity;
@@ -250,7 +252,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
           float edge = max(abs(ndc.x), abs(ndc.y));
           edgeFX = 1.0 + uFXIntensity * 0.6 * smoothstep(0.7, 1.0, edge);
         }
-        gl_PointSize = size * pulse * ripple * spiral * pulseFX * edgeFX * uPixelRatio * (1.0 + highlight * 1.5);
+        gl_PointSize = size * uPointScale * pulse * ripple * spiral * pulseFX * edgeFX * uPixelRatio * (1.0 + highlight * 1.5);
         ${VERTEX_FX_BRANCHES}
         // Apply vertex FX scale (caustic/plasma/kaleido6/dof/wireframe)
         gl_PointSize *= fxS;
@@ -1296,6 +1298,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
 
       // Update opacity + FX uniforms
       pointsMat.uniforms.uOpacity.value = params.opacity ?? 0.95;
+      pointsMat.uniforms.uPointScale.value = params.pointScale || 1;
       pointsMat.uniforms.uTime.value = time;
       // FX mode: 0=none, 1=glow, 2=trail, 3=kaleidoscope, 4=ripple, 5=spiral,
       //          6=pulse, 7=chromatic, 8=fog, 9=heat, 10=edge-glow

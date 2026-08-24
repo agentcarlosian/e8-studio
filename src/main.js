@@ -135,11 +135,23 @@ const VIEWS = [
   { id: 'sixhundred',  label: '600-cell',    factory: createSixHundredView, primary: true },
   { id: 'polytope',    label: '4D Polytope', factory: createPolytope4DView, primary: true },
   { id: 'raymarched',  label: 'E₈ SDF',      factory: createRaymarchedView, primary: true },
-  // Hidden — accessible via ?view=dynkin in URL but not in the main UI
-  // Per user feedback: Dynkin's static layout isn't visually compelling enough
-  // to justify a tab slot. The view still exists in code for reference.
-  { id: 'dynkin',      label: 'Dynkin',      factory: createDynkinView,    primary: false, hidden: true },
+  // Secondary view: visible in the More menu and View workspace without
+  // displacing the six visual-first primary tabs.
+  { id: 'dynkin',      label: 'Dynkin',      factory: createDynkinView,    primary: false },
 ];
+
+const AUTO_MODEL_SEQUENCE = Object.freeze([
+  { view: 'e8coxeter' },
+  { view: 'bloom', shape: 'icosahedron' },
+  { view: 'sixhundred' },
+  { view: 'raymarched' },
+  ...['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron',
+    'stellated_dodecahedron', 'great_dodecahedron', 'great_icosahedron',
+    'great_stellated_dodecahedron'].map(shape => ({ view: 'platonic', shape })),
+  ...['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell']
+    .map(poly4d => ({ view: 'polytope', poly4d })),
+  ...['E6', 'E7', 'E8'].map(dynkin => ({ view: 'dynkin', dynkin })),
+]);
 
 const PLATONIC_VERTEX_COUNTS = {
   tetrahedron: 4,
@@ -235,6 +247,9 @@ let shiftStartedAt = typeof performance !== 'undefined' ? performance.now() / 10
 // shift cycle. The shift loop won't change palette more than once per 1.5s,
 // regardless of shiftSpeed — keeps cycling below the ~3 Hz seizure threshold.
 let lastPaletteShiftAt = 0;
+let lastFxShiftAt = 0;
+let lastModelShiftAt = 0;
+let autoModelIndex = 0;
 
 let weylPathTimer = null;  // interval id for the Weyl-path reflection animation
 
@@ -926,6 +941,7 @@ function switchView(id, options = {}) {
     return;
   }
   const previousView = params.view;
+  if (previousView !== id && options.fromAutoModel !== true) params.autoModel = false;
   stabilizeViewTransition(previousView, id, options);
   // Tear down current view
   if (currentView) {
@@ -1160,11 +1176,8 @@ function defaultParams() {
     bloomAmount: 0,
     bloomAuto: false,
     bloomSpeed: 0.05,
-    // Bug fix 2026-06-25 (round 8 dead-code audit): removed pointSize,
-    // lineWeight, showFaces, showVertices — declared in defaults but never
-    // read by any view (only persisted, taking up localStorage space).
-    // Legacy configs with these keys still load cleanly: loadConfig
-    // filters by PERSISTABLE, so missing defaults just don't appear.
+    pointScale: 1,
+    showVertices: false,
     showEdges: false,
     showRings: true,
     showPetrie: false,       // toggle real Hamiltonian 30-cycle (Petrie polygon)
@@ -1175,6 +1188,8 @@ function defaultParams() {
     fxMode: 'none',       // active view's effect; capability-checked by fx-catalog
     fxByView: {},         // remembers one compatible effect choice per renderer
     fxIntensity: 0.5,     // 0-1, controls how strong the FX is
+    autoFx: false,
+    fxShiftInterval: 3.2,
     panelMode: 'scene',   // focused View / Visuals / Learn workspaces
     // Lighting controls (rebuilt when these change)
     lightAmbient: 0.55,
@@ -1187,7 +1202,8 @@ function defaultParams() {
     cameraSpeed: 1.0,     // multiplier on automatic camera motion
     cameraDistance: CAMERA_DEFAULT_DISTANCE,
     cameraRotation: Math.PI / 6,
-    autoZoom: false,      // gentle in/out zoom
+    autoZoom: false,
+    autoModel: false,
     blendMode: 'spectrum', // internal palette-mixing pattern (sampler)
     colorBy: 'shell',      // E8-native coloring: shell|radius|phase|axis|index|mono
     autoSliders: [],       // param keys whose sliders auto-oscillate (per-slider ⟳)
@@ -1239,6 +1255,7 @@ function defaultParams() {
     rootDiffusion: false,
     rootHaloDepth: 3,
     rootDiffusionSpeed: 1.25,
+    rootSubset: 'icosahedron',
     cartanHighlight: false, // when on, click a simple root to highlight its 56 neighbors
     showStarfield: false,   // legacy — now driven by bgMode === 'starfield'
     bgMode: 'void',         // background mood: void|starfield|milkyway|cosmos|aurora|mandala|grid|plasma
@@ -1310,6 +1327,8 @@ function paramEnums() {
     e8: new Set(['coxeter', 'ortho3d', 'custom', 'h4', 'petrie']),
     compare: new Set(['off', 'overlay', 'intersection', 'difference']),
     quality: new Set(['auto', 'low', 'medium', 'high']),
+    dynkin: new Set(['E6', 'E7', 'E8']),
+    rootSubset: new Set(['icosahedron', 'dodecahedron', 'simple_roots']),
   };
   return _paramEnums;
 }
@@ -1342,6 +1361,8 @@ function normalizeParams(target) {
   if (!E.cameraPath.has(target.cameraPath)) target.cameraPath = 'manual';
   if (!E.e8.has(target.e8ViewMode)) target.e8ViewMode = 'coxeter';
   if (!E.quality.has(target.mobileQuality)) target.mobileQuality = 'high';
+  if (!E.dynkin.has(target.dynkin)) target.dynkin = 'E8';
+  if (!E.rootSubset.has(target.rootSubset)) target.rootSubset = 'icosahedron';
   if (typeof target.reducedMode !== 'boolean') target.reducedMode = false;
   // Migrate the original combined Create workspace to the focused View tab.
   if (target.panelMode === 'create') target.panelMode = 'scene';
@@ -1362,6 +1383,10 @@ function normalizeParams(target) {
   target.fxByView = normalizedFxByView;
   target.bgMode = coerceBackgroundForQuality(target.bgMode, target.reducedMode ? 'low' : target.mobileQuality);
   if (typeof target.cameraOrbit !== 'boolean') target.cameraOrbit = false;
+  if (typeof target.autoZoom !== 'boolean') target.autoZoom = false;
+  if (typeof target.autoModel !== 'boolean') target.autoModel = false;
+  if (typeof target.autoFx !== 'boolean') target.autoFx = false;
+  if (typeof target.showVertices !== 'boolean') target.showVertices = false;
   if (!['instant', 'standard'].includes(target.firstVisualMode)) target.firstVisualMode = 'standard';
   if (typeof target.activeUnlock !== 'string') target.activeUnlock = '';
 
@@ -1371,6 +1396,8 @@ function normalizeParams(target) {
   target.opacity = clampNumber(target.opacity, 0.1, 1, 0.9);
   target.rotationSpeed = clampNumber(target.rotationSpeed, 0, 0.02, 0.003);
   target.fxIntensity = clampNumber(target.fxIntensity, 0, 1, 0.5);
+  target.fxShiftInterval = clampNumber(target.fxShiftInterval, 2, 20, 3.2);
+  target.pointScale = clampNumber(target.pointScale, 0.7, 1.8, 1);
   target.shiftSpeed = clampNumber(target.shiftSpeed, 1, 120, 12);
   target.bgIntensity = clampNumber(target.bgIntensity, 0, 1.5, 0.7);
   // Bug fix 2026-06-25: fallback was 1.2 (mid-morph) even though the canonical
@@ -1388,7 +1415,7 @@ function normalizeParams(target) {
   target.rootHaloDepth = Math.round(clampNumber(target.rootHaloDepth, 1, 5, 3));
   target.rootDiffusionSpeed = clampNumber(target.rootDiffusionSpeed, 0.2, 4, 1.25);
   target.cameraSpeed = clampNumber(target.cameraSpeed, 0.1, 5, 1.0);
-  target.cameraDistance = clampNumber(target.cameraDistance, 2.4, 12, CAMERA_DEFAULT_DISTANCE);
+  target.cameraDistance = clampNumber(target.cameraDistance, 0.45, 12, CAMERA_DEFAULT_DISTANCE);
   target.cameraRotation = clampNumber(target.cameraRotation, -Math.PI, Math.PI, Math.PI / 6);
   target.polyRotationSpeed = clampNumber(target.polyRotationSpeed, 0.04, 0.6, 0.18);
   target.bloomAmount = clampNumber(target.bloomAmount, 0, 1, 0);
@@ -2688,6 +2715,41 @@ async function recordPostcardWebM(caption) {
   return blob;
 }
 
+function rootSubsetIndices(name = params.rootSubset) {
+  return name === 'simple_roots'
+    ? (DATA.e8_math?.simple_root_indices || [])
+    : (DATA.mckay_subsets?.[name] || []);
+}
+
+function selectRoot(index) {
+  const roots = DATA.e8?.roots8d || [];
+  const next = Number(index);
+  if (!Number.isInteger(next) || next < 0 || next >= roots.length) return;
+  if (params.pickedRoot !== next) params.pickedRootPrev = params.pickedRoot;
+  params.pickedRoot = next;
+  params.showInspector = true;
+  saveConfig(params);
+  refreshPanel();
+}
+
+function advanceAutoModel(nowSeconds) {
+  if (!AUTO_MODEL_SEQUENCE.length) return;
+  autoModelIndex = (autoModelIndex + 1) % AUTO_MODEL_SEQUENCE.length;
+  const target = AUTO_MODEL_SEQUENCE[autoModelIndex];
+  if (target.shape) params.shape = target.shape;
+  if (target.poly4d) {
+    params.poly4d = target.poly4d;
+    params.morph4d = target.poly4d === 'tesseract' ? 0.65 : 0;
+  }
+  if (target.dynkin) params.dynkin = target.dynkin;
+  params.autoModel = true;
+  switchView(target.view, { resetSelection: false, fromAutoModel: true });
+  params.autoModel = true;
+  lastModelShiftAt = nowSeconds;
+  saveConfig(params);
+  refreshPanel();
+}
+
 // ---------- App object exposed for inline handlers ----------
 window.__app = {
   get params() { return params; },
@@ -2812,6 +2874,7 @@ window.__app = {
     showSavedToast('Renderer: WebGL2 (WebGPU not yet implemented)');
   },
   setShape(s) {
+    params.autoModel = false;
     resetSelectionModifiers(params.view);
     updateParam('shape', s, { refresh: false });
     // Rebuild the 3D view so the new shape is reflected (Platonic wireframe,
@@ -2886,8 +2949,14 @@ window.__app = {
     saveConfig(params);
     refreshPanel();
   },
-  setDynkin(d) { updateParam('dynkin', d, { overlay: true }); },
+  setDynkin(d) {
+    params.autoModel = false;
+    updateParam('dynkin', d, { refresh: false });
+    if (params.view === 'dynkin' && currentView) switchView('dynkin');
+    refreshPanel();
+  },
   setPoly4d(p) {
+    params.autoModel = false;
     resetSelectionModifiers(params.view);
     updateParam('poly4d', p, { refresh: false });
     // The iconic tesseract projection is a cube within a cube. At W-depth 0,
@@ -3008,6 +3077,61 @@ window.__app = {
     if (weylPathTimer) { clearInterval(weylPathTimer); weylPathTimer = null; }
     refreshPanel();
   },
+  setRootSubset(name) {
+    if (!['icosahedron', 'dodecahedron', 'simple_roots'].includes(name)) return;
+    params.rootSubset = name;
+    const subset = rootSubsetIndices(name);
+    if (subset.length && !subset.includes(params.pickedRoot)) selectRoot(subset[0]);
+    else {
+      saveConfig(params);
+      refreshPanel();
+    }
+  },
+  firstSubsetRoot() {
+    const subset = rootSubsetIndices();
+    if (subset.length) selectRoot(subset[0]);
+  },
+  stepSubsetRoot(direction = 1) {
+    const subset = rootSubsetIndices();
+    if (!subset.length) return;
+    const current = subset.indexOf(params.pickedRoot);
+    const next = current < 0 ? 0 : (current + Math.sign(direction || 1) + subset.length) % subset.length;
+    selectRoot(subset[next]);
+  },
+  frameRootSubset() {
+    const subset = rootSubsetIndices();
+    if (!subset.length) return;
+    if (params.rootSubset === 'icosahedron' || params.rootSubset === 'dodecahedron') {
+      params.shape = params.rootSubset;
+    }
+    params.e8ViewMode = 'coxeter';
+    params.cameraOrbit = false;
+    params.cameraPath = 'manual';
+    params.autoZoom = false;
+    resetCameraPose();
+    params.cameraDistance = cameraController.distance;
+    selectRoot(subset[0]);
+    updateOverlays(params.view);
+    showSavedToast(`Framed ${params.rootSubset.replace('_', ' ')}`);
+  },
+  jumpRoot(kind) {
+    const roots = DATA.e8?.roots8d || [];
+    if (!roots.length) return;
+    const current = Number.isInteger(params.pickedRoot) ? params.pickedRoot : 0;
+    const source = roots[current];
+    let next = current;
+    if (kind === 'alpha') {
+      next = DATA.e8_math?.simple_root_indices?.[0] ?? 0;
+    } else if (kind === 'random') {
+      next = Math.floor(Math.random() * roots.length);
+    } else if (kind === 'neighbor') {
+      next = roots.findIndex((root, index) => index !== current
+        && Math.abs(root.reduce((sum, value, i) => sum + value * source[i], 0) + 1) < 1e-8);
+    } else if (kind === 'opposite') {
+      next = roots.findIndex(root => root.every((value, i) => Math.abs(value + source[i]) < 1e-8));
+    }
+    if (next >= 0) selectRoot(next);
+  },
   // Animate the Weyl-group reflection path from pickedRootPrev → pickedRoot.
   // Computes the shortest word in the simple reflections (cached on params),
   // then steps through each intermediate root, moving the neighbor-highlight
@@ -3072,6 +3196,13 @@ window.__app = {
       return;
     }
     updateParam('fxMode', mode);
+  },
+  toggleFXShift() {
+    params.autoFx = !params.autoFx;
+    lastFxShiftAt = performance.now() / 1000;
+    saveConfig(params);
+    refreshPanel();
+    showSavedToast(params.autoFx ? 'FX shift on' : 'FX shift off');
   },
   setPanelMode(mode) {
     if (mode === 'create') mode = 'scene';
@@ -3355,11 +3486,28 @@ window.__app = {
     const enabled = !params.autoZoom;
     updateParam('autoZoom', enabled, { refresh: false });
     if (enabled) {
-      params.cameraOrbit = true;
-      params.cameraMode = 'orbit';
       params.cameraPath = 'manual';
     }
     refreshPanel();
+    showSavedToast(enabled ? 'Auto zoom on' : 'Auto zoom off');
+  },
+  toggleAutoModel() {
+    params.autoModel = !params.autoModel;
+    if (params.autoModel) {
+      const match = AUTO_MODEL_SEQUENCE.findIndex(item => item.view === params.view
+        && (!item.shape || item.shape === params.shape)
+        && (!item.poly4d || item.poly4d === params.poly4d)
+        && (!item.dynkin || item.dynkin === params.dynkin));
+      autoModelIndex = Math.max(0, match);
+      lastModelShiftAt = performance.now() / 1000;
+      params.intro = false;
+    }
+    saveConfig(params);
+    refreshPanel();
+    showSavedToast(params.autoModel ? 'Auto model on' : 'Auto model off');
+  },
+  toggleVertices() {
+    updateParam('showVertices', !params.showVertices);
   },
   toggleE8AutoRotate() {
     updateParam('e8AutoRotate', !params.e8AutoRotate);
@@ -3478,11 +3626,55 @@ window.__app = {
     return exportRecording.exportHighResPNG({ renderer, camera, scene, scale: 1 });
   },
   resetConfig() {
-    // Reset all parameters to defaults and reload, no confirm dialog
+    // Reset the active model to its canonical visual state while preserving
+    // the user's current model/view selection. This is immediate and visible;
+    // it no longer reloads into E8 and makes the button feel unresponsive.
+    const selected = {
+      view: params.view,
+      shape: params.shape,
+      poly4d: params.poly4d,
+      dynkin: params.dynkin,
+      panelMode: params.panelMode,
+      mobileQuality: params.mobileQuality,
+      reducedMode: params.reducedMode,
+      adaptivePixelRatio: params.adaptivePixelRatio,
+    };
     clearConfig();
-    // Also try to stop any running animations
-    try { localStorage.removeItem('e8-config'); } catch (e) {}
-    location.reload();
+    for (const key of Object.keys(params)) delete params[key];
+    Object.assign(params, defaultParams(), selected, { intro: false });
+    normalizeParams(params);
+    projectionAutoStartedAt = 0;
+    lastFxShiftAt = 0;
+    lastModelShiftAt = 0;
+    cameraController.autoZoomFactor = 1;
+    resetCameraPose();
+    params.cameraDistance = cameraController.distance;
+    params.cameraRotation = cameraController.theta;
+    applyTheme(params.theme);
+    applyLayout(params.layout);
+    if (fxRuntime) {
+      fxRuntime.setMode('none');
+      fxRuntime.setIntensity(params.fxIntensity);
+    }
+    if (bgRuntime) {
+      bgRuntime.setMode(params.bgMode);
+      bgRuntime.setIntensity(params.bgIntensity);
+    }
+    switchView(selected.view, { resetSelection: false });
+    saveConfig(params);
+    refreshPanel();
+    updateOverlays(params.view);
+    const button = document.querySelector('[data-act="resetConfig"]');
+    if (button) {
+      button.classList.add('is-confirmed');
+      button.innerHTML = '<span style="font-size:13px">✓</span> Reset done';
+      setTimeout(() => {
+        if (!button.isConnected) return;
+        button.classList.remove('is-confirmed');
+        button.innerHTML = '<span style="font-size:13px">↺</span> Reset';
+      }, 1200);
+    }
+    showSavedToast(`${selected.view === 'e8coxeter' ? 'E8' : selected.view} visuals reset`);
   },
   // Export/recording orchestration lives in services/export-recording.js.
   exportClip(durationSec = 8, opts = {}) {
@@ -3726,23 +3918,37 @@ function animate() {
         cameraController.theta += dt * 0.3 * speed;
         break;
     }
-    // Auto zoom: gentle in/out pulse
-    if (params.autoZoom) {
-      const baseDistance = (cameraController.distance || CAMERA_DEFAULT_DISTANCE) / cameraController.autoZoomFactor;
-      cameraController.autoZoomFactor = 1 + Math.sin(t * 0.5 * speed) * 0.05;
-      cameraController.distance = baseDistance * cameraController.autoZoomFactor;
-    } else if (cameraController.autoZoomFactor !== 1) {
-      cameraController.distance /= cameraController.autoZoomFactor;
-      cameraController.autoZoomFactor = 1;
-    }
     // Apply the mode's updated spherical coords to the actual camera. Without
     // this, spiral / figure-8 / pullback updated cameraController.theta/cameraController.phi/cameraController.distance but
     // never moved the camera (orbit only *looked* alive via view group spin).
     if (!isDragging) updateCameraFromSpherical();
     cameraDrivenByMode = true;
-  } else if (cameraController.autoZoomFactor !== 1) {
-    // Restore the un-pulsed distance when automatic camera motion is disabled.
-    cameraController.distance /= cameraController.autoZoomFactor;
+  }
+  // Auto zoom is independent from orbit and traverses the useful range on a
+  // logarithmic curve. E8 and SDF can approach especially close; mesh views
+  // retain a little more near-plane margin.
+  if (currentView && params.autoZoom && !isDragging) {
+    const speed = (params.cameraSpeed || 1) * recScale;
+    const near = ['e8coxeter', 'raymarched', 'bloom'].includes(params.view) ? 0.45 : 0.75;
+    const far = params.view === 'dynkin' ? 9 : 12;
+    const wave = 0.5 + 0.5 * Math.sin(t * 0.22 * speed - Math.PI / 2);
+    cameraController.distance = Math.exp(Math.log(far) + (Math.log(near) - Math.log(far)) * wave);
+    cameraController.distanceTarget = cameraController.distance;
+    cameraController.autoZoomFactor = 1;
+    params.cameraDistance = cameraController.distance;
+    updateCameraFromSpherical();
+    const zoomSlider = document.getElementById('slider-cameraDistance');
+    if (zoomSlider) {
+      const min = Number(zoomSlider.min);
+      const max = Number(zoomSlider.max);
+      const displayed = min + max - cameraController.distance;
+      zoomSlider.value = displayed;
+      zoomSlider.style.setProperty('--fill', `${((displayed - min) / (max - min)) * 100}%`);
+      const zoomLabel = document.getElementById('slider-val-cameraDistance');
+      if (zoomLabel) zoomLabel.textContent = `${Math.round(100 * 6 / Math.max(0.24, cameraController.distance))}%`;
+    }
+    cameraDrivenByMode = true;
+  } else {
     cameraController.autoZoomFactor = 1;
   }
   const cameraPathActive = updateCinematicCamera(now);
@@ -3767,12 +3973,12 @@ function animate() {
     syncCameraTargets();
   }
 
-  // Intro bloom: auto-cycle through VISIBLE views only (skip hidden ones like Dynkin),
+  // Intro bloom: auto-cycle through the six visual-first primary views.
   // 4s each, with bloom-t animating. User clicking a view tab cancels the intro.
   if (params.intro && !params.paused) {
     if (introStart === null) introStart = now;
     const elapsed = (now - introStart) / 1000;
-    const visibleViews = VIEWS.filter(v => !v.hidden);
+    const visibleViews = VIEWS.filter(v => v.primary);
     const viewIdx = Math.floor(elapsed / 4) % visibleViews.length;
     const targetView = visibleViews[viewIdx].id;
     if (params.view !== targetView) switchView(targetView);
@@ -3784,6 +3990,11 @@ function animate() {
       params.intro = false;
       switchView('e8coxeter');
     }
+  }
+  if (params.autoModel && !params.paused) {
+    const modelInterval = Math.max(4, 8 / Math.max(0.2, params.cameraSpeed || 1));
+    if (!lastModelShiftAt) lastModelShiftAt = t;
+    if (t - lastModelShiftAt >= modelInterval) advanceAutoModel(t);
   }
   updateProjectionAtlas(now);
 
@@ -3841,6 +4052,22 @@ function animate() {
         // means this can't thrash the UI even when shiftSpeed is set very low.
         switchView(params.view);
       }
+    }
+  }
+
+  if (params.autoFx && !params.paused) {
+    const interval = Math.max(2, params.fxShiftInterval || 3.2);
+    if (!lastFxShiftAt) lastFxShiftAt = t;
+    if (t - lastFxShiftAt >= interval) {
+      const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
+      const modes = effectsForView(params.view, quality).map(item => item.id).filter(id => id !== 'none');
+      if (modes.length) {
+        const current = modes.indexOf(params.fxMode);
+        const next = modes[(current + 1 + modes.length) % modes.length];
+        updateParam('fxMode', next, { refresh: false });
+        refreshPanel();
+      }
+      lastFxShiftAt = t;
     }
   }
 

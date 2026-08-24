@@ -32,8 +32,8 @@ FX_MODES = ['none', 'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripp
             'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi', 'caustic',
             'iridescent', 'flowfield', 'plasma', 'kaleido6', 'dof', 'nebula',
             'wireframe', 'hologram', 'xray', 'crystal']
-VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']
-SDF_FX_MODES = ['none', 'glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']
+VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']
+SDF_FX_MODES = FX_MODES
 
 results: list[tuple[str, bool, str]] = []
 
@@ -223,7 +223,7 @@ def main() -> int:
               window.__app.switchView('platonic');
               window.__app.setParam('autoSliders', ['cameraDistance']);
               const el = document.querySelector('input[data-param="cameraDistance"]');
-              el.value = '11.2';
+              el.value = '9.25';
               el.dispatchEvent(new Event('input', { bubbles: true }));
               return {
                 param: window.__app.params.cameraDistance,
@@ -447,13 +447,14 @@ def main() -> int:
                   restored is not None and abs(restored["dpr"] - restored["native"]) < 1e-6,
                   str(restored))
 
-            # ---- Auto zoom must pulse around a stable baseline, not compound ----
+            # ---- Auto zoom must traverse a broad but bounded useful range ----
             zoom_start = pg.evaluate("""() => {
               window.__app.resetCamera();
               window.__app.setParam('cameraPath', 'manual');
               window.__app.setParam('cameraMode', 'orbit');
               window.__app.setParam('showAmbient', false);
               window.__app.setParam('cameraOrbit', true);
+              window.__app.setParam('cameraSpeed', 2);
               window.__app.setParam('autoZoom', true);
               return window.__app.camera.position.length();
             }""")
@@ -463,8 +464,8 @@ def main() -> int:
               window.__app.setParam('autoZoom', false);
               window.__app.setParam('cameraOrbit', false);
             }""")
-            check("auto zoom remains a bounded pulse",
-                  zoom_start * 0.94 <= zoom_end <= zoom_start * 1.06,
+            check("auto zoom traverses the full bounded range",
+                  0.44 <= zoom_end <= 12.01 and abs(zoom_end - zoom_start) > 0.25,
                   f"{zoom_start:.3f} -> {zoom_end:.3f}")
 
             # ---- 6. Persisted actions actually update localStorage ----

@@ -483,6 +483,7 @@ export function createBloomView({ data, palette, scale: baseScale, context = {} 
       // 6-mode local map that silently broke when panel exposed more modes).
       group.userData.materials = [mat];
       group.userData.trailGeo = geo;
+      mat.uniforms.uSize.value = 18 * baseScale * (params.pointScale || 1);
       if (group.userData.materials) {
         for (const m of group.userData.materials) {
           if (m.uniforms) {
