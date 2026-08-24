@@ -931,6 +931,69 @@ def main() -> int:
             check("model reset returns to E8 Coxeter renderer", reset_model_metrics["lastModelMode"] == "e8_2d" and reset_model_metrics["lastDrawStats"]["projectedPoints"] == 240, str(reset_model_metrics["lastDrawStats"]))
             page.evaluate("() => { window.__mobileApp.fitAllRoots(); window.__mobileApp.forceRender(); window.__mobileApp.hideStatus(); window.__mobileApp.openSettings('style'); }")
 
+            background_options = page.locator("#background-select option").evaluate_all(
+                "options => options.map(option => ({ value: option.value, label: option.textContent.trim() }))"
+            )
+            expected_backgrounds = [
+                {"value": "void", "label": "Void"},
+                {"value": "starfield", "label": "Space"},
+                {"value": "grid", "label": "Grid"},
+                {"value": "aurora", "label": "Cloud"},
+                {"value": "cosmos", "label": "Cosmos"},
+                {"value": "mandala", "label": "Mandala"},
+                {"value": "plasma", "label": "Plasma"},
+                {"value": "vortex", "label": "Vortex"},
+                {"value": "quantum", "label": "Quantum"},
+                {"value": "eclipse", "label": "Eclipse"},
+                {"value": "synthwave", "label": "Barset"},
+                {"value": "prism", "label": "Prism"},
+            ]
+            check("Visuals section exposes the full desktop background catalog", background_options == expected_backgrounds, str(background_options))
+            legacy_backgrounds = page.evaluate("""() => {
+                const space = window.__mobileApp.setState({ background: 'space' }).background;
+                const cloud = window.__mobileApp.setState({ background: 'cloud' }).background;
+                return { space, cloud };
+            }""")
+            check("legacy mobile backgrounds migrate to desktop identifiers", legacy_backgrounds == {"space": "starfield", "cloud": "aurora"}, str(legacy_backgrounds))
+            background_rendering = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const modes = ['void', 'starfield', 'grid', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'synthwave', 'prism'];
+                const expectedRenderers = ['flat', 'stars', 'grid', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'synthwave', 'prism'];
+                app.closeSettings();
+                const results = modes.map((mode, index) => {
+                    app.setState({ background: mode, backgroundBrightness: 0.7, autoRotate: false, autoColor: false, softFx: false });
+                    app.forceRender();
+                    const stats = app.getMetrics().lastDrawStats;
+                    return {
+                        mode,
+                        expectedRenderer: expectedRenderers[index],
+                        renderedMode: stats.backgroundMode,
+                        renderer: stats.backgroundRenderer,
+                        primitives: stats.backgroundPrimitives,
+                    };
+                });
+                app.setState({ background: 'void', backgroundBrightness: 0.7 });
+                app.forceRender();
+                const canvas = document.getElementById('mobile-canvas');
+                const context = canvas.getContext('2d');
+                const topLeft = [...context.getImageData(3, 3, 1, 1).data];
+                const bottomLeft = [...context.getImageData(3, canvas.height - 4, 1, 1).data];
+                app.openSettings('style');
+                return { results, topLeft, bottomLeft, runtimeErrors: app.getMetrics().runtimeErrors };
+            }""")
+            check(
+                "every mobile background renders through its dedicated scene",
+                all(
+                    item["renderedMode"] == item["mode"]
+                    and item["renderer"] == item["expectedRenderer"]
+                    and item["primitives"] >= (1 if item["mode"] == "void" else 2)
+                    for item in background_rendering["results"]
+                ),
+                str(background_rendering),
+            )
+            check("Void background is flat instead of a hazy radial wash", background_rendering["topLeft"] == background_rendering["bottomLeft"], str(background_rendering))
+            check("background catalog renders without runtime errors", not background_rendering["runtimeErrors"], str(background_rendering["runtimeErrors"]))
+
             palette_grid = page.evaluate("""() => ({
                 buttons: [...document.querySelectorAll('#palette-swatch-grid [data-palette-swatch]')].map(button => ({
                     id: button.dataset.paletteSwatch,
