@@ -601,6 +601,10 @@ button:disabled {
   transition: border-color 100ms ease, background 100ms ease, color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
 }
 
+.view-actions .fit-all-action {
+  grid-column: 1 / -1;
+}
+
 .view-actions .wide-action:active {
   border-color: var(--accent);
   background: rgba(244, 210, 122, 0.16);

@@ -1607,9 +1607,22 @@ def main() -> int:
             })""")
             check("Still preset stops all runtime showcase toggles", not still_after["state"]["autoRotate"] and not still_after["state"]["autoZoom"] and not still_after["state"]["autoExtrude"] and not still_after["state"]["autoModel"] and not still_after["state"]["autoColor"] and not still_after["state"]["softFx"] and not still_after["controls"]["motion"] and not still_after["controls"]["autoModel"] and not still_after["controls"]["autoColor"] and not still_after["controls"]["softFx"] and still_after["controls"]["activeMotion"] == "still" and still_after["controls"]["motionOutput"] == "Still" and still_after["controls"]["activeFx"] == "clean" and still_after["metrics"]["lastSettingsControlSyncSkip"] == "auto-preset-still", str(still_after))
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
-            page.evaluate("() => { window.__mobileApp.setState({ autoColor: false, softFx: false, palette: 'cyan' }); window.__mobileApp.forceRender(); window.__mobileApp.openSettings('style'); }")
-            surprise_button = page.locator("#surprise-button").bounding_box()
-            check("Visuals section exposes compact Surprise action", bool(surprise_button) and surprise_button["height"] >= 40, str(surprise_button))
+            page.evaluate("() => { window.__mobileApp.setState({ autoColor: false, softFx: false, palette: 'cyan' }); window.__mobileApp.forceRender(); window.__mobileApp.openSettings('view'); }")
+            surprise_layout = page.evaluate("""() => {
+                const surprise = document.getElementById('surprise-button');
+                const reset = document.querySelector('[data-action="reset-view"]');
+                const fit = document.querySelector('[data-view-action="fit-all"]');
+                const rect = element => element?.getBoundingClientRect();
+                return {
+                    surprise: rect(surprise),
+                    reset: rect(reset),
+                    fit: rect(fit),
+                    parentClass: surprise?.parentElement?.className,
+                    visualDuplicates: document.querySelectorAll('[data-section="style"] #surprise-button').length,
+                    action: surprise?.dataset.viewAction
+                };
+            }""")
+            check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1 and surprise_layout["fit"]["width"] > surprise_layout["surprise"]["width"] * 1.8, str(surprise_layout))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
             surprise_after = page.evaluate("""() => ({
