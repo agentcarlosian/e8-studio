@@ -319,6 +319,40 @@ def main() -> int:
                 output: document.getElementById('model-shortcut-output').textContent.trim()
             })""")
             check("Models retains direct Dodecahedron selection", model_shortcut_dodecahedron["state"]["modelMode"] == "platonic" and model_shortcut_dodecahedron["state"]["shape"] == "dodecahedron" and model_shortcut_dodecahedron["activeShortcut"] == "shape-dodecahedron" and model_shortcut_dodecahedron["output"] == "Dodecahedron", str(model_shortcut_dodecahedron))
+            model_replacement_sync = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                app.openSettings('motion');
+                app.setState({
+                    autoColor: true,
+                    softFx: true,
+                    autoRotate: true,
+                    autoZoom: true,
+                    autoExtrude: true,
+                    autoModel: true,
+                    rotationSpeed: 1.2,
+                    cameraPath: 'spiral',
+                    cameraTilt: 0.8
+                });
+                app.selectModelShortcut('shape-cube');
+                return {
+                    state: app.getState(),
+                    controls: {
+                        autoColor: document.getElementById('auto-color-toggle').checked,
+                        softFx: document.getElementById('soft-fx-toggle').checked,
+                        motion: document.getElementById('motion-toggle').checked,
+                        autoModel: document.getElementById('auto-model-toggle').checked,
+                        activeFx: document.querySelector('#fx-preset-grid button.active')?.dataset.fxPreset,
+                        fxOutput: document.getElementById('fx-preset-output').textContent.trim(),
+                        activeMotion: document.querySelector('#motion-preset-grid button.active')?.dataset.motionAction,
+                        motionOutput: document.getElementById('motion-preset-output').textContent.trim(),
+                        activeSpeed: document.querySelector('#motion-speed-grid button.active')?.dataset.motionSpeed,
+                        speedOutput: document.getElementById('motion-speed-output').textContent.trim(),
+                        cameraPath: document.getElementById('camera-path-output').textContent.trim()
+                    }
+                };
+            }""")
+            check("model replacement resets runtime state without changing desktop behavior", not model_replacement_sync["state"]["autoColor"] and not model_replacement_sync["state"]["softFx"] and not model_replacement_sync["state"]["autoRotate"] and not model_replacement_sync["state"]["autoZoom"] and not model_replacement_sync["state"]["autoExtrude"] and not model_replacement_sync["state"]["autoModel"] and abs(model_replacement_sync["state"]["rotationSpeed"] - 0.7) < 0.01 and model_replacement_sync["state"]["cameraPath"] == "manual" and abs(model_replacement_sync["state"]["cameraTilt"] - 0.28) < 0.01, str(model_replacement_sync))
+            check("model replacement immediately synchronizes Visuals and Motion controls", not model_replacement_sync["controls"]["autoColor"] and not model_replacement_sync["controls"]["softFx"] and not model_replacement_sync["controls"]["motion"] and not model_replacement_sync["controls"]["autoModel"] and model_replacement_sync["controls"]["activeFx"] == "clean" and model_replacement_sync["controls"]["fxOutput"] == "Static" and model_replacement_sync["controls"]["activeMotion"] == "still" and model_replacement_sync["controls"]["motionOutput"] == "Still" and model_replacement_sync["controls"]["activeSpeed"] == "medium" and model_replacement_sync["controls"]["speedOutput"] == "Medium" and model_replacement_sync["controls"]["cameraPath"] == "Manual", str(model_replacement_sync["controls"]))
             page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.hideStatus(); }")
             contextual_controls = page.evaluate("""() => {
                 const app = window.__mobileApp;
@@ -1252,6 +1286,19 @@ def main() -> int:
             check("Visuals exposes the complete 24-effect desktop catalog", fx_mode_ids == desktop_fx_ids and fx_modes["metrics"]["fxModeButtonCount"] == 24 and fx_modes["output"] == "Off" and fx_modes["shellMode"] == "none" and any(button["id"] == "none" and button["active"] and button["pressed"] == "true" for button in fx_modes["buttons"]), str(fx_modes))
             fx_costs = {button["id"]: button["cost"] for button in fx_modes["buttons"]}
             check("Effect buttons expose desktop-compatible GPU cost badges", all(button["cost"] in ["low", "medium", "high"] and button["costText"] == button["cost"] for button in fx_modes["buttons"]) and fx_costs["voronoi"] == "high" and fx_costs["trail"] == "medium" and fx_costs["glow"] == "low", str(fx_modes["buttons"]))
+            fx_budget_note = page.locator(".fx-cost-note").inner_text()
+            check("Effects explains the mobile dense-graph safety budget", "20 fps" in fx_budget_note and "E8 Edges" in fx_budget_note, fx_budget_note)
+            dense_fx_budget = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                app.setState({ modelMode: 'e8_2d', showEdges: true, fxMode: 'ripple', autoRotate: true, autoColor: true, softFx: true });
+                const dense = { state: app.getState(), metrics: app.getMetrics() };
+                app.setState({ showEdges: false });
+                const regular = { state: app.getState(), metrics: app.getMetrics() };
+                app.setState({ fxMode: 'none', autoRotate: false, autoColor: false, softFx: false });
+                return { dense, regular };
+            }""")
+            check("dense E8 FX keep every treatment while using a phone-safe motion budget", dense_fx_budget["dense"]["state"]["fxMode"] == "ripple" and dense_fx_budget["dense"]["state"]["showEdges"] and dense_fx_budget["dense"]["state"]["autoRotate"] and dense_fx_budget["dense"]["state"]["autoColor"] and dense_fx_budget["dense"]["state"]["softFx"] and dense_fx_budget["dense"]["metrics"]["motionFrameTargetMs"] == 50, str(dense_fx_budget["dense"]))
+            check("normal mobile scenes retain the smoother motion budget", not dense_fx_budget["regular"]["state"]["showEdges"] and dense_fx_budget["regular"]["metrics"]["motionFrameTargetMs"] == 33, str(dense_fx_budget["regular"]))
             fx_rendering = page.evaluate("""ids => {
                 const canvas = document.getElementById('mobile-canvas');
                 const sdf = document.getElementById('mobile-sdf-canvas');
@@ -1922,6 +1969,34 @@ def main() -> int:
             check("fit all fits visible bounds", fit_all["metrics"]["allFrame"]["withinView"], str(fit_all["metrics"]["allFrame"]))
             check("fit all updates zoom", abs(fit_all["state"]["zoom"] - 2.4) > 0.05, str(fit_all["state"]))
             check("fit all telemetry records action", fit_all["metrics"]["lastInteractionType"] == "fit-all", str(fit_all["metrics"]))
+            projected_model_fits = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const targets = [
+                    { id: 'shape-dodecahedron', mode: 'platonic' },
+                    { id: 'poly-24cell', mode: 'poly4d' },
+                    { id: 'dynkin-E7', mode: 'dynkin' },
+                    { id: 'bloom', mode: 'bloom' }
+                ];
+                return targets.map(target => {
+                    app.selectModelShortcut(target.id);
+                    app.setState({ zoom: 2.65, panX: 280, panY: -240, autoRotate: false });
+                    app.forceRender();
+                    const before = app.getMetrics().allFrame;
+                    app.fitAllRoots();
+                    app.forceRender();
+                    const after = app.getMetrics();
+                    return {
+                        id: target.id,
+                        mode: target.mode,
+                        before,
+                        frame: after.allFrame,
+                        renderedMode: after.lastModelMode,
+                        state: app.getState()
+                    };
+                });
+            }""")
+            check("Fit All uses each active model's projected bounds", all(result["renderedMode"] == result["mode"] and result["frame"]["withinView"] and abs(result["state"]["zoom"] - 2.65) > 0.05 for result in projected_model_fits), str(projected_model_fits))
+            page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.openSettings('view'); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ zoom: 2.2, panX: 230, panY: -210, rotation: 0.55, selectedRoot: null, autoRotate: false }); window.__mobileApp.forceRender(); }")
             before_double_tap = page.evaluate("() => window.__mobileApp.getMetrics().allFrame")
             check("dirty double-tap frame starts outside view", not before_double_tap["withinView"], str(before_double_tap))
@@ -2482,6 +2557,30 @@ def main() -> int:
             )
             check("one-finger drag also orbits 4D model projections", abs(polytope_orbit["after"]["rotation"] - polytope_orbit["before"]["rotation"]) > 0.2 and abs(polytope_orbit["after"]["cameraTilt"] - polytope_orbit["before"]["cameraTilt"]) > 0.1 and polytope_orbit["after"]["panX"] == polytope_orbit["before"]["panX"] and polytope_orbit["after"]["panY"] == polytope_orbit["before"]["panY"] and polytope_orbit["metrics"]["lastInteractionType"] == "orbit-end" and polytope_orbit["metrics"]["lastDrawStats"]["modelMode"] == "poly4d", str(polytope_orbit))
 
+            pointer_cancel_probe = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({ modelMode: 'e8_2d', selectedRoot: null, autoRotate: false, zoom: 1, panX: 0, panY: 0, rotation: 0 });
+                    app.forceRender();
+                    const point = app.getRootScreenPoint(0);
+                    const canvas = document.getElementById('mobile-canvas');
+                    const fire = type => canvas.dispatchEvent(new PointerEvent(type, {
+                        bubbles: true,
+                        pointerId: 81,
+                        pointerType: 'touch',
+                        clientX: point.x,
+                        clientY: point.y,
+                        isPrimary: true,
+                    }));
+                    fire('pointerdown');
+                    fire('pointercancel');
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return { state: app.getState(), metrics: app.getMetrics() };
+                }"""
+            )
+            check("pointer cancellation never selects a root", pointer_cancel_probe["state"]["selectedRoot"] is None, str(pointer_cancel_probe))
+            check("pointer cancellation releases input and requests a settled frame", not pointer_cancel_probe["metrics"]["interactionActive"] and pointer_cancel_probe["metrics"]["pointerCount"] == 0 and pointer_cancel_probe["metrics"]["lastInteractionType"] == "pointer-cancel" and pointer_cancel_probe["metrics"]["lastSettledRenderRequestReason"] == "pointer-cancel", str(pointer_cancel_probe["metrics"]))
+
             pinch_jitter_probe = page.evaluate(
                 """async () => {
                     const app = window.__mobileApp;
@@ -2516,6 +2615,42 @@ def main() -> int:
             check("pinch jitter does not zoom or pan while held", pinch_jitter_probe["duringState"]["zoom"] == pinch_jitter_probe["beforeState"]["zoom"] and pinch_jitter_probe["duringState"]["panX"] == pinch_jitter_probe["beforeState"]["panX"] and pinch_jitter_probe["duringState"]["panY"] == pinch_jitter_probe["beforeState"]["panY"] and pinch_jitter_probe["duringMetrics"]["renderCount"] == pinch_jitter_probe["beforeMetrics"]["renderCount"], str(pinch_jitter_probe))
             check("pinch jitter records ignored movement", pinch_jitter_probe["duringMetrics"]["pinchJitterIgnoredCount"] > pinch_jitter_probe["beforeMetrics"]["pinchJitterIgnoredCount"] and pinch_jitter_probe["duringMetrics"]["lastPinchJitterDistanceDelta"] <= 3 and pinch_jitter_probe["duringMetrics"]["lastPinchJitterCenterDelta"] <= 3, str(pinch_jitter_probe["duringMetrics"]))
             check("pinch jitter releases input state", not pinch_jitter_probe["afterMetrics"]["interactionActive"] and pinch_jitter_probe["afterMetrics"]["pointerCount"] == 0, str(pinch_jitter_probe["afterMetrics"]))
+
+            focal_pinch_probe = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({ modelMode: 'e8_2d', autoRotate: false, selectedRoot: null, zoom: 1, panX: 0, panY: 0, rotation: 0 });
+                    app.forceRender();
+                    const before = app.getRootScreenPoint(0);
+                    const canvas = document.getElementById('mobile-canvas');
+                    const fire = (type, id, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+                        bubbles: true,
+                        pointerId: id,
+                        pointerType: 'touch',
+                        clientX: x,
+                        clientY: y,
+                        isPrimary: id === 91,
+                    }));
+                    fire('pointerdown', 91, before.x - 34, before.y);
+                    fire('pointerdown', 92, before.x + 34, before.y);
+                    fire('pointermove', 91, before.x - 68, before.y);
+                    fire('pointermove', 92, before.x + 68, before.y);
+                    app.forceRender();
+                    const during = app.getRootScreenPoint(0);
+                    fire('pointerup', 91, before.x - 68, before.y);
+                    fire('pointerup', 92, before.x + 68, before.y);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return {
+                        before,
+                        during,
+                        drift: Math.hypot(during.x - before.x, during.y - before.y),
+                        state: app.getState(),
+                        metrics: app.getMetrics()
+                    };
+                }"""
+            )
+            check("off-center pinch stays anchored under the fingers", focal_pinch_probe["state"]["zoom"] > 1.5 and focal_pinch_probe["drift"] < 1.5, str(focal_pinch_probe))
+            check("focal pinch releases input cleanly", not focal_pinch_probe["metrics"]["interactionActive"] and focal_pinch_probe["metrics"]["pointerCount"] == 0 and focal_pinch_probe["metrics"]["lastInteractionType"] == "pinch-end", str(focal_pinch_probe["metrics"]))
 
             page.evaluate("() => { window.__mobileApp.setState({ showRings: true, showContext: true, autoRotate: false, subset: 'icosahedron', selectedRoot: null, zoom: 1, panX: 0, panY: 0, rotation: 0 }); window.__mobileApp.selectRoot(0, { save: false, status: false }); window.__mobileApp.forceRender(); }")
             before_zoom = page.evaluate("() => window.__mobileApp.getState().zoom")

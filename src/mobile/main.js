@@ -284,6 +284,11 @@ const SCENE_CHIP_SWIPE_SLOP_PX = 24;
 const SCENE_CHIP_LONG_PRESS_MS = 540;
 const STATUS_HIDE_MS = 1400;
 const MOTION_FRAME_INTERVAL_MS = 33;
+// The complete 56-neighbor E8 graph draws 6,720 chords. Real-device profiling
+// showed that the graph—not the individual FX—is the dominant sustained cost.
+// Keep every effect available, but pace animated dense-graph frames so the
+// main thread retains enough headroom for touch and Android system UI.
+const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
@@ -1501,7 +1506,7 @@ function bindEvents() {
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   installNativeBackHandler();
 }
@@ -3537,6 +3542,8 @@ function scenePatchForTarget(target) {
     softFx: false,
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
     rotation: 0,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
     panX: 0,
     panY: 0,
     zoom: 1,
@@ -3609,6 +3616,12 @@ function setScenePreset(targetOrIndex, options = {}) {
     metrics.lastSceneChipStoppedAutoModel = !!(previousAutoModel && !state.autoModel);
   }
   syncModelControls();
+  // Scene replacement also clears color/motion presets and camera framing.
+  // Keep those already-rendered controls truthful while the settings sheet is
+  // open without paying for a full settings synchronization.
+  syncFxPresetControls();
+  syncMotionPresetControls();
+  syncMotionSpeedControls();
   updateSelectionUI({ reason: interactionType });
   showStatus(`Scene: ${sceneStatusText()}`);
   return result;
@@ -7863,8 +7876,15 @@ function advanceAutoModel() {
 }
 
 function syncMotionLoop() {
+  metrics.motionFrameTargetMs = mobileMotionFrameIntervalMs();
   if (hasRuntimeAnimation() && !document.hidden && !isSettingsOpen() && !hasActiveInput()) startMotion();
   else stopMotion();
+}
+
+function mobileMotionFrameIntervalMs() {
+  return state.modelMode === 'e8_2d' && state.showEdges
+    ? DENSE_E8_MOTION_FRAME_INTERVAL_MS
+    : MOTION_FRAME_INTERVAL_MS;
 }
 
 function syncAutoMotionPhase(kind) {
@@ -7898,7 +7918,9 @@ function startMotion() {
       return;
     }
     const elapsed = now - last;
-    if (elapsed < MOTION_FRAME_INTERVAL_MS) {
+    const targetFrameMs = mobileMotionFrameIntervalMs();
+    metrics.motionFrameTargetMs = targetFrameMs;
+    if (elapsed < targetFrameMs) {
       metrics.motionFrameSkipCount++;
       metrics.lastMotionFrameSkipMs = now;
       motionRafId = requestAnimationFrame(tick);
@@ -8097,6 +8119,15 @@ function onPointerUp(event) {
   syncMotionLoop();
 }
 
+function onPointerCancel() {
+  // Android may cancel a pointer when system chrome, accessibility gestures,
+  // or another native surface takes ownership.  A cancellation is never a tap
+  // and must not participate in double-tap fitting or root selection.
+  clearTapMemory();
+  const hadInput = resetInputState('pointer-cancel');
+  if (hadInput) requestSettledRenderAfterInput('pointer-cancel');
+}
+
 function resetInputState(reason = null) {
   const hadInput = hasActiveInput();
   for (const pointerId of activePointers.keys()) {
@@ -8138,6 +8169,7 @@ function consumeDoubleTap(x, y) {
 function beginGesture() {
   const snap = gestureSnapshot();
   if (!snap || snap.distance < 4) return;
+  const layout = layoutForCanvas(state.zoom);
   gesture = {
     distance: snap.distance,
     centerX: snap.centerX,
@@ -8145,6 +8177,8 @@ function beginGesture() {
     zoom: state.zoom,
     panX: state.panX,
     panY: state.panY,
+    originX: layout.cx,
+    originY: layout.cy,
     moved: false,
   };
   markInteraction('pinch-start');
@@ -8168,8 +8202,11 @@ function updateGesture() {
   gesture.moved = true;
   state.autoZoom = false;
   state.zoom = clamp(gesture.zoom * (snap.distance / gesture.distance), 0.55, 3.2);
-  state.panX = gesture.panX + (snap.centerX - gesture.centerX);
-  state.panY = gesture.panY + (snap.centerY - gesture.centerY);
+  const zoomRatio = state.zoom / Math.max(0.001, gesture.zoom);
+  const anchorX = gesture.centerX - gesture.originX - gesture.panX;
+  const anchorY = gesture.centerY - gesture.originY - gesture.panY;
+  state.panX = snap.centerX - gesture.originX - anchorX * zoomRatio;
+  state.panY = snap.centerY - gesture.originY - anchorY * zoomRatio;
   markInteraction('pinch');
   requestRender();
 }
@@ -8350,7 +8387,9 @@ function fitAllRoots(interactionType = 'fit-all', options = {}) {
   }
   const fitted = state.modelMode === 'sdf'
     ? frameSdfModel(interactionType, options)
-    : framePointList(allRootList, interactionType, options);
+    : state.modelMode === 'e8_2d'
+      ? framePointList(allRootList, interactionType, options)
+      : frameProjectedModel(interactionType, options);
   if (fitted && !options.silentStatus) showStatus('View fitted');
   return fitted;
 }
@@ -8389,13 +8428,38 @@ function frameSdfModel(interactionType, options = {}) {
 function framePointList(list, interactionType, options = {}) {
   const modelBounds = pointModelBounds(list);
   if (!modelBounds) return false;
+  return frameModelBounds(modelBounds, interactionType, options);
+}
+
+function frameProjectedModel(interactionType, options = {}) {
+  // A model may have been selected while Settings was open, in which case its
+  // normal render is deliberately deferred.  Fit is an explicit visual action,
+  // so render once to obtain bounds for the active model rather than reusing
+  // the previous model's Coxeter-root frame.
+  render();
+  const frame = metrics.lastRenderAllFrame;
+  if (!frame || metrics.lastModelMode !== state.modelMode) return false;
+  const currentLayout = layoutForCanvas(state.zoom);
+  const scale = Math.max(0.001, currentLayout.scale);
+  const modelBounds = {
+    minX: (frame.minX - currentLayout.cx - state.panX) / scale,
+    maxX: (frame.maxX - currentLayout.cx - state.panX) / scale,
+    minY: (frame.minY - currentLayout.cy - state.panY) / scale,
+    maxY: (frame.maxY - currentLayout.cy - state.panY) / scale,
+  };
+  return frameModelBounds(modelBounds, interactionType, options);
+}
+
+function frameModelBounds(modelBounds, interactionType, options = {}) {
   const layout = layoutForCanvas(1);
   const view = usableViewBounds();
   const modelW = Math.max(0.001, modelBounds.maxX - modelBounds.minX);
   const modelH = Math.max(0.001, modelBounds.maxY - modelBounds.minY);
   const fitW = Math.max(120, view.right - view.left);
   const fitH = Math.max(120, view.bottom - view.top);
-  const nextZoom = clamp(Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)), 0.55, 3.2);
+  // Leave a small visual and floating-point margin. An exact edge-to-edge fit
+  // can be reported outside the view by sub-pixel rounding and feels cramped.
+  const nextZoom = clamp(Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)) * 0.96, 0.55, 3.2);
   const nextLayout = layoutForCanvas(nextZoom);
   const targetX = (view.left + view.right) / 2;
   const targetY = (view.top + view.bottom) / 2;
