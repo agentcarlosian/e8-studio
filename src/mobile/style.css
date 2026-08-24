@@ -471,6 +471,18 @@ button:disabled {
   font-weight: 800;
 }
 
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-heading output {
+  color: var(--accent);
+  font-weight: 800;
+}
+
 .browse-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -584,7 +596,7 @@ button:disabled {
 
 .palette-swatch-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -608,15 +620,17 @@ button:disabled {
 }
 
 .palette-dots {
-  display: grid;
-  grid-template-columns: repeat(3, 10px);
+  display: flex;
+  justify-content: center;
   gap: 3px;
+  max-width: 100%;
 }
 
 .palette-dots i {
   display: block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
+  flex: 0 1 9px;
   border-radius: 999px;
   background: var(--dot);
 }

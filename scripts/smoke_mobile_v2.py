@@ -57,10 +57,10 @@ def main() -> int:
             check("initial draw renders all roots", initial_draw["points"] == 240 and initial_draw["rings"] == 8, str(initial_draw))
             check("initial draw has no context ray stroke", initial_draw["rays"] == 0 and initial_draw["rayStrokes"] == 0, str(initial_draw))
             check("rings are batched into one stroke", initial_draw["ringStrokes"] == 1, str(initial_draw))
-            check("base points batch into two fills", initial_draw["batchedPoints"] == 228 and initial_draw["pointBatchFills"] == 2 and initial_draw["directPoints"] == 12, str(initial_draw))
+            check("base points batch across the full palette", initial_draw["batchedPoints"] == 228 and initial_draw["pointBatchFills"] == 5 and initial_draw["directPoints"] == 12, str(initial_draw))
             check("direct highlighted points preserve glow fills", initial_draw["directPointFills"] == initial_draw["directPoints"] * 2, str(initial_draw))
             check("settled initial draw renders glow halos", initial_draw["glowFills"] == initial_draw["directPoints"] and initial_draw["glowsSkippedForInteraction"] == 0, str(initial_draw))
-            check("initial draw uses reusable point queues", initial_draw["drawMaskWrites"] == 240 and initial_draw["directQueuePoints"] == initial_draw["directPoints"] == 12 and initial_draw["directPointObjectAllocs"] == 0 and initial_draw["baseBucketCount"] == initial_draw["pointBatchFills"] == 2, str(initial_draw))
+            check("initial draw uses reusable point queues", initial_draw["drawMaskWrites"] == 240 and initial_draw["directQueuePoints"] == initial_draw["directPoints"] == 12 and initial_draw["directPointObjectAllocs"] == 0 and initial_draw["baseBucketCount"] == initial_draw["pointBatchFills"] == 5, str(initial_draw))
             check("initial draw uses cached alpha colors", initial_draw["alphaColorCacheHits"] == initial_draw["directPoints"] + 1 and initial_draw["alphaColorRuntimeParses"] == 0, str(initial_draw))
             check("initial draw uses precomputed geometry", initial_draw["baseSizeCacheHits"] == 240 and initial_draw["fillSlotCacheHits"] == initial_draw["batchedPoints"] and initial_draw["ringScaleFactors"] == initial_draw["rings"], str(initial_draw))
             check("initial draw projects directly into point cache", initial_draw["projectedPoints"] == 240 and initial_draw["projectionObjectAllocs"] == 0 and metrics["lastProjectionSource"] == "direct-point-fields" and metrics["lastProjectionCount"] == 240, str(metrics))
@@ -330,7 +330,7 @@ def main() -> int:
             page.get_by_role("button", name="Settings").click()
             check("settings button opens sheet", page.locator("#settings-sheet:not(.hidden)").count() == 1)
             section_nav_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            for name in ["View", "Style", "Motion", "Quality", "Info"]:
+            for name in ["View", "Visuals", "Motion", "Quality", "Info"]:
                 page.get_by_role("button", name=name, exact=True).click()
                 active = page.evaluate(
                     """sectionName => {
@@ -722,7 +722,7 @@ def main() -> int:
             done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("bottom Done closes scrolled settings", not done_metrics["settingsOpen"] and done_metrics["lastInteractionType"] == "settings-done", str(done_metrics))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.get_by_role("button", name="Style", exact=True).click()
+            page.get_by_role("button", name="Visuals", exact=True).click()
             style_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("section switch resets settings scroll", style_metrics["settingsSection"] == "style" and style_metrics["settingsScrollTop"] == 0, str(style_metrics))
             page.evaluate("""() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))""")
@@ -811,7 +811,7 @@ def main() -> int:
             page.locator("#shape-select").select_option("dodecahedron")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             platonic_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("Platonic dodecahedron renders desktop geometry", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaceFills"] > 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
+            check("Platonic dodecahedron renders faces and edges without vertex spheres", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaceFills"] > 0 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
             platonic_mckay = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
@@ -916,7 +916,7 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             palette_ids = [button["id"] for button in palette_grid["buttons"]]
-            check("Style section exposes compact palette swatches", len(palette_grid["buttons"]) == 4 and palette_grid["metrics"]["paletteSwatchButtonCount"] == 4 and palette_ids == ["gold", "cyan", "mono", "ember"], str(palette_grid))
+            check("Visuals section exposes the full desktop palette catalog", len(palette_grid["buttons"]) == 45 and palette_grid["metrics"]["paletteSwatchButtonCount"] == 45 and palette_ids[:4] == ["gold", "ember", "ice", "cyan"] and all(name in palette_ids for name in ["rainbow", "aurora", "ultraviolet", "solar_flare", "petrie", "vintage"]), str(palette_grid))
             check("palette swatches mark active Gold palette", palette_grid["output"] == "Gold" and palette_grid["select"] == "gold" and any(button["id"] == "gold" and button["active"] and button["pressed"] == "true" for button in palette_grid["buttons"]), str(palette_grid))
             palette_swatch_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#palette-swatch-grid [data-palette-swatch="ember"]').click()
@@ -952,6 +952,19 @@ def main() -> int:
             }""")
             check("palette state reaches localStorage", palette_saved["stored"] == "cyan", str(palette_saved))
             check("flush leaves no pending save", not palette_saved["pending"], str(palette_saved))
+            page.locator("#background-select").select_option("eclipse")
+            page.locator("#background-brightness").evaluate("""el => { el.value = '0.9'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }""")
+            page.locator("#point-opacity").evaluate("""el => { el.value = '0.85'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }""")
+            page.locator("#color-speed").evaluate("""el => { el.value = '1.2'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }""")
+            page.locator("#fx-strength").evaluate("""el => { el.value = '1.25'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }""")
+            visual_controls = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                backgroundOutput: document.getElementById('background-brightness-output').textContent.trim(),
+                opacityOutput: document.getElementById('point-opacity-output').textContent.trim(),
+                colorSpeedOutput: document.getElementById('color-speed-output').textContent.trim(),
+                fxStrengthOutput: document.getElementById('fx-strength-output').textContent.trim()
+            })""")
+            check("Visuals section exposes functional background, opacity, shift speed, and FX strength controls", visual_controls["state"]["background"] == "eclipse" and abs(visual_controls["state"]["backgroundBrightness"] - 0.9) < 0.01 and abs(visual_controls["state"]["pointOpacity"] - 0.85) < 0.01 and abs(visual_controls["state"]["colorSpeed"] - 1.2) < 0.01 and abs(visual_controls["state"]["fxStrength"] - 1.25) < 0.01 and visual_controls["backgroundOutput"] == "90%" and visual_controls["opacityOutput"] == "85%" and visual_controls["colorSpeedOutput"] == "Fast" and visual_controls["fxStrengthOutput"] == "125%", str(visual_controls))
             fx_grid = page.evaluate("""() => ({
                 buttons: [...document.querySelectorAll('#fx-preset-grid [data-fx-preset]')].map(button => ({
                     id: button.dataset.fxPreset,
@@ -963,7 +976,7 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             fx_ids = [button["id"] for button in fx_grid["buttons"]]
-            check("Style section exposes compact FX presets", len(fx_grid["buttons"]) == 4 and fx_grid["metrics"]["fxPresetButtonCount"] == 4 and fx_ids == ["clean", "pulse", "color", "live"], str(fx_grid))
+            check("Visuals section exposes compact FX presets", len(fx_grid["buttons"]) == 4 and fx_grid["metrics"]["fxPresetButtonCount"] == 4 and fx_ids == ["clean", "pulse", "color", "live"], str(fx_grid))
             check("FX presets mark active Clean state", fx_grid["output"] == "Clean" and any(button["id"] == "clean" and button["active"] and button["pressed"] == "true" for button in fx_grid["buttons"]), str(fx_grid))
             fx_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-preset-grid [data-fx-preset="live"]').click()
@@ -1002,7 +1015,7 @@ def main() -> int:
                 activeFx: document.querySelector('#fx-preset-grid button.active')?.dataset.fxPreset,
                 fxOutput: document.getElementById('fx-preset-output').textContent.trim()
             })""")
-            check("Style section exposes auto color and soft FX toggles", style_anim_set["state"]["autoColor"] and style_anim_set["state"]["softFx"] and style_anim_set["metrics"]["lastSettingsControlSyncSkip"] == "soft-fx-toggle", str(style_anim_set))
+            check("Visuals section exposes color shift and soft FX toggles", style_anim_set["state"]["autoColor"] and style_anim_set["state"]["softFx"] and style_anim_set["metrics"]["lastSettingsControlSyncSkip"] == "soft-fx-toggle", str(style_anim_set))
             check("FX preset chips sync from fallback toggles", style_anim_set["activeFx"] == "live" and style_anim_set["fxOutput"] == "Live", str(style_anim_set))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("before => window.__mobileApp.getMetrics().motionFrameRenderCount > before", arg=style_anim_before["motionFrameRenderCount"], timeout=1500)
@@ -1084,7 +1097,7 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             page.evaluate("() => { window.__mobileApp.setState({ autoColor: false, softFx: false, palette: 'cyan' }); window.__mobileApp.forceRender(); window.__mobileApp.openSettings('style'); }")
             surprise_button = page.locator("#surprise-button").bounding_box()
-            check("Style section exposes compact Surprise action", bool(surprise_button) and surprise_button["height"] >= 40, str(surprise_button))
+            check("Visuals section exposes compact Surprise action", bool(surprise_button) and surprise_button["height"] >= 40, str(surprise_button))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
             surprise_after = page.evaluate("""() => ({
@@ -1581,8 +1594,8 @@ def main() -> int:
             check("context toggle enables context visuals", context_metrics["contextVisible"], str(context_metrics))
             check("context rays are batched into one stroke", context_draw["rays"] == 56 and context_draw["rayStrokes"] == 1, str(context_draw))
             check("context draw records highlighted points", context_draw["points"] == 240 and context_draw["neighborPoints"] == 56 and context_draw["selectedPoints"] == 1, str(context_draw))
-            check("context draw keeps ordinary points batched", context_draw["batchedPoints"] + context_draw["directPoints"] == 240 and context_draw["pointBatchFills"] <= 2 and context_draw["directPoints"] == context_draw["glowPoints"], str(context_draw))
-            check("context draw uses reusable point queues", context_draw["drawMaskWrites"] == 240 and context_draw["directQueuePoints"] == context_draw["directPoints"] == context_draw["glowPoints"] and context_draw["directPointObjectAllocs"] == 0 and context_draw["baseBucketCount"] == context_draw["pointBatchFills"] == 2, str(context_draw))
+            check("context draw keeps ordinary points batched", context_draw["batchedPoints"] + context_draw["directPoints"] == 240 and context_draw["pointBatchFills"] <= 5 and context_draw["directPoints"] == context_draw["glowPoints"], str(context_draw))
+            check("context draw uses reusable point queues", context_draw["drawMaskWrites"] == 240 and context_draw["directQueuePoints"] == context_draw["directPoints"] == context_draw["glowPoints"] and context_draw["directPointObjectAllocs"] == 0 and context_draw["baseBucketCount"] == context_draw["pointBatchFills"] == 5, str(context_draw))
             check("context draw uses cached alpha colors", context_draw["alphaColorCacheHits"] == context_draw["directPoints"] + 2 and context_draw["alphaColorRuntimeParses"] == 0, str(context_draw))
             check("context draw uses precomputed geometry", context_draw["baseSizeCacheHits"] == 240 and context_draw["fillSlotCacheHits"] == context_draw["batchedPoints"] and context_draw["ringScaleFactors"] == context_draw["rings"], str(context_draw))
             check("context draw projects directly into point cache", context_draw["projectedPoints"] == 240 and context_draw["projectionObjectAllocs"] == 0 and context_metrics["lastProjectionSource"] == "direct-point-fields" and context_metrics["lastProjectionCount"] == 240, str(context_metrics))
