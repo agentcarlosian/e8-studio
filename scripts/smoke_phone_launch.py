@@ -72,15 +72,24 @@ def main() -> int:
             panel_state = page.evaluate("""() => {
               const panel = document.getElementById('panel');
               const body = document.getElementById('ps-body');
-              const learn = body?.querySelector('[data-section="learn"]');
+              const learnTab = document.getElementById('panel-tab-learn');
               return {
                 panelPresent: !!panel,
                 bodyPresent: !!body,
-                learnSectionPresent: !!learn,
+                learnTabPresent: !!learnTab,
+                learnTabLabel: learnTab?.textContent.trim(),
               };
             }""")
             check("control panel present", panel_state["panelPresent"], str(panel_state))
-            check("learn section rendered", panel_state["learnSectionPresent"], str(panel_state))
+            check("Learn workspace tab present", panel_state["learnTabPresent"] and panel_state["learnTabLabel"] == "Learn", str(panel_state))
+            learn_workspace = page.evaluate("""() => {
+              window.__app.setPanelMode('learn');
+              const section = document.querySelector('#ps-body [data-section="learn"]');
+              const selected = document.getElementById('panel-tab-learn')?.getAttribute('aria-selected');
+              window.__app.setPanelMode('scene');
+              return { sectionPresent: !!section, selected };
+            }""")
+            check("Learn workspace renders on selection", learn_workspace["sectionPresent"] and learn_workspace["selected"] == "true", str(learn_workspace))
 
             page.evaluate("() => window.__app.showRenderFallbackForTest()")
             check("fallback poster can show", page.locator("#render-fallback:not(.hidden)").count() == 1)
