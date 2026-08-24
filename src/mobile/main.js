@@ -72,6 +72,7 @@ const MANUAL_ZOOM_MIN = 0.55;
 const STANDARD_ZOOM_MAX = 3.2;
 const E8_COXETER_ZOOM_MAX = 25;
 const FX_SHIFT_INTERVAL_S = 3.2;
+const PALETTE_COMPACT_COUNT = 9;
 const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
   { id: 'clean', label: 'Static', autoColor: false, softFx: false },
@@ -3077,6 +3078,17 @@ function syncPaletteExpansion() {
   return paletteExpanded;
 }
 
+function syncPaletteCompactSwatches() {
+  if (!els.paletteSwatchGrid) return 0;
+  const buttons = [...els.paletteSwatchGrid.querySelectorAll('[data-palette-swatch]')];
+  const compact = buttons.slice(0, PALETTE_COMPACT_COUNT);
+  const active = buttons.find(button => button.dataset.paletteSwatch === state.palette);
+  if (active && !compact.includes(active)) compact[compact.length - 1] = active;
+  const compactSet = new Set(compact);
+  buttons.forEach(button => button.classList.toggle('compact-visible', compactSet.has(button)));
+  return compactSet.size;
+}
+
 function togglePaletteExpanded(force = null) {
   paletteExpanded = typeof force === 'boolean' ? force : !paletteExpanded;
   metrics.paletteExpandToggleCount++;
@@ -3096,6 +3108,7 @@ function syncPaletteControls() {
       button.classList.toggle('active', isActive);
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+    syncPaletteCompactSwatches();
   }
   return true;
 }

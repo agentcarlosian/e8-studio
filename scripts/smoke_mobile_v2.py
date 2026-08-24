@@ -1258,7 +1258,9 @@ def main() -> int:
             palette_ids = [button["id"] for button in palette_grid["buttons"]]
             check("Visuals section exposes the full desktop palette catalog", len(palette_grid["buttons"]) == 45 and palette_grid["metrics"]["paletteSwatchButtonCount"] == 45 and palette_ids[:4] == ["gold", "ember", "ice", "cyan"] and all(name in palette_ids for name in ["rainbow", "aurora", "ultraviolet", "solar_flare", "petrie", "vintage"]), str(palette_grid))
             check("palette swatches mark active Gold palette", palette_grid["output"] == "Gold" and palette_grid["select"] == "gold" and any(button["id"] == "gold" and button["active"] and button["pressed"] == "true" for button in palette_grid["buttons"]), str(palette_grid))
-            check("palette catalog starts as a compact two-row tray", not palette_grid["expanded"] and palette_grid["expandText"] == "Expand" and palette_grid["expandAria"] == "false" and sum(button["visible"] for button in palette_grid["buttons"]) == 6, str(palette_grid))
+            palette_expand_box = page.locator("#palette-expand-button").bounding_box()
+            check("palette catalog starts as a complete three-row tray", not palette_grid["expanded"] and palette_grid["expandText"] == "Expand" and palette_grid["expandAria"] == "false" and sum(button["visible"] for button in palette_grid["buttons"]) == 9, str(palette_grid))
+            check("palette Expand is a full touch target", bool(palette_expand_box) and palette_expand_box["height"] >= 44 and palette_expand_box["width"] >= 84, str(palette_expand_box))
             palette_expand_before = palette_grid["metrics"]
             page.locator("#palette-expand-button").click()
             palette_expanded = page.evaluate("""() => ({
@@ -1276,7 +1278,19 @@ def main() -> int:
                 text: document.getElementById('palette-expand-button').textContent.trim(),
                 aria: document.getElementById('palette-expand-button').getAttribute('aria-expanded')
             })""")
-            check("Collapse restores the compact palette tray", palette_collapsed["visible"] == 6 and not palette_collapsed["expanded"] and palette_collapsed["text"] == "Expand" and palette_collapsed["aria"] == "false", str(palette_collapsed))
+            check("Collapse restores the compact palette tray", palette_collapsed["visible"] == 9 and not palette_collapsed["expanded"] and palette_collapsed["text"] == "Expand" and palette_collapsed["aria"] == "false", str(palette_collapsed))
+            selected_late_palette = page.evaluate("""() => {
+                window.__mobileApp.setState({ palette: 'vintage' });
+                const buttons = [...document.querySelectorAll('#palette-swatch-grid [data-palette-swatch]')];
+                const result = {
+                    visible: buttons.filter(button => getComputedStyle(button).display !== 'none').length,
+                    activeVisible: getComputedStyle(document.querySelector('[data-palette-swatch="vintage"]')).display !== 'none',
+                    active: document.querySelector('#palette-swatch-grid button.active')?.dataset.paletteSwatch
+                };
+                window.__mobileApp.setState({ palette: 'gold' });
+                return result;
+            }""")
+            check("compact palette tray includes a selected later palette without opening gaps", selected_late_palette["visible"] == 9 and selected_late_palette["activeVisible"] and selected_late_palette["active"] == "vintage", str(selected_late_palette))
             palette_swatch_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#palette-swatch-grid [data-palette-swatch="ember"]').click()
             palette_swatch_after = page.evaluate("""() => ({
