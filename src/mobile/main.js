@@ -2744,7 +2744,18 @@ function commitLiveControl(controlName, options = {}) {
 
 function resetView() {
   stopMobileTourForManualExplore();
-  setState({ rotation: 0, panX: 0, panY: 0, zoom: 1, selectedRoot: null });
+  motionPhase = 0;
+  setState({
+    rotation: 0,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    autoRotate: false,
+    e8MorphT: 0,
+    panX: 0,
+    panY: 0,
+    zoom: 1,
+    selectedRoot: null,
+  }, { interactionType: 'reset-view' });
   showStatus('View reset');
 }
 
@@ -5102,6 +5113,10 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
   drawStats.bloomTwinTrails = twinTrails;
 }
 
+const SDF_ROOT_SCALE = 1.55;
+const SDF_FOV_RADIANS = 50 * Math.PI / 180;
+const SDF_BASE_CAMERA_DISTANCE = 11.0;
+
 const SDF_VERTEX_SHADER = `
 attribute vec2 aPosition;
 void main() {
@@ -5150,8 +5165,12 @@ float sdf(vec3 p) {
   for (int ringIndex = 0; ringIndex < 8; ringIndex++) {
     vec4 ring = uRings[ringIndex];
     float nearestSlot = floor((pointAngle - ring.y) / ring.z + 0.5);
+    float nearestAngle = ring.y + nearestSlot * ring.z;
+    // Sample the same symmetric neighbourhood on both sides of a root. A
+    // one-sided shortcut makes the chosen neighbour flip at each root centre,
+    // producing the 30 radial normal seams that resemble cel shading.
     for (int offset = -ROOT_NEIGHBOR_SPAN; offset <= ROOT_NEIGHBOR_SPAN; offset++) {
-      float rootAngle = ring.y + (nearestSlot + float(offset)) * ring.z;
+      float rootAngle = nearestAngle + float(offset) * ring.z;
       vec3 root = vec3(ring.x * cos(rootAngle), ring.x * sin(rootAngle), ring.w);
       float rootDistance = length(p - root) - sphereRadius;
       if (rootDistance < nearestDistance) {
@@ -5166,7 +5185,10 @@ float sdf(vec3 p) {
 }
 
 vec3 surfaceNormal(vec3 p) {
-  const float e = 0.0015;
+  // A phone raster covers a larger world-space footprint than the desktop
+  // renderer. Sampling the normal over that footprint prevents sub-pixel
+  // sphere junctions from turning into radial bands when magnified.
+  const float e = 0.006;
   const vec2 h = vec2(1.0, -1.0) * 0.5773;
   return normalize(
     h.xyy * sdf(p + h.xyy * e) +
@@ -5247,35 +5269,36 @@ void main() {
   float diffuse = max(dot(n, keyDirection), 0.0);
   float fill = max(dot(n, fillDirection), 0.0) * 0.32;
   float fresnel = pow(1.0 - max(dot(n, -rayDirection), 0.0), 3.0);
-  float shadow = softShadow(p + n * 0.004, keyDirection);
+  float shadow = softShadow(p + n * 0.006, keyDirection);
   float ao = ambientOcclusion(p, n);
   vec3 baseColor = mix(uColorInner, uColorOuter, ringMix);
-  float wrap = max(0.0, (dot(n, keyDirection) + 0.32) / 1.32);
-  vec3 color = baseColor * (0.17 + diffuse * shadow * 0.86 + fill) * ao;
-  color += baseColor * wrap * 0.24;
-  color += mix(vec3(0.42, 0.68, 1.0), baseColor, 0.35) * fresnel * (0.42 + uBloom * 0.34);
+  float wrap = smoothstep(-0.45, 0.9, dot(n, keyDirection));
+  float hemisphere = 0.5 + 0.5 * n.y;
+  vec3 color = baseColor * (0.4 + diffuse * shadow * 0.42 + fill * 0.42 + hemisphere * 0.08) * ao;
+  color += baseColor * wrap * 0.12;
+  color += mix(vec3(0.42, 0.68, 1.0), baseColor, 0.45) * fresnel * (0.3 + uBloom * 0.24);
 
   vec3 halfVector = normalize(keyDirection - rayDirection);
-  float standardSpec = pow(max(dot(n, halfVector), 0.0), 34.0);
+  float standardSpec = pow(max(dot(n, halfVector), 0.0), 26.0);
   vec3 tangent = normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(0.001));
   vec3 bitangent = normalize(cross(n, tangent));
-  float anisoSpec = pow(abs(dot(tangent, halfVector)), 28.0) * 0.58
-    + pow(abs(dot(bitangent, halfVector)), 74.0) * 0.42;
-  color += vec3(1.0) * standardSpec * shadow * 0.52;
-  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.62;
+  float anisoSpec = pow(abs(dot(tangent, halfVector)), 36.0) * 0.58
+    + pow(abs(dot(bitangent, halfVector)), 82.0) * 0.42;
+  color += vec3(1.0) * standardSpec * shadow * 0.28;
+  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.24;
   vec3 bright = max(color - vec3(0.64), vec3(0.0));
-  color += bright * uBloom * 0.92;
-  color = color / (color + vec3(0.30));
-  color = pow(clamp(color, 0.0, 1.0), vec3(0.92));
+  color += bright * uBloom * 0.72;
+  color = color / (color + vec3(0.42));
+  color = pow(clamp(color, 0.0, 1.0), vec3(0.96));
   gl_FragColor = vec4(color, 1.0);
 }`;
 
 const MOBILE_SDF_QUALITY = {
   interactive: { scale: 0.48, marchSteps: 28, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
   motion: { scale: 0.66, marchSteps: 34, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
-  smooth: { scale: 0.80, marchSteps: 40, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
-  balanced: { scale: 1.0, marchSteps: 48, neighborSpan: 1, shadowSteps: 2, aoSteps: 1 },
-  sharp: { scale: 1.2, marchSteps: 60, neighborSpan: 1, shadowSteps: 4, aoSteps: 2 },
+  smooth: { scale: 1.0, marchSteps: 42, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  balanced: { scale: 1.0, marchSteps: 48, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  sharp: { scale: 1.25, marchSteps: 60, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
 };
 
 function sdfShaderSource(profile) {
@@ -5382,7 +5405,7 @@ function setSdfCanvasActive(active) {
 }
 
 function updateSdfRingUniforms() {
-  const scale = 1.55;
+  const scale = SDF_ROOT_SCALE;
   const byRing = Array.from({ length: 8 }, () => []);
   for (const point of points) byRing[clamp(Number(point.ring) || 0, 0, 7)].push(point);
   for (let ringIndex = 0; ringIndex < 8; ringIndex++) {
@@ -5399,6 +5422,52 @@ function updateSdfRingUniforms() {
   return scale;
 }
 
+function sdfWorldBoundsRadius() {
+  let radius = 0;
+  const surfacePadding = (state.sdfSphereR + state.sdfBlend * 0.3) * SDF_ROOT_SCALE;
+  for (const point of points) {
+    const planarRadius = Math.hypot(point.x, point.y) * SDF_ROOT_SCALE;
+    const z = Math.abs((point.ring / 7 - 0.5) * 0.8 * SDF_ROOT_SCALE * state.e8MorphT);
+    radius = Math.max(radius, Math.hypot(planarRadius, z) + surfacePadding);
+  }
+  return Math.max(0.25, radius);
+}
+
+function sdfCameraDiveScale() {
+  return state.cameraPath === 'dive' && state.autoRotate
+    ? 0.82 + 0.22 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+    : 1;
+}
+
+function sdfCameraDistance() {
+  return (SDF_BASE_CAMERA_DISTANCE / Math.sqrt(state.zoom)) * sdfCameraDiveScale();
+}
+
+function sdfProjectedFrameMetrics(layout, distance = sdfCameraDistance()) {
+  const view = usableViewBounds();
+  const worldRadius = sdfWorldBoundsRadius();
+  const focalPixels = window.innerHeight / (2 * Math.tan(SDF_FOV_RADIANS * 0.5));
+  const safeDistance = Math.max(worldRadius + 0.01, distance);
+  const projectedRadius = focalPixels * worldRadius /
+    Math.sqrt(Math.max(0.0001, safeDistance * safeDistance - worldRadius * worldRadius));
+  const centerX = window.innerWidth * 0.5 + state.panX;
+  const centerY = layout.cy + state.panY;
+  const minX = centerX - projectedRadius;
+  const maxX = centerX + projectedRadius;
+  const minY = centerY - projectedRadius;
+  const maxY = centerY + projectedRadius;
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: projectedRadius * 2,
+    height: projectedRadius * 2,
+    withinView: minX >= view.left - 0.5 && maxX <= view.right + 0.5 && minY >= view.top - 0.5 && maxY <= view.bottom + 0.5,
+    view,
+  };
+}
+
 function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   if (!ensureSdfWebgl()) return null;
   try {
@@ -5406,8 +5475,12 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     const record = sdfProgramFor(profileKey);
     const { program, profile, uniforms, position, buffer } = record;
     const gl = sdfGl;
-    const width = Math.max(1, Math.round(window.innerWidth * profile.scale));
-    const height = Math.max(1, Math.round(window.innerHeight * profile.scale));
+    const staticPixelBoost = interactionLiteFrame || hasRuntimeAnimation()
+      ? 1
+      : Math.min(window.devicePixelRatio || 1, 1.5);
+    const rasterScale = profile.scale * staticPixelBoost;
+    const width = Math.max(1, Math.round(window.innerWidth * rasterScale));
+    const height = Math.max(1, Math.round(window.innerHeight * rasterScale));
     if (sdfCanvas.width !== width || sdfCanvas.height !== height) {
       sdfCanvas.width = width;
       sdfCanvas.height = height;
@@ -5426,8 +5499,7 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
 
     const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
     const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
-    const diveScale = state.cameraPath === 'dive' && state.autoRotate ? 0.82 + 0.22 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86)) : 1;
-    const distance = (9.45 / Math.sqrt(state.zoom)) * diveScale;
+    const distance = sdfCameraDistance();
     const cosPitch = Math.cos(pitch);
     const camera = [
       Math.sin(state.rotation) * cosPitch * distance,
@@ -5461,7 +5533,7 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     gl.uniform1f(uniforms.uTime, stylePhase + motionPhase);
     gl.uniform3f(uniforms.uCameraPos, camera[0], camera[1], camera[2]);
     gl.uniformMatrix3fv(uniforms.uCameraBasis, false, cameraBasis);
-    gl.uniform1f(uniforms.uFov, 50 * Math.PI / 180);
+    gl.uniform1f(uniforms.uFov, SDF_FOV_RADIANS);
     gl.uniform4fv(uniforms.uRings, sdfRingUniformData);
     gl.uniform1f(uniforms.uSphereR, state.sdfSphereR * rootScale);
     gl.uniform1f(uniforms.uBlend, state.sdfBlend * rootScale);
@@ -5477,6 +5549,8 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     drawStats.modelFaceFills = 1;
     drawStats.sdfRenderer = 'webgl-raymarch';
     drawStats.sdfQuality = profileKey;
+    drawStats.sdfRasterScale = rasterScale;
+    drawStats.sdfStaticPixelBoost = staticPixelBoost;
     drawStats.sdfRasterSize = Math.min(width, height);
     drawStats.sdfPixels = width * height;
     drawStats.sdfSpheres = points.length;
@@ -5484,11 +5558,7 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     drawStats.sdfNeighborSpan = profile.neighborSpan;
     drawStats.sdfShadowSteps = profile.shadowSteps;
     drawStats.sdfAoSteps = profile.aoSteps;
-    const diameter = Math.min(window.innerWidth - 24, layout.availableH * 0.92);
-    return projectedModelFrameMetrics([
-      { x: window.innerWidth * 0.5 - diameter * 0.5, y: layout.cy - diameter * 0.5 },
-      { x: window.innerWidth * 0.5 + diameter * 0.5, y: layout.cy + diameter * 0.5 },
-    ]);
+    return sdfProjectedFrameMetrics(layout, distance);
   } catch (error) {
     recordError(error);
     sdfWebglUnavailable = true;
@@ -7059,9 +7129,41 @@ function fitAllRoots(interactionType = 'fit-all', options = {}) {
     state.selectedRoot = null;
     updateSelectionUI();
   }
-  const fitted = framePointList(allRootList, interactionType, options);
+  const fitted = state.modelMode === 'sdf'
+    ? frameSdfModel(interactionType, options)
+    : framePointList(allRootList, interactionType, options);
   if (fitted && !options.silentStatus) showStatus('View fitted');
   return fitted;
+}
+
+function frameSdfModel(interactionType, options = {}) {
+  const layout = layoutForCanvas(1);
+  const view = usableViewBounds();
+  const targetX = (view.left + view.right) * 0.5;
+  const targetY = (view.top + view.bottom) * 0.5;
+  const fitRadius = Math.max(48, Math.min(
+    targetX - view.left,
+    view.right - targetX,
+    targetY - view.top,
+    view.bottom - targetY
+  ) * 0.96);
+  const worldRadius = sdfWorldBoundsRadius();
+  const focalPixels = window.innerHeight / (2 * Math.tan(SDF_FOV_RADIANS * 0.5));
+  const requiredDistance = worldRadius * Math.sqrt(1 + (focalPixels / fitRadius) ** 2) + 0.02;
+  const nextZoom = clamp((SDF_BASE_CAMERA_DISTANCE / requiredDistance) ** 2, 0.55, 3.2);
+  motionPhase = 0;
+  setState({
+    cameraPath: 'manual',
+    autoRotate: false,
+    zoom: nextZoom,
+    panX: targetX - window.innerWidth * 0.5,
+    panY: targetY - layout.cy,
+  }, {
+    interactionType,
+    save: options.save,
+    renderReason: interactionType,
+  });
+  return true;
 }
 
 function framePointList(list, interactionType, options = {}) {
@@ -7553,7 +7655,7 @@ function getMetrics() {
     subsetSize: rootSubset().size,
     subsetIndex: subsetIndex(),
     subsetFrame: subsetFrameMetrics(),
-    allFrame: allFrameMetrics(),
+    allFrame: state.modelMode === 'e8_2d' ? allFrameMetrics() : metrics.lastRenderAllFrame,
     selectedRootFrame: selectedRootFrameMetrics(),
     selectedContext: selectedContext ? {
       neighborCount: selectedContext.neighborCount,
