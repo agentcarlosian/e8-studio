@@ -271,23 +271,6 @@ const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'poly4d', polytope4d: '120cell' },
   { modelMode: 'dynkin', dynkinDiagram: 'E8' },
 ];
-const SCENE_PRESETS = [
-  { id: 'bloom', label: 'Bloom', target: { modelMode: 'bloom' } },
-  { id: 'e8_2d', label: 'E8', target: { modelMode: 'e8_2d' } },
-  { id: 'sdf', label: 'SDF', target: { modelMode: 'sdf' } },
-  { id: 'tetrahedron', label: 'Tet', target: { modelMode: 'platonic', shape: 'tetrahedron' } },
-  { id: 'cube', label: 'Cube', target: { modelMode: 'platonic', shape: 'cube' } },
-  { id: 'octahedron', label: 'Oct', target: { modelMode: 'platonic', shape: 'octahedron' } },
-  { id: 'dodecahedron', label: 'Dod', target: { modelMode: 'platonic', shape: 'dodecahedron' } },
-  { id: 'icosahedron', label: 'Ico', target: { modelMode: 'platonic', shape: 'icosahedron' } },
-  { id: '5cell', label: '5-cell', target: { modelMode: 'poly4d', polytope4d: '5cell' } },
-  { id: 'tesseract', label: 'Tess', target: { modelMode: 'poly4d', polytope4d: 'tesseract' } },
-  { id: '16cell', label: '16', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
-  { id: '24cell', label: '24', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
-  { id: '600cell', label: '600', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
-  { id: '120cell', label: '120', target: { modelMode: 'poly4d', polytope4d: '120cell' } },
-  { id: 'dynkin-e8', label: 'Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E8' } },
-];
 const MOBILE_TOUR_STEPS = [
   {
     id: 'e8-coxeter',
@@ -561,13 +544,6 @@ let metrics = {
   lastSceneChipGesture: null,
   lastSceneChipGestureMs: null,
   lastSceneChipSwipeDirection: null,
-  scenePresetButtonCount: 0,
-  scenePresetSelectCount: 0,
-  scenePresetSyncSkipCount: 0,
-  lastScenePresetId: null,
-  lastScenePresetLabel: null,
-  lastScenePresetMs: null,
-  lastScenePresetTarget: null,
   modelShortcutButtonCount: 0,
   modelShortcutSelectCount: 0,
   modelShortcutSyncSkipCount: 0,
@@ -1126,8 +1102,6 @@ function cacheElements() {
   els.sdfBloomOutput = document.getElementById('sdf-bloom-output');
   els.sdfAniso = document.getElementById('sdf-aniso');
   els.sdfAnisoOutput = document.getElementById('sdf-aniso-output');
-  els.scenePresetGrid = document.getElementById('scene-preset-grid');
-  els.scenePresetOutput = document.getElementById('scene-preset-output');
   els.modelShortcutGroups = document.getElementById('model-shortcut-groups');
   els.modelShortcutOutput = document.getElementById('model-shortcut-output');
   els.subsetChipGrid = document.getElementById('subset-chip-grid');
@@ -1239,11 +1213,6 @@ function bindEvents() {
     const rootAction = event.target.closest('[data-root-action]')?.dataset.rootAction;
     if (rootAction) {
       handleRootAction(rootAction);
-      return;
-    }
-    const scenePreset = event.target.closest('[data-scene-preset]')?.dataset.scenePreset;
-    if (scenePreset) {
-      selectScenePreset(scenePreset);
       return;
     }
     const modelShortcut = event.target.closest('[data-model-shortcut]')?.dataset.modelShortcut;
@@ -2810,61 +2779,6 @@ function resetView(button = els.resetView) {
   return true;
 }
 
-function scenePresetLabel(preset) {
-  const target = preset?.target || {};
-  if (target.modelMode === 'bloom') return 'Designed Bloom';
-  if (target.modelMode === 'e8_2d') return 'E8 Coxeter';
-  if (target.modelMode === 'sdf') return 'E8 distance field';
-  if (target.modelMode === 'platonic') return SHAPE_LABELS[target.shape] || preset.label;
-  if (target.modelMode === 'poly4d') return POLYTOPE4D_LABELS[target.polytope4d] || preset.label;
-  if (target.modelMode === 'dynkin') return `${DYNKIN_LABELS[target.dynkinDiagram] || preset.label} Dynkin`;
-  return preset?.label || 'Scene';
-}
-
-function scenePresetMatches(preset) {
-  const target = preset?.target;
-  if (!target || target.modelMode !== state.modelMode) return false;
-  if (target.modelMode === 'platonic') return target.shape === state.shape;
-  if (target.modelMode === 'poly4d') return target.polytope4d === state.polytope4d;
-  if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
-  return true;
-}
-
-function activeScenePreset() {
-  return SCENE_PRESETS.find(scenePresetMatches) || null;
-}
-
-function renderScenePresetButtons() {
-  if (!els.scenePresetGrid) return false;
-  els.scenePresetGrid.innerHTML = SCENE_PRESETS.map(preset => (
-    `<button type="button" data-scene-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(scenePresetLabel(preset))}">${escapeHtml(preset.label)}</button>`
-  )).join('');
-  metrics.scenePresetButtonCount = SCENE_PRESETS.length;
-  return true;
-}
-
-function syncScenePresetControls() {
-  if (!els.scenePresetGrid) return false;
-  const active = activeScenePreset();
-  if (els.scenePresetOutput) els.scenePresetOutput.textContent = active ? active.label : sceneStatusText();
-  els.scenePresetGrid.querySelectorAll('[data-scene-preset]').forEach(button => {
-    const isActive = active?.id === button.dataset.scenePreset;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  });
-  return true;
-}
-
-function selectScenePreset(id) {
-  const preset = SCENE_PRESETS.find(item => item.id === id);
-  if (!preset) return false;
-  return setScenePreset(preset.target, {
-    interactionType: `scene-preset-${preset.id}`,
-    metricKind: 'scene-preset',
-    preset,
-  });
-}
-
 function modelShortcutLabel(shortcut) {
   return shortcut?.name || shortcut?.label || 'Model';
 }
@@ -3523,7 +3437,7 @@ function setScenePreset(targetOrIndex, options = {}) {
     });
   }
   if (!target || !SUPPORTED_MODEL_MODES.has(target.modelMode)) return getState();
-  const interactionType = options.interactionType || 'scene-preset';
+  const interactionType = options.interactionType || 'model-target';
   if (mobileTourActive && !interactionType.startsWith('mobile-tour')) {
     stopMobileTour({ interactionType: 'mobile-tour-manual-stop', status: false });
   }
@@ -3539,14 +3453,7 @@ function setScenePreset(targetOrIndex, options = {}) {
   autoModelElapsed = 0;
   const snapshotIndex = targetIndex >= 0 ? targetIndex : autoModelIndex;
   const snapshot = sceneTargetSnapshot(snapshotIndex, state);
-  if (metricKind === 'scene-preset') {
-    metrics.scenePresetSelectCount++;
-    metrics.scenePresetSyncSkipCount++;
-    metrics.lastScenePresetId = options.preset?.id || null;
-    metrics.lastScenePresetLabel = options.preset ? scenePresetLabel(options.preset) : sceneStatusText();
-    metrics.lastScenePresetMs = performance.now();
-    metrics.lastScenePresetTarget = snapshot;
-  } else if (metricKind === 'model-shortcut') {
+  if (metricKind === 'model-shortcut') {
     metrics.modelShortcutSelectCount++;
     metrics.modelShortcutSyncSkipCount++;
     metrics.lastModelShortcutId = options.modelShortcut?.id || null;
@@ -3619,7 +3526,6 @@ function syncModelControls() {
   syncSdfControls();
   syncBloomControls();
   if (els.autoModelToggle) els.autoModelToggle.checked = state.autoModel;
-  syncScenePresetControls();
   syncModelShortcutControls();
   const scene = activeSceneSummary();
   if (els.sceneChip) {
@@ -5841,12 +5747,112 @@ function normalizedPlatonicVerts(shape) {
   return verts.map(v => [v[0] / denom, v[1] / denom, v[2] / denom]);
 }
 
+// The baked dodecahedron and icosahedron triangle lists are unsuitable for
+// mobile painter-style rendering: they expose their triangulation and can read
+// as diagonals through the solid. Recover the actual convex face polygons from
+// the vertices, matching the desktop view's hull-first geometry policy.
+function convexHullPolygons(verts) {
+  const count = verts.length;
+  if (count < 4) return [];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  let maxR = 0;
+  for (const v of verts) maxR = Math.max(maxR, Math.hypot(v[0], v[1], v[2]));
+  const epsilon = 1e-4 * (maxR || 1);
+  const planes = new Map();
+
+  for (let i = 0; i < count; i++) {
+    for (let j = i + 1; j < count; j++) {
+      for (let k = j + 1; k < count; k++) {
+        let normal = cross(sub(verts[j], verts[i]), sub(verts[k], verts[i]));
+        const length = Math.hypot(normal[0], normal[1], normal[2]);
+        if (length < epsilon) continue;
+        normal = [normal[0] / length, normal[1] / length, normal[2] / length];
+        let distance = dot(normal, verts[i]);
+        let positive = 0;
+        let negative = 0;
+        for (let m = 0; m < count; m++) {
+          const side = dot(normal, verts[m]) - distance;
+          if (side > epsilon) positive++;
+          else if (side < -epsilon) negative++;
+        }
+        if (positive && negative) continue;
+        if (distance < 0) {
+          normal = [-normal[0], -normal[1], -normal[2]];
+          distance = -distance;
+        }
+        const key = [normal[0], normal[1], normal[2], distance]
+          .map(value => Math.round(value / epsilon))
+          .join(',');
+        if (!planes.has(key)) planes.set(key, { normal, distance });
+      }
+    }
+  }
+
+  const polygons = [];
+  for (const { normal, distance } of planes.values()) {
+    const indices = [];
+    for (let i = 0; i < count; i++) {
+      if (Math.abs(dot(normal, verts[i]) - distance) < epsilon * 10) indices.push(i);
+    }
+    if (indices.length < 3) continue;
+    let axis = Math.abs(normal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    const projection = dot(axis, normal);
+    axis = [
+      axis[0] - projection * normal[0],
+      axis[1] - projection * normal[1],
+      axis[2] - projection * normal[2],
+    ];
+    const axisLength = Math.hypot(axis[0], axis[1], axis[2]);
+    axis = [axis[0] / axisLength, axis[1] / axisLength, axis[2] / axisLength];
+    const tangent = cross(normal, axis);
+    const center = [0, 0, 0];
+    for (const index of indices) {
+      center[0] += verts[index][0];
+      center[1] += verts[index][1];
+      center[2] += verts[index][2];
+    }
+    center[0] /= indices.length;
+    center[1] /= indices.length;
+    center[2] /= indices.length;
+    indices.sort((a, b) => {
+      const pointA = sub(verts[a], center);
+      const pointB = sub(verts[b], center);
+      return Math.atan2(dot(pointA, tangent), dot(pointA, axis))
+        - Math.atan2(dot(pointB, tangent), dot(pointB, axis));
+    });
+    polygons.push(indices);
+  }
+  return polygons;
+}
+
 function platonicFaces(shapeName, shape) {
   if (!shape) return [];
   if (platonicFaceCache.has(shapeName)) return platonicFaceCache.get(shapeName);
-  const faces = Array.isArray(shape.faces) ? shape.faces.filter(face => Array.isArray(face) && face.length >= 3) : [];
+  const faces = STAR_SHAPES.has(shapeName)
+    ? (Array.isArray(shape.faces) ? shape.faces.filter(face => Array.isArray(face) && face.length >= 3) : [])
+    : convexHullPolygons(shape.verts || []);
   platonicFaceCache.set(shapeName, faces);
   return faces;
+}
+
+function projectedPolygonArea(face, projected) {
+  let area = 0;
+  for (let i = 0; i < face.length; i++) {
+    const a = projected[face[i]];
+    const b = projected[face[(i + 1) % face.length]];
+    if (a && b) area += a.x * b.y - b.x * a.y;
+  }
+  return area * 0.5;
+}
+
+function modelEdgeKey(a, b) {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
 function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) {
@@ -5855,27 +5861,68 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   if (!shape) return null;
   const verts = normalizedPlatonicVerts(shape);
   const projected = verts.map(v => projectModelPoint(v[0], v[1], v[2], layout, 1.04));
+  const faces = platonicFaces(shapeName, shape);
+  const edges = shape.edges || [];
+  const isStar = STAR_SHAPES.has(shapeName);
   drawStats.modelVertices = verts.length;
   drawStats.modelProjectedVertices = projected.length;
-  drawStats.modelEdges = shape.edges?.length || 0;
-  drawStats.modelFaces = shape.faces?.length || 0;
+  drawStats.modelEdges = edges.length;
+  drawStats.modelFaces = faces.length;
+  drawStats.modelFacePolygons = faces.length;
   const frame = projectedModelFrameMetrics(projected);
 
+  let visibleEdges = edges;
   if (!interactionLiteFrame) {
-    const faces = platonicFaces(shapeName, shape)
+    const entries = faces
       .map(face => ({
         face,
         depth: face.reduce((total, idx) => total + (projected[idx]?.z || 0), 0) / face.length,
+        front: isStar || projectedPolygonArea(face, projected) < 0,
       }))
-      .sort((a, b) => a.depth - b.depth);
+      .sort((a, b) => b.depth - a.depth);
+    const frontEdgeKeys = new Set();
+    if (!isStar) {
+      for (const entry of entries) {
+        if (!entry.front) continue;
+        for (let i = 0; i < entry.face.length; i++) {
+          frontEdgeKeys.add(modelEdgeKey(entry.face[i], entry.face[(i + 1) % entry.face.length]));
+        }
+      }
+      visibleEdges = edges.filter(edge => frontEdgeKeys.has(modelEdgeKey(edge[0], edge[1])));
+    }
+
+    // Rear structure is drawn first, then covered by the solid faces. This
+    // preserves a little depth context without putting every hidden edge on top.
     ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = paletteSet.glowSubset;
-    ctx.strokeStyle = colorWithAlpha(paletteSet.colors[2], 0.18);
-    ctx.lineWidth = 1;
-    for (const entry of faces) {
+    ctx.globalAlpha = isStar ? 0.26 : 0.12;
+    ctx.strokeStyle = paletteSet.colors[2] || paletteSet.colors[0];
+    ctx.lineWidth = 1.1;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const edge of edges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    const depths = entries.map(entry => entry.depth);
+    const minDepth = depths.length ? Math.min(...depths) : 0;
+    const maxDepth = depths.length ? Math.max(...depths) : 1;
+    const depthSpan = maxDepth - minDepth || 1;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (const entry of entries) {
       const first = projected[entry.face[0]];
       if (!first) continue;
+      const depthT = clamp((entry.depth - minDepth) / depthSpan, 0, 1);
+      const colorIndex = Math.min(paletteSet.colors.length - 1, Math.floor(depthT * paletteSet.colors.length));
+      ctx.globalAlpha = isStar ? 0.22 : (entry.front ? 0.72 : 0.2);
+      ctx.fillStyle = paletteSet.colors[colorIndex] || paletteSet.colors[0];
       ctx.beginPath();
       ctx.moveTo(first.x, first.y);
       for (let i = 1; i < entry.face.length; i++) {
@@ -5887,6 +5934,10 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
       drawStats.modelFaceFills++;
     }
     ctx.restore();
+    drawStats.modelFrontFaces = entries.filter(entry => entry.front).length;
+    drawStats.modelBackFaces = entries.length - drawStats.modelFrontFaces;
+    drawStats.modelFaceAlpha = isStar ? 0.22 : 0.72;
+    drawStats.modelHiddenEdgeAlpha = isStar ? 0.26 : 0.12;
   }
 
   ctx.save();
@@ -5900,7 +5951,7 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
   ctx.shadowBlur = interactionLiteFrame ? 0 : 3;
   ctx.beginPath();
-  for (const edge of shape.edges || []) {
+  for (const edge of visibleEdges) {
     const a = projected[edge[0]];
     const b = projected[edge[1]];
     if (!a || !b) continue;
@@ -5908,7 +5959,9 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     ctx.lineTo(b.x, b.y);
   }
   ctx.stroke();
-  drawStats.modelEdgeStrokes = shape.edges?.length ? 1 : 0;
+  drawStats.modelEdgeStrokes = edges.length ? (interactionLiteFrame ? 1 : 2) : 0;
+  drawStats.modelVisibleEdges = visibleEdges.length;
+  drawStats.modelHiddenEdges = Math.max(0, edges.length - visibleEdges.length);
   drawStats.modelEdgeWidth = edgeWidth;
   drawStats.modelEdgeAlpha = edgeAlpha;
   drawStats.modelEdgeColor = paletteSet.colors[0];
@@ -7862,7 +7915,6 @@ function clamp(value, min, max) {
 
 async function init() {
   cacheElements();
-  renderScenePresetButtons();
   renderModelShortcuts();
   renderPaletteSwatches();
   renderSubsetChips();
@@ -7900,7 +7952,6 @@ async function init() {
     fitAllRoots,
     stepScene,
     setScenePreset,
-    selectScenePreset,
     selectModelShortcut,
     selectFxPreset,
     selectMotionPreset,

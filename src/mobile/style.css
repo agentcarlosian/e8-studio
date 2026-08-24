@@ -54,6 +54,10 @@ button:disabled {
   opacity: 0.42;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .mobile-shell {
   position: fixed;
   inset: 0;
@@ -416,7 +420,6 @@ button:disabled {
 .browse-panel,
 .subset-panel,
 .zoom-panel,
-.scene-preset-panel,
 .model-shortcut-panel,
 .bloom-timeline-panel,
 .palette-panel,
@@ -473,7 +476,6 @@ button:disabled {
 .browse-panel,
 .subset-panel,
 .zoom-panel,
-.scene-preset-panel,
 .model-shortcut-panel,
 .bloom-timeline-panel,
 .palette-panel,
@@ -585,28 +587,6 @@ button:disabled {
   font-size: 11px;
   font-weight: 900;
   line-height: 1.05;
-}
-
-.scene-preset-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.scene-preset-grid button {
-  min-width: 0;
-  min-height: 42px;
-  padding: 0 4px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.05;
-}
-
-.scene-preset-grid button.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #08080d;
 }
 
 .model-shortcut-groups {

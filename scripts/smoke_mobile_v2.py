@@ -188,20 +188,13 @@ def main() -> int:
             scene_hold = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("scene chip hold opens View settings", scene_hold["settingsOpen"] and scene_hold["settingsSection"] == "view" and scene_hold["lastInteractionType"] == "scene-chip-hold-view", str(scene_hold))
             check("scene chip hold records gesture telemetry", scene_hold["sceneChipLongPressCount"] > scene_hold_before["sceneChipLongPressCount"] and scene_hold["sceneChipOpenSettingsCount"] > scene_hold_before["sceneChipOpenSettingsCount"] and scene_hold["lastSceneChipGesture"] == "hold-view", str(scene_hold))
-            scene_grid = page.evaluate("""() => ({
-                buttons: [...document.querySelectorAll('#scene-preset-grid [data-scene-preset]')].map(button => ({
-                    id: button.dataset.scenePreset,
-                    text: button.textContent.trim(),
-                    active: button.classList.contains('active'),
-                    pressed: button.getAttribute('aria-pressed')
-                })),
-                output: document.getElementById('scene-preset-output').textContent.trim(),
-                metrics: window.__mobileApp.getMetrics()
+            redundant_scene_catalog = page.evaluate("""() => ({
+                panel: document.querySelector('.scene-preset-panel'),
+                grid: document.getElementById('scene-preset-grid'),
+                buttons: document.querySelectorAll('[data-scene-preset]').length,
+                models: document.getElementById('model-shortcut-groups')
             })""")
-            scene_grid_ids = [button["id"] for button in scene_grid["buttons"]]
-            check("View section exposes compact scene preset grid", len(scene_grid["buttons"]) == 15 and scene_grid["metrics"]["scenePresetButtonCount"] == 15 and "bloom" in scene_grid_ids and "sdf" in scene_grid_ids and "tetrahedron" in scene_grid_ids and "600cell" in scene_grid_ids and "120cell" in scene_grid_ids and "dynkin-e8" in scene_grid_ids, str(scene_grid))
-            check("Scenes omit redundant star-polyhedron shortcuts", all(name not in scene_grid_ids for name in ["stellated-dodecahedron", "great-dodecahedron", "great-icosahedron", "great-stellated-dodecahedron"]), str(scene_grid_ids))
-            check("scene preset grid marks active E8 scene", scene_grid["output"] == "E8" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for button in scene_grid["buttons"]), str(scene_grid))
+            check("View removes the redundant Scenes catalog", redundant_scene_catalog["panel"] is None and redundant_scene_catalog["grid"] is None and redundant_scene_catalog["buttons"] == 0 and redundant_scene_catalog["models"] is not None, str(redundant_scene_catalog))
             model_shortcuts = page.evaluate("""() => ({
                 groups: [...document.querySelectorAll('#model-shortcut-groups [data-model-shortcut-group]')].map(group => ({
                     id: group.dataset.modelShortcutGroup,
@@ -220,6 +213,13 @@ def main() -> int:
             check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 21 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 21 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
             model_options = page.locator("#model-select option").evaluate_all("options => options.map(option => option.value)")
             check("model selector replaces legacy E8 3D with Bloom and SDF", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "dynkin"], str(model_options))
+            fallback_selectors_hidden = page.evaluate("""() => [
+                document.getElementById('model-select').closest('label'),
+                document.getElementById('shape-field'),
+                document.getElementById('polytope4d-field'),
+                document.getElementById('dynkin-field')
+            ].every(field => field.hidden && getComputedStyle(field).display === 'none')""")
+            check("Models is the sole visible selection surface", fallback_selectors_hidden)
             dynkin_options = page.locator("#dynkin-select option").evaluate_all("options => options.map(option => option.value)")
             check("mobile Dynkin catalog matches desktop-facing E-series", dynkin_options == ["E8", "E7", "E6"], str(dynkin_options))
             check("model shortcuts mark active E8 Coxeter", model_shortcuts["output"] == "E8 Coxeter" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for group in model_shortcuts["groups"] for button in group["buttons"]), str(model_shortcuts))
@@ -266,7 +266,7 @@ def main() -> int:
                 }
             })""")
             check("model shortcut selects non-E8 Dynkin diagram", model_shortcut_dynkin["state"]["modelMode"] == "dynkin" and model_shortcut_dynkin["state"]["dynkinDiagram"] == "E6" and model_shortcut_dynkin["controls"]["modelMode"] == "dynkin" and model_shortcut_dynkin["controls"]["dynkinDiagram"] == "E6" and model_shortcut_dynkin["controls"]["dynkinVisible"] and model_shortcut_dynkin["controls"]["polyHidden"] and model_shortcut_dynkin["controls"]["activeShortcut"] == "dynkin-E6" and model_shortcut_dynkin["controls"]["output"] == "E6 Dynkin" and model_shortcut_dynkin["metrics"]["lastModelShortcutTarget"]["dynkinDiagram"] == "E6", str(model_shortcut_dynkin))
-            page.locator("#dynkin-select").select_option("E7")
+            page.locator("#dynkin-select").evaluate("el => { el.value = 'E7'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             model_shortcut_select_sync = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
@@ -296,31 +296,30 @@ def main() -> int:
                 }
             })""")
             check("debug API selects SDF model shortcut", model_shortcut_sdf["state"]["modelMode"] == "sdf" and model_shortcut_sdf["controls"]["modelMode"] == "sdf" and model_shortcut_sdf["controls"]["activeShortcut"] == "sdf" and model_shortcut_sdf["controls"]["output"] == "E8 distance field" and model_shortcut_sdf["metrics"]["lastModelShortcutId"] == "sdf", str(model_shortcut_sdf))
-            page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_2d')")
-            scene_preset_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('#scene-preset-grid [data-scene-preset="16cell"]').click()
-            scene_preset_poly = page.evaluate("""() => ({
+            model_shortcut_before = page.evaluate("() => window.__mobileApp.getMetrics()")
+            page.locator('#model-shortcut-groups [data-model-shortcut="poly-16cell"]').click()
+            model_shortcut_16cell = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
                 controls: {
                     modelMode: document.getElementById('model-select').value,
                     polytope4d: document.getElementById('polytope4d-select').value,
                     polyVisible: !document.getElementById('polytope4d-field').classList.contains('hidden'),
-                    activePreset: document.querySelector('#scene-preset-grid button.active')?.dataset.scenePreset,
-                    output: document.getElementById('scene-preset-output').textContent.trim()
+                    activeShortcut: document.querySelector('#model-shortcut-groups button.active')?.dataset.modelShortcut,
+                    output: document.getElementById('model-shortcut-output').textContent.trim()
                 }
             })""")
-            check("scene preset grid selects hidden 16-cell option", scene_preset_poly["state"]["modelMode"] == "poly4d" and scene_preset_poly["state"]["polytope4d"] == "16cell" and scene_preset_poly["controls"]["modelMode"] == "poly4d" and scene_preset_poly["controls"]["polytope4d"] == "16cell" and scene_preset_poly["controls"]["polyVisible"] and scene_preset_poly["controls"]["activePreset"] == "16cell", str(scene_preset_poly))
-            check("scene preset grid uses lightweight settings sync", scene_preset_poly["metrics"]["scenePresetSelectCount"] > scene_preset_before["scenePresetSelectCount"] and scene_preset_poly["metrics"]["scenePresetSyncSkipCount"] > scene_preset_before["scenePresetSyncSkipCount"] and scene_preset_poly["metrics"]["controlSyncCount"] == scene_preset_before["controlSyncCount"] and scene_preset_poly["metrics"]["lastScenePresetId"] == "16cell" and scene_preset_poly["metrics"]["lastInteractionType"] == "scene-preset-16cell", str(scene_preset_poly["metrics"]))
-            page.locator('#scene-preset-grid [data-scene-preset="dodecahedron"]').click()
-            scene_preset_solid = page.evaluate("""() => ({
+            check("Models retains the complete 16-cell selection", model_shortcut_16cell["state"]["modelMode"] == "poly4d" and model_shortcut_16cell["state"]["polytope4d"] == "16cell" and model_shortcut_16cell["controls"]["modelMode"] == "poly4d" and model_shortcut_16cell["controls"]["polytope4d"] == "16cell" and model_shortcut_16cell["controls"]["polyVisible"] and model_shortcut_16cell["controls"]["activeShortcut"] == "poly-16cell" and model_shortcut_16cell["controls"]["output"] == "16-cell", str(model_shortcut_16cell))
+            check("16-cell model shortcut keeps lightweight settings sync", model_shortcut_16cell["metrics"]["modelShortcutSelectCount"] > model_shortcut_before["modelShortcutSelectCount"] and model_shortcut_16cell["metrics"]["modelShortcutSyncSkipCount"] > model_shortcut_before["modelShortcutSyncSkipCount"] and model_shortcut_16cell["metrics"]["controlSyncCount"] == model_shortcut_before["controlSyncCount"] and model_shortcut_16cell["metrics"]["lastModelShortcutId"] == "poly-16cell" and model_shortcut_16cell["metrics"]["lastInteractionType"] == "model-shortcut-poly-16cell", str(model_shortcut_16cell["metrics"]))
+            page.locator('#model-shortcut-groups [data-model-shortcut="shape-dodecahedron"]').click()
+            model_shortcut_dodecahedron = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
-                activePreset: document.querySelector('#scene-preset-grid button.active')?.dataset.scenePreset,
-                output: document.getElementById('scene-preset-output').textContent.trim()
+                activeShortcut: document.querySelector('#model-shortcut-groups button.active')?.dataset.modelShortcut,
+                output: document.getElementById('model-shortcut-output').textContent.trim()
             })""")
-            check("scene preset grid selects Platonic solid", scene_preset_solid["state"]["modelMode"] == "platonic" and scene_preset_solid["state"]["shape"] == "dodecahedron" and scene_preset_solid["activePreset"] == "dodecahedron" and scene_preset_solid["output"] == "Dod", str(scene_preset_solid))
-            page.evaluate("() => { window.__mobileApp.selectScenePreset('e8_2d'); window.__mobileApp.hideStatus(); }")
+            check("Models retains direct Dodecahedron selection", model_shortcut_dodecahedron["state"]["modelMode"] == "platonic" and model_shortcut_dodecahedron["state"]["shape"] == "dodecahedron" and model_shortcut_dodecahedron["activeShortcut"] == "shape-dodecahedron" and model_shortcut_dodecahedron["output"] == "Dodecahedron", str(model_shortcut_dodecahedron))
+            page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.hideStatus(); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.hideStatus(); }")
             page.wait_for_timeout(450)
 
@@ -579,7 +578,7 @@ def main() -> int:
                 app.openSettings('view');
             }""")
             manual_model_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator("#model-select").select_option("platonic")
+            page.locator("#model-select").evaluate("el => { el.value = 'platonic'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             manual_model_stop = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
@@ -674,7 +673,7 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             check("Manual view action stops active tour", not manual_view_stop["metrics"]["mobileTourActive"] and not manual_view_stop["metrics"]["mobileTourTimerActive"] and manual_view_stop["metrics"]["mobileTourStopCount"] > manual_view_before["mobileTourStopCount"] and manual_view_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-explore-stop" and manual_view_stop["metrics"]["lastInteractionType"] == "fit-all", str(manual_view_stop))
-            page.evaluate("() => { window.__mobileApp.selectScenePreset('e8_2d'); window.__mobileApp.openSettings('info'); }")
+            page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.openSettings('info'); }")
             cartan_select_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#cartan-matrix [data-cartan-root="3"]').first.click()
             cartan_select = page.evaluate("""() => ({
@@ -826,9 +825,9 @@ def main() -> int:
                 auto: document.getElementById('bloom-auto-button').textContent,
                 twinPressed: document.getElementById('bloom-twin-button').getAttribute('aria-pressed'),
                 timelineTop: document.getElementById('bloom-timeline-field').getBoundingClientRect().top,
-                scenesTop: document.querySelector('.scene-preset-panel').getBoundingClientRect().top
+                modelsTop: document.querySelector('.model-shortcut-panel').getBoundingClientRect().top
             })""")
-            check("View exposes the Bloom timeline controls above the scene catalog", bloom_controls["visible"] and bloom_controls["value"] == "0" and bloom_controls["time"] == "0.00" and bloom_controls["phase"] == "Shape" and bloom_controls["auto"] == "Auto" and bloom_controls["twinPressed"] == "true" and bloom_controls["timelineTop"] < bloom_controls["scenesTop"], str(bloom_controls))
+            check("View exposes the Bloom timeline controls above Models", bloom_controls["visible"] and bloom_controls["value"] == "0" and bloom_controls["time"] == "0.00" and bloom_controls["phase"] == "Shape" and bloom_controls["auto"] == "Auto" and bloom_controls["twinPressed"] == "true" and bloom_controls["timelineTop"] < bloom_controls["modelsTop"], str(bloom_controls))
             page.locator("#bloom-time").evaluate("el => { el.value = '0.65'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }")
             bloom_scrub = page.evaluate("() => ({ state: window.__mobileApp.getState(), time: document.getElementById('bloom-time-output').textContent, phase: document.getElementById('bloom-phase-output').textContent })")
             check("Bloom timeline scrubs and labels the twin phase", abs(bloom_scrub["state"]["bloomAmount"] - 0.65) < 0.001 and not bloom_scrub["state"]["bloomAuto"] and bloom_scrub["time"] == "0.65" and bloom_scrub["phase"] == "Twin H4", str(bloom_scrub))
@@ -923,13 +922,13 @@ def main() -> int:
             sdf_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows SDF's Coxeter-plane sphere centres", sdf_obj["ok"] and sdf_obj["obj"]["kind"] == "e8-root-point-cloud-2d-obj" and sdf_obj["obj"]["name"] == "e8-distance-field" and sdf_obj["obj"]["vertices"] == 240 and sdf_obj["obj"]["points"] == 240 and "centres underlying the mobile SDF" in sdf_obj["obj"]["text"], str(sdf_obj["obj"]))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.locator("#model-select").select_option("platonic")
+            page.locator("#model-select").evaluate("el => { el.value = 'platonic'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             model_select_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("model selector switches to Platonic controls", page.locator("#shape-field:not(.hidden)").count() == 1 and model_select_metrics["settingsControlSyncSkipCount"] > 0 and model_select_metrics["selectedRoot"] is None, str(model_select_metrics))
-            page.locator("#shape-select").select_option("dodecahedron")
+            page.locator("#shape-select").evaluate("el => { el.value = 'dodecahedron'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             platonic_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("Platonic dodecahedron renders bright edges without vertex spheres", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaceFills"] > 0 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["lastDrawStats"]["modelEdgeWidth"] >= 2.2 and platonic_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.95 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
+            check("Platonic dodecahedron renders twelve solid hull faces with occluded rear edges", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaces"] == 12 and platonic_metrics["lastDrawStats"]["modelFaceFills"] == 12 and 0 < platonic_metrics["lastDrawStats"]["modelFrontFaces"] < 12 and platonic_metrics["lastDrawStats"]["modelVisibleEdges"] < 30 and platonic_metrics["lastDrawStats"]["modelHiddenEdges"] > 0 and platonic_metrics["lastDrawStats"]["modelFaceAlpha"] >= 0.7 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["lastDrawStats"]["modelEdgeWidth"] >= 2.2 and platonic_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.95 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
             platonic_mckay = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
@@ -947,7 +946,12 @@ def main() -> int:
             platonic_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows Platonic solid", platonic_obj["ok"] and platonic_obj["obj"]["kind"] == "polyhedron" and platonic_obj["obj"]["name"] == "dodecahedron" and platonic_obj["obj"]["vertices"] == 20 and platonic_obj["obj"]["lines"] == 30 and platonic_obj["obj"]["faces"] == 36, str(platonic_obj["obj"]))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.locator("#shape-select").select_option("great_icosahedron")
+            page.locator("#shape-select").evaluate("el => { el.value = 'icosahedron'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+            icosahedron_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Platonic icosahedron renders twenty solid hull faces with occluded rear edges", icosahedron_metrics["lastModelMode"] == "platonic" and icosahedron_metrics["lastShape"] == "icosahedron" and icosahedron_metrics["lastDrawStats"]["modelVertices"] == 12 and icosahedron_metrics["lastDrawStats"]["modelEdges"] == 30 and icosahedron_metrics["lastDrawStats"]["modelFaces"] == 20 and icosahedron_metrics["lastDrawStats"]["modelFaceFills"] == 20 and 0 < icosahedron_metrics["lastDrawStats"]["modelFrontFaces"] < 20 and icosahedron_metrics["lastDrawStats"]["modelVisibleEdges"] < 30 and icosahedron_metrics["lastDrawStats"]["modelHiddenEdges"] > 0 and icosahedron_metrics["lastDrawStats"]["modelFaceAlpha"] >= 0.7 and icosahedron_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(icosahedron_metrics["lastDrawStats"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#shape-select").evaluate("el => { el.value = 'great_icosahedron'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             star_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Great icosahedron renders generated desktop star geometry", star_metrics["lastModelMode"] == "platonic" and star_metrics["lastShape"] == "great_icosahedron" and star_metrics["lastDrawStats"]["modelVertices"] == 12 and star_metrics["lastDrawStats"]["modelEdges"] == 30 and star_metrics["lastDrawStats"]["modelFaces"] == 20 and star_metrics["lastDrawStats"]["modelFaceFills"] == 20 and star_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(star_metrics["lastDrawStats"]))
@@ -956,10 +960,10 @@ def main() -> int:
             check("geometry data export follows star polyhedron", star_data["ok"] and star_data["geometry"]["name"] == "great_icosahedron" and len(star_data["geometry"]["verts"]) == 12 and len(star_data["geometry"]["edges"]) == 30 and len(star_data["geometry"]["faces"]) == 20, str(star_data["geometry"]))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.locator("#model-select").select_option("poly4d")
+            page.locator("#model-select").evaluate("el => { el.value = 'poly4d'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             poly_select_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("model selector switches to 4D polytope controls", page.locator("#polytope4d-field:not(.hidden)").count() == 1 and page.locator("#shape-field.hidden").count() == 1 and poly_select_metrics["selectedRoot"] is None, str(poly_select_metrics))
-            page.locator("#polytope4d-select").select_option("600cell")
+            page.locator("#polytope4d-select").evaluate("el => { el.value = '600cell'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             poly_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("4D 600-cell renders brighter desktop polytope edges without vertex spheres", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["lastDrawStats"]["modelEdgeWidth"] >= 1.0 and poly_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.7 and poly_metrics["lastDrawStats"]["modelVertexFills"] == 0 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
@@ -978,7 +982,7 @@ def main() -> int:
             poly_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows projected 4D polytope", poly_obj["ok"] and poly_obj["obj"]["kind"] == "4d-polytope-projected-obj" and poly_obj["obj"]["name"] == "600cell" and poly_obj["obj"]["vertices"] == 120 and poly_obj["obj"]["lines"] == 720 and poly_obj["obj"]["faces"] == 0, str(poly_obj["obj"]))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.locator("#polytope4d-select").select_option("120cell")
+            page.locator("#polytope4d-select").evaluate("el => { el.value = '120cell'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             cell120_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("4D 120-cell is exposed and renders without vertex spheres", cell120_metrics["lastPolytope4D"] == "120cell" and cell120_metrics["lastDrawStats"]["modelVertices"] == 600 and cell120_metrics["lastDrawStats"]["modelEdges"] == 1200 and cell120_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(cell120_metrics["lastDrawStats"]))
@@ -1000,14 +1004,14 @@ def main() -> int:
             poly_auto_after = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Auto model sequence includes 4D polytopes", poly_auto_after["lastAutoModelTarget"]["modelMode"] == "poly4d" and poly_auto_after["lastAutoModelTarget"]["polytope4d"] == "600cell" and poly_auto_after["lastPolytope4D"] == "600cell", str(poly_auto_after))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
-            page.locator("#model-select").select_option("dynkin")
+            page.locator("#model-select").evaluate("el => { el.value = 'dynkin'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             dynkin_select_probe = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
                 autoModelToggle: document.getElementById('auto-model-toggle').checked
             })""")
             check("model selector switches to Dynkin controls", page.locator("#dynkin-field:not(.hidden)").count() == 1 and page.locator("#shape-field.hidden").count() == 1 and page.locator("#polytope4d-field.hidden").count() == 1 and not dynkin_select_probe["state"]["autoModel"] and not dynkin_select_probe["autoModelToggle"], str(dynkin_select_probe))
-            page.locator("#dynkin-select").select_option("E8")
+            page.locator("#dynkin-select").evaluate("el => { el.value = 'E8'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             dynkin_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("E8 Dynkin diagram renders desktop graph data", dynkin_metrics["lastModelMode"] == "dynkin" and dynkin_metrics["lastDynkinDiagram"] == "E8" and dynkin_metrics["lastDrawStats"]["modelVertices"] == 8 and dynkin_metrics["lastDrawStats"]["modelEdges"] == 7 and dynkin_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and dynkin_metrics["dynkinDrawCount"] >= 1, str(dynkin_metrics["lastDrawStats"]))
