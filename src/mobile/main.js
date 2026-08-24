@@ -107,6 +107,14 @@ const MOBILE_FX_MODES = [
 ];
 const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
 const MOBILE_FX_MODE_INDEX = Object.freeze(Object.fromEntries(MOBILE_FX_MODES.map((mode, index) => [mode.id, index])));
+// Ripple already paints every chord from its topology coordinate. Give the
+// rest of the FX catalog the same structural color access while preserving
+// each treatment's intended strength and keeping Off class-colored.
+const E8_CHORD_FX_COLOR_MIX = Object.freeze([
+  0, 0.58, 0.54, 0.72, 0.78, 0.68, 1, 0.7,
+  0.48, 0.82, 0.62, 0.72, 0.7, 0.72, 0.88, 0.7,
+  0.84, 0.78, 0.42, 0.76, 0.66, 0.78, 0.8, 0.88,
+]);
 const ANIMATED_MOBILE_FX = new Set([
   'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripple', 'spiral',
   'aura', 'caustic', 'iridescent', 'flowfield', 'plasma', 'kaleido6',
@@ -324,6 +332,10 @@ uniform float uRipple;
 uniform float uRipplePhase;
 uniform float uAlphaBoost;
 uniform float uColorLift;
+uniform float uFxMode;
+uniform float uFxStrength;
+uniform float uFxPhase;
+uniform float uFxColorMix;
 uniform vec3 uPalette0;
 uniform vec3 uPalette1;
 uniform vec3 uPalette2;
@@ -337,6 +349,10 @@ vec3 paletteAt(float value) {
   if (scaled < 2.0) return mix(uPalette1, uPalette2, scaled - 1.0);
   if (scaled < 3.0) return mix(uPalette2, uPalette3, scaled - 2.0);
   return mix(uPalette3, uPalette4, scaled - 3.0);
+}
+
+vec3 fxSpectrum(float value) {
+  return 0.55 + 0.45 * cos(6.2831853 * (value + vec3(0.0, 0.33, 0.67)));
 }
 
 void main() {
@@ -364,8 +380,71 @@ void main() {
   );
   gl_Position = vec4(clip, 0.0, 1.0);
 
-  float rotatedRippleColor = fract(aStyle.w + uRotation * 0.0732113);
-  float colorT = mix(aStyle.x, rotatedRippleColor, uRipple);
+  float endpointAngleT = fract(atan(aRoot.y, aRoot.x) / 6.2831853 + 1.0);
+  float fxSeed = fract(
+    aStyle.w * (1.0 + mod(uFxMode, 5.0) * 0.083) +
+    endpointAngleT * (0.18 + mod(uFxMode, 3.0) * 0.11) +
+    aStyle.z * (0.07 + mod(uFxMode, 4.0) * 0.035) +
+    uFxPhase * (0.006 + mod(uFxMode, 6.0) * 0.002)
+  );
+  vec3 baseColor = paletteAt(aStyle.x);
+  vec3 effectColor = paletteAt(fxSeed);
+  float pulse = 0.5 + 0.5 * sin(uFxPhase * 1.4 + aStyle.w * 12.0);
+  float folded10 = abs(fract(endpointAngleT * 10.0 + uFxPhase * 0.018) * 2.0 - 1.0);
+  float folded6 = abs(fract(endpointAngleT * 6.0 - uFxPhase * 0.014) * 2.0 - 1.0);
+
+  if (uFxMode > 0.5 && uFxMode < 1.5) {
+    effectColor = mix(effectColor, vec3(1.0), 0.2 + pulse * 0.18);
+  } else if (uFxMode > 1.5 && uFxMode < 2.5) {
+    effectColor *= 0.72 + pulse * (0.34 + uFxStrength * 0.08);
+  } else if (uFxMode > 2.5 && uFxMode < 3.5) {
+    effectColor = mix(vec3(1.0, 0.12, 0.48), vec3(0.12, 0.9, 1.0), fxSeed);
+  } else if (uFxMode > 3.5 && uFxMode < 4.5) {
+    effectColor = fxSpectrum(fxSeed + uFxPhase * 0.025);
+  } else if (uFxMode > 4.5 && uFxMode < 5.5) {
+    effectColor = fxSpectrum(folded10 + aStyle.z * 0.12);
+  } else if (uFxMode > 5.5 && uFxMode < 6.5) {
+    effectColor = paletteAt(fract(aStyle.w + uRotation * 0.0732113));
+  } else if (uFxMode > 6.5 && uFxMode < 7.5) {
+    effectColor = fxSpectrum(fxSeed + endpointAngleT * 1.7 + aStyle.z * 0.18);
+  } else if (uFxMode > 7.5 && uFxMode < 8.5) {
+    effectColor = mix(vec3(0.34, 0.42, 0.58), vec3(0.86, 0.94, 1.0), fxSeed);
+  } else if (uFxMode > 8.5 && uFxMode < 9.5) {
+    effectColor = fxSeed < 0.48
+      ? mix(vec3(0.54, 0.01, 0.0), vec3(1.0, 0.24, 0.01), fxSeed / 0.48)
+      : mix(vec3(1.0, 0.24, 0.01), vec3(1.0, 0.96, 0.22), (fxSeed - 0.48) / 0.52);
+  } else if (uFxMode > 9.5 && uFxMode < 10.5) {
+    effectColor = mix(vec3(0.24, 0.9, 1.0), vec3(1.0), pulse * 0.72);
+  } else if (uFxMode > 10.5 && uFxMode < 11.5) {
+    effectColor = mix(vec3(0.12, 0.92, 1.0), vec3(0.68, 0.22, 1.0), fxSeed);
+  } else if (uFxMode > 11.5 && uFxMode < 12.5) {
+    effectColor = fxSpectrum(floor(fxSeed * 7.0) / 7.0 + 0.08);
+  } else if (uFxMode > 12.5 && uFxMode < 13.5) {
+    float caustic = pow(0.5 + 0.5 * sin(fxSeed * 38.0 - uFxPhase * 1.3), 4.0);
+    effectColor = mix(vec3(0.03, 0.56, 0.74), vec3(0.8, 1.0, 0.94), caustic);
+  } else if (uFxMode > 13.5 && uFxMode < 14.5) {
+    effectColor = fxSpectrum(fxSeed + uFxPhase * 0.04);
+  } else if (uFxMode > 14.5 && uFxMode < 15.5) {
+    effectColor = mix(vec3(0.03, 0.42, 0.72), vec3(0.08, 1.0, 0.68), 0.5 + 0.5 * sin(fxSeed * 18.0 - uFxPhase));
+  } else if (uFxMode > 15.5 && uFxMode < 16.5) {
+    effectColor = fxSpectrum(fxSeed + sin(endpointAngleT * 22.0 - uFxPhase) * 0.16);
+  } else if (uFxMode > 16.5 && uFxMode < 17.5) {
+    effectColor = fxSpectrum(folded6 + aStyle.w * 0.24);
+  } else if (uFxMode > 17.5 && uFxMode < 18.5) {
+    effectColor = mix(effectColor * 0.7, vec3(0.84, 0.92, 1.0), smoothstep(0.25, 0.82, aStyle.z));
+  } else if (uFxMode > 18.5 && uFxMode < 19.5) {
+    effectColor = mix(vec3(0.24, 0.03, 0.52), vec3(0.08, 0.82, 0.96), 0.5 + 0.5 * sin(fxSeed * 13.0 + uFxPhase * 0.55));
+  } else if (uFxMode > 19.5 && uFxMode < 20.5) {
+    effectColor = mix(vec3(0.14, 0.72, 0.78), vec3(0.88, 1.0, 0.98), step(0.52, fxSeed));
+  } else if (uFxMode > 20.5 && uFxMode < 21.5) {
+    float scan = step(0.52, fract(aRoot.y * 7.0 + uFxPhase * 0.42));
+    effectColor = mix(vec3(0.02, 0.54, 0.62), vec3(0.32, 1.0, 0.9), 0.54 + scan * 0.46);
+  } else if (uFxMode > 21.5 && uFxMode < 22.5) {
+    effectColor = mix(vec3(0.02, 0.14, 0.24), vec3(0.38, 0.96, 1.0), 0.28 + fxSeed * 0.72);
+  } else if (uFxMode > 22.5 && uFxMode < 23.5) {
+    effectColor = mix(fxSpectrum(floor(fxSeed * 9.0) / 9.0), vec3(0.92, 0.98, 1.0), pulse * 0.24);
+  }
+
   float wave = sin(aStyle.z * 8.0 - uRipplePhase);
   float wave01 = clamp(0.5 + wave * 0.5, 0.0, 1.0);
   // The Canvas version received a second energy contribution from shadowBlur.
@@ -373,7 +452,8 @@ void main() {
   // keep Rainbow Ripple legible without adding another 21,840-line pass.
   float rippleBrightness = 0.34 + wave01 * 1.16;
   float alpha = clamp(mix(aStyle.y, 0.12 * rippleBrightness, uRipple) * uAlphaBoost, 0.0, 0.56);
-  vec3 chordColor = mix(paletteAt(colorT), vec3(1.0), clamp(uColorLift, 0.0, 0.22));
+  vec3 chordColor = mix(baseColor, effectColor, uFxColorMix);
+  chordColor = mix(chordColor, vec3(1.0), clamp(uColorLift, 0.0, 0.22));
   vColor = vec4(chordColor, alpha);
 }`;
 const E8_CHORD_FRAGMENT_SHADER = `
@@ -4978,6 +5058,7 @@ function ensureE8ChordWebgl() {
     const uniformNames = [
       'uResolution', 'uOrigin', 'uScale', 'uRotation', 'uPitch', 'uPathZoom',
       'uExtrude', 'uRipple', 'uRipplePhase', 'uAlphaBoost', 'uColorLift',
+      'uFxMode', 'uFxStrength', 'uFxPhase', 'uFxColorMix',
       'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
     ];
     e8ChordUniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
@@ -5041,6 +5122,10 @@ function drawE8ChordWebglField(layout, paletteSet) {
     gl.uniform1f(e8ChordUniforms.uRipplePhase, ripplePhaseAngle());
     gl.uniform1f(e8ChordUniforms.uAlphaBoost, e8ChordAlphaBoost());
     gl.uniform1f(e8ChordUniforms.uColorLift, e8ChordColorLift());
+    gl.uniform1f(e8ChordUniforms.uFxMode, MOBILE_FX_MODE_INDEX[state.fxMode] || 0);
+    gl.uniform1f(e8ChordUniforms.uFxStrength, state.fxStrength);
+    gl.uniform1f(e8ChordUniforms.uFxPhase, stylePhase * TAU);
+    gl.uniform1f(e8ChordUniforms.uFxColorMix, e8ChordFxColorMix());
     for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
       const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
       gl.uniform3f(
@@ -5074,6 +5159,7 @@ function drawE8ChordWebglField(layout, paletteSet) {
       vertices: e8ChordVertexCount,
       alphaBoost: e8ChordAlphaBoost(),
       colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
     };
   } catch (error) {
     e8ChordWebglUnavailable = true;
@@ -5356,6 +5442,7 @@ function render() {
       e8ChordGpuVertices: 0,
       e8ChordAlphaBoost: 1,
       e8ChordColorLift: 0,
+      e8ChordFxColorMix: 0,
       e8ChordRecoveryPass: false,
       e8EdgesSkippedForInteraction: 0,
       ripplePointCount: 0,
@@ -5444,6 +5531,7 @@ function render() {
       drawStats.e8ChordGpuVertices = edgeStats.vertices;
       drawStats.e8ChordAlphaBoost = edgeStats.alphaBoost;
       drawStats.e8ChordColorLift = edgeStats.colorLift;
+      drawStats.e8ChordFxColorMix = edgeStats.fxColorMix;
       drawStats.modelEdges += edgeStats.segments;
       drawStats.modelEdgeStrokes += edgeStats.strokes;
       recordRippleEdgeStats(drawStats, edgeStats);
@@ -7226,6 +7314,14 @@ function e8ChordColorLift() {
   return clamp(0.02 + e8ChordZoomProgress() * 0.12 + fxLift, 0, 0.2);
 }
 
+function e8ChordFxColorMix() {
+  const modeIndex = MOBILE_FX_MODE_INDEX[state.fxMode] || 0;
+  if (!modeIndex) return 0;
+  if (state.fxMode === 'ripple') return 1;
+  const baseMix = E8_CHORD_FX_COLOR_MIX[modeIndex] || 0.6;
+  return clamp(baseMix * (0.65 + clamp(state.fxStrength, 0.25, 1.5) * 0.35), 0, 0.96);
+}
+
 function e8ChordPaletteColorAt(paletteSet, value) {
   const channels = paletteChannelsAt(paletteSet, value);
   const lift = e8ChordColorLift();
@@ -7275,6 +7371,7 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
       ripple: false,
       alphaBoost: e8ChordAlphaBoost(),
       colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
     };
   }
 
@@ -7295,6 +7392,28 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
       classCounts,
       alphaBoost: e8ChordAlphaBoost(),
       colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
+    };
+  }
+
+  // WebGL context loss is rare, but FX should not fall back to the old two
+  // class colors when it happens. Twelve topology buckets preserve the same
+  // full-palette chord field without a per-edge stroke cost.
+  if (state.fxMode !== 'none') {
+    const edgeStats = drawPaletteEdgeField(projected, e8ChordEdges, layout, paletteSet, {
+      baseAlpha: 0.045 * e8ChordAlphaBoost(),
+      baseWidth: 0.62,
+      shadowBlur: 0.45,
+      alwaysPalette: true,
+      composite: 'source-over',
+    });
+    return {
+      ...edgeStats,
+      classes: populated.length,
+      classCounts,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
     };
   }
 
@@ -7346,6 +7465,7 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
     ripple: false,
     alphaBoost: e8ChordAlphaBoost(),
     colorLift: e8ChordColorLift(),
+    fxColorMix: e8ChordFxColorMix(),
   };
 }
 

@@ -1425,6 +1425,17 @@ def main() -> int:
                         canvasSignature ^= pixels[offset] + pixels[offset + 1] * 3 + pixels[offset + 2] * 7 + pixels[offset + 3] * 11;
                         canvasSignature = Math.imul(canvasSignature, 16777619);
                     }
+                    const chordGl = chords.getContext('webgl');
+                    const chordPixels = new Uint8Array(chords.width * chords.height * 4);
+                    chordGl.readPixels(0, 0, chords.width, chords.height, chordGl.RGBA, chordGl.UNSIGNED_BYTE, chordPixels);
+                    let chordSignature = 2166136261;
+                    let coloredChordPixels = 0;
+                    for (let offset = 0; offset < chordPixels.length; offset += 4) {
+                        if (!chordPixels[offset + 3]) continue;
+                        coloredChordPixels++;
+                        chordSignature ^= chordPixels[offset] + chordPixels[offset + 1] * 3 + chordPixels[offset + 2] * 7 + chordPixels[offset + 3] * 11;
+                        chordSignature = Math.imul(chordSignature, 16777619);
+                    }
                     return {
                         id,
                         state: window.__mobileApp.getState().fxMode,
@@ -1443,6 +1454,9 @@ def main() -> int:
                         canvasFxPassPrimitives: stats.canvasFxPassPrimitives,
                         canvasFxPassRenderer: stats.canvasFxPassRenderer,
                         canvasSignature: (canvasSignature >>> 0).toString(16),
+                        chordSignature: (chordSignature >>> 0).toString(16),
+                        coloredChordPixels,
+                        e8ChordFxColorMix: stats.e8ChordFxColorMix,
                         ripplePointCount: stats.ripplePointCount,
                         e8ChordRenderer: stats.e8ChordRenderer,
                         e8ChordGpuDrawCalls: stats.e8ChordGpuDrawCalls
@@ -1455,6 +1469,7 @@ def main() -> int:
             check("All non-Ripple Canvas effects use the native foreground compositor", all(item["canvasFxPassApplied"] and item["canvasFxPassPrimitives"] > 0 and item["canvasFxPassRenderer"] == f"canvas-composite-{item['id']}" for item in fx_rendering if item["id"] in composite_ids), str(fx_rendering))
             check("GPU chords feed the Canvas FX compositor without double painting", all(item["e8ChordRenderer"] == "webgl-lines" and item["e8ChordGpuDrawCalls"] == 1 and item["chordActive"] and item["chordComposited"] for item in fx_rendering if item["id"] in composite_ids) and all(item["chordActive"] and not item["chordComposited"] for item in fx_rendering if item["id"] in {"none", "ripple"}), str(fx_rendering))
             check("All 24 Canvas effects produce visibly distinct model pixels", len({item["canvasSignature"] for item in fx_rendering}) == len(desktop_fx_ids), str(fx_rendering))
+            check("every active FX colors the GPU chord field instead of only the root layer", all(item["coloredChordPixels"] > 1000 for item in fx_rendering) and next(item for item in fx_rendering if item["id"] == "none")["e8ChordFxColorMix"] == 0 and all(item["e8ChordFxColorMix"] > 0 for item in fx_rendering if item["id"] != "none") and len({item["chordSignature"] for item in fx_rendering}) == len(desktop_fx_ids), str(fx_rendering))
             chord_visibility = page.evaluate("""() => {
                 const app = window.__mobileApp;
                 const snapshot = () => {
