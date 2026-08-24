@@ -1657,6 +1657,18 @@ def main() -> int:
             page.locator('[data-motion-action="toggle-extrude-auto"]').click()
             auto_transform_stopped = page.evaluate("() => window.__mobileApp.getState()")
             check("Zoom and Extrude Auto controls stop independently", not auto_transform_stopped["autoZoom"] and not auto_transform_stopped["autoExtrude"], str(auto_transform_stopped))
+            coxeter_auto_zoom_before = page.evaluate("""() => {
+                window.__mobileApp.setState({ modelMode: 'e8_2d', zoom: 25, autoZoom: false });
+                return window.__mobileApp.getMetrics();
+            }""")
+            page.locator('[data-motion-action="toggle-zoom-auto"]').click()
+            page.evaluate("() => window.__mobileApp.closeSettings()")
+            page.wait_for_function("before => window.__mobileApp.getMetrics().autoZoomFrameCount > before", arg=coxeter_auto_zoom_before["autoZoomFrameCount"], timeout=1500)
+            coxeter_auto_zoom = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("Coxeter Auto-zoom uses the complete 55% to 2500% range", coxeter_auto_zoom["metrics"]["autoZoomRange"]["min"] == 0.55 and coxeter_auto_zoom["metrics"]["autoZoomRange"]["max"] == 25 and coxeter_auto_zoom["state"]["autoZoom"] and coxeter_auto_zoom["state"]["zoom"] > 24, str(coxeter_auto_zoom))
+            page.evaluate("() => window.__mobileApp.openSettings('motion')")
+            page.locator('[data-motion-action="toggle-zoom-auto"]').click()
+            page.evaluate("() => window.__mobileApp.setState({ zoom: 1 })")
             page.locator('[data-motion-action="camera-dive"]').click()
             dive_camera = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
