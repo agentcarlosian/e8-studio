@@ -56,6 +56,36 @@ def main() -> int:
             initial_draw = metrics["lastDrawStats"]
             check("initial draw renders all roots", initial_draw["points"] == 240 and initial_draw["rings"] == 8, str(initial_draw))
             check("E8 defaults to the full desktop chord topology", state["showEdges"] and initial_draw["e8ChordEdges"] == 21840 and initial_draw["e8ChordEdgeStrokes"] == 2 and initial_draw["e8ChordClassCount"] == 2 and initial_draw["e8ChordClassCounts"] == [0, 0, 0, 6720, 0, 0, 0, 15120] and metrics["e8ChordEdgeCount"] == 21840 and metrics["e8ChordDegreeMin"] == 182 and metrics["e8ChordDegreeMax"] == 182, str({"state": state, "draw": initial_draw, "metrics": metrics}))
+            chord_layer = page.evaluate("""() => {
+                const chord = document.getElementById('mobile-e8-chord-canvas');
+                const roots = document.getElementById('mobile-canvas');
+                return {
+                    exists: !!chord,
+                    active: chord?.classList.contains('active') || false,
+                    composited: chord?.classList.contains('fx-composited') || false,
+                    chordZ: Number(getComputedStyle(chord).zIndex),
+                    rootZ: Number(getComputedStyle(roots).zIndex),
+                    width: chord?.width || 0,
+                    height: chord?.height || 0,
+                };
+            }""")
+            check("E8 chords render through the dedicated GPU layer", initial_draw["e8ChordRenderer"] == "webgl-lines" and initial_draw["e8ChordGpuDrawCalls"] == 1 and initial_draw["e8ChordGpuVertices"] == 43680 and metrics["e8ChordWebglInitCount"] == 1 and metrics["e8ChordWebglFallbackCount"] == 0 and chord_layer["exists"] and chord_layer["active"] and not chord_layer["composited"] and chord_layer["chordZ"] < chord_layer["rootZ"] and chord_layer["width"] == metrics["canvas"]["width"] and chord_layer["height"] == metrics["canvas"]["height"], str({"draw": initial_draw, "metrics": metrics, "layer": chord_layer}))
+            context_loss_supported = page.evaluate("""() => {
+                const chord = document.getElementById('mobile-e8-chord-canvas');
+                window.__mobileChordContextTest = chord.getContext('webgl').getExtension('WEBGL_lose_context');
+                return !!window.__mobileChordContextTest;
+            }""")
+            check("GPU chord context-loss testing is available", context_loss_supported)
+            page.evaluate("() => window.__mobileChordContextTest.loseContext()")
+            page.wait_for_timeout(180)
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            chord_context_lost = page.evaluate("() => ({ metrics: window.__mobileApp.getMetrics(), draw: window.__mobileApp.getMetrics().lastDrawStats })")
+            check("WebGL context loss preserves all chords through Canvas fallback", chord_context_lost["metrics"]["e8ChordWebglContextLossCount"] == 1 and chord_context_lost["draw"]["e8ChordRenderer"] == "canvas-fallback" and chord_context_lost["draw"]["e8ChordEdges"] == 21840, str(chord_context_lost))
+            page.evaluate("() => window.__mobileChordContextTest.restoreContext()")
+            page.wait_for_timeout(300)
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            chord_context_restored = page.evaluate("() => ({ metrics: window.__mobileApp.getMetrics(), draw: window.__mobileApp.getMetrics().lastDrawStats })")
+            check("WebGL context restoration returns to the GPU chord layer", chord_context_restored["metrics"]["e8ChordWebglContextRestoreCount"] == 1 and chord_context_restored["draw"]["e8ChordRenderer"] == "webgl-lines" and chord_context_restored["draw"]["e8ChordEdges"] == 21840, str(chord_context_restored))
             check("E8 roots keep the dense inner rings legible", 1.8 <= initial_draw["minPointRadius"] <= initial_draw["maxPointRadius"] <= 3.1 and initial_draw["maxPointRadius"] / initial_draw["minPointRadius"] < 1.7, str(initial_draw))
             check("initial draw has no context ray stroke", initial_draw["rays"] == 0 and initial_draw["rayStrokes"] == 0, str(initial_draw))
             check("rings are batched into one stroke", initial_draw["ringStrokes"] == 1, str(initial_draw))
@@ -1292,16 +1322,21 @@ def main() -> int:
             dense_fx_budget = page.evaluate("""() => {
                 const app = window.__mobileApp;
                 app.setState({ modelMode: 'e8_2d', showEdges: true, fxMode: 'ripple', autoRotate: true, autoColor: true, softFx: true });
-                const dense = { state: app.getState(), metrics: app.getMetrics() };
+                const gpu = { state: app.getState(), metrics: app.getMetrics() };
+                app.setState({ fxMode: 'glow' });
+                const composited = { state: app.getState(), metrics: app.getMetrics() };
                 app.setState({ showEdges: false });
                 const regular = { state: app.getState(), metrics: app.getMetrics() };
                 app.setState({ fxMode: 'none', autoRotate: false, autoColor: false, softFx: false });
-                return { dense, regular };
+                return { gpu, composited, regular };
             }""")
-            check("dense E8 FX keep every treatment while using a phone-safe motion budget", dense_fx_budget["dense"]["state"]["fxMode"] == "ripple" and dense_fx_budget["dense"]["state"]["showEdges"] and dense_fx_budget["dense"]["state"]["autoRotate"] and dense_fx_budget["dense"]["state"]["autoColor"] and dense_fx_budget["dense"]["state"]["softFx"] and dense_fx_budget["dense"]["metrics"]["motionFrameTargetMs"] == 50, str(dense_fx_budget["dense"]))
+            check("GPU-native Ripple keeps full chords on the smoother motion budget", dense_fx_budget["gpu"]["state"]["fxMode"] == "ripple" and dense_fx_budget["gpu"]["state"]["showEdges"] and dense_fx_budget["gpu"]["state"]["autoRotate"] and dense_fx_budget["gpu"]["state"]["autoColor"] and dense_fx_budget["gpu"]["state"]["softFx"] and dense_fx_budget["gpu"]["metrics"]["motionFrameTargetMs"] == 33 and dense_fx_budget["gpu"]["metrics"]["lastE8ChordRenderer"] == "webgl-lines", str(dense_fx_budget["gpu"]))
+            check("Canvas-composited E8 FX retain the phone-safe motion budget", dense_fx_budget["composited"]["state"]["fxMode"] == "glow" and dense_fx_budget["composited"]["state"]["showEdges"] and dense_fx_budget["composited"]["metrics"]["motionFrameTargetMs"] == 50, str(dense_fx_budget["composited"]))
             check("normal mobile scenes retain the smoother motion budget", not dense_fx_budget["regular"]["state"]["showEdges"] and dense_fx_budget["regular"]["metrics"]["motionFrameTargetMs"] == 33, str(dense_fx_budget["regular"]))
             fx_rendering = page.evaluate("""ids => {
+                window.__mobileApp.setState({ modelMode: 'e8_2d', showEdges: true, autoRotate: false, autoColor: false, softFx: false });
                 const canvas = document.getElementById('mobile-canvas');
+                const chords = document.getElementById('mobile-e8-chord-canvas');
                 const sdf = document.getElementById('mobile-sdf-canvas');
                 const background = document.getElementById('mobile-background-canvas');
                 return ids.map(id => {
@@ -1319,6 +1354,9 @@ def main() -> int:
                         id,
                         state: window.__mobileApp.getState().fxMode,
                         canvasFilter: getComputedStyle(canvas).filter,
+                        chordFilter: getComputedStyle(chords).filter,
+                        chordActive: chords.classList.contains('active'),
+                        chordComposited: chords.classList.contains('fx-composited'),
                         sdfFilter: getComputedStyle(sdf).filter,
                         backgroundFilter: getComputedStyle(background).filter,
                         fxRenderer: stats.fxRenderer,
@@ -1330,7 +1368,9 @@ def main() -> int:
                         canvasFxPassPrimitives: stats.canvasFxPassPrimitives,
                         canvasFxPassRenderer: stats.canvasFxPassRenderer,
                         canvasSignature: (canvasSignature >>> 0).toString(16),
-                        ripplePointCount: stats.ripplePointCount
+                        ripplePointCount: stats.ripplePointCount,
+                        e8ChordRenderer: stats.e8ChordRenderer,
+                        e8ChordGpuDrawCalls: stats.e8ChordGpuDrawCalls
                     };
                 });
             }""", desktop_fx_ids)
@@ -1338,6 +1378,7 @@ def main() -> int:
             check("FX never filters or overlays the background layer", all(item["backgroundFilter"] == "none" for item in fx_rendering), str(fx_rendering))
             composite_ids = set(desktop_fx_ids) - {"none", "ripple"}
             check("All non-Ripple Canvas effects use the native foreground compositor", all(item["canvasFxPassApplied"] and item["canvasFxPassPrimitives"] > 0 and item["canvasFxPassRenderer"] == f"canvas-composite-{item['id']}" for item in fx_rendering if item["id"] in composite_ids), str(fx_rendering))
+            check("GPU chords feed the Canvas FX compositor without double painting", all(item["e8ChordRenderer"] == "webgl-lines" and item["e8ChordGpuDrawCalls"] == 1 and item["chordActive"] and item["chordComposited"] for item in fx_rendering if item["id"] in composite_ids) and all(item["chordActive"] and not item["chordComposited"] for item in fx_rendering if item["id"] in {"none", "ripple"}), str(fx_rendering))
             check("All 24 Canvas effects produce visibly distinct model pixels", len({item["canvasSignature"] for item in fx_rendering}) == len(desktop_fx_ids), str(fx_rendering))
             patterned_ids = {"kaleidoscope", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
             check("Procedural Canvas FX retain foreground-clipped pattern detail", all(item["fxRenderer"] == f"canvas-composite-{item['id']}" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))

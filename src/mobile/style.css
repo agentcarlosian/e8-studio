@@ -76,6 +76,7 @@ button:disabled {
 }
 
 #mobile-background-canvas,
+#mobile-e8-chord-canvas,
 #mobile-canvas,
 #mobile-sdf-canvas {
   position: absolute;
@@ -90,13 +91,23 @@ button:disabled {
   pointer-events: none;
 }
 
-#mobile-canvas {
+#mobile-e8-chord-canvas {
   z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+}
+
+#mobile-e8-chord-canvas.active:not(.fx-composited) {
+  opacity: 1;
+}
+
+#mobile-canvas {
+  z-index: 2;
   touch-action: none;
 }
 
 #mobile-sdf-canvas {
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   opacity: 0;
   transition: opacity 140ms ease;
@@ -107,118 +118,141 @@ button:disabled {
 }
 
 .mobile-shell[data-fx-mode="glow"] #mobile-canvas,
+.mobile-shell[data-fx-mode="glow"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="glow"] #mobile-sdf-canvas {
   filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(244, 210, 122, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="pulse"] #mobile-canvas,
+.mobile-shell[data-fx-mode="pulse"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="pulse"] #mobile-sdf-canvas {
   filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 6px rgba(244, 210, 122, var(--mobile-fx-alpha)));
   animation: mobile-fx-pulse 2.8s ease-in-out infinite;
 }
 
 .mobile-shell[data-fx-mode="trail"] #mobile-canvas,
+.mobile-shell[data-fx-mode="trail"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="trail"] #mobile-sdf-canvas {
   filter: saturate(var(--mobile-fx-saturation)) drop-shadow(3px 1px rgba(106, 255, 232, var(--mobile-fx-alpha))) drop-shadow(7px 2px rgba(155, 77, 255, calc(var(--mobile-fx-alpha) * 0.7))) drop-shadow(11px 3px rgba(255, 107, 157, calc(var(--mobile-fx-alpha) * 0.45)));
 }
 
 .mobile-shell[data-fx-mode="chromatic"] #mobile-canvas,
+.mobile-shell[data-fx-mode="chromatic"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="chromatic"] #mobile-sdf-canvas {
   filter: saturate(var(--mobile-fx-saturation)) drop-shadow(var(--mobile-fx-fringe) 0 rgba(255, 44, 150, var(--mobile-fx-alpha))) drop-shadow(calc(-1 * var(--mobile-fx-fringe)) 0 rgba(40, 230, 255, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="kaleidoscope"] #mobile-canvas,
+.mobile-shell[data-fx-mode="kaleidoscope"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="kaleidoscope"] #mobile-sdf-canvas {
   filter: saturate(calc(var(--mobile-fx-saturation) * 1.12)) contrast(1.08) drop-shadow(0 0 7px rgba(155, 77, 255, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="ripple"] #mobile-canvas,
+.mobile-shell[data-fx-mode="ripple"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="ripple"] #mobile-sdf-canvas {
   filter: saturate(calc(var(--mobile-fx-saturation) * 1.12)) contrast(1.1) brightness(1.04) drop-shadow(0 0 5px rgba(255, 255, 255, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="spiral"] #mobile-canvas,
+.mobile-shell[data-fx-mode="spiral"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="spiral"] #mobile-sdf-canvas {
   filter: saturate(var(--mobile-fx-saturation)) hue-rotate(-12deg) contrast(1.08);
 }
 
 .mobile-shell[data-fx-mode="fog"] #mobile-canvas,
+.mobile-shell[data-fx-mode="fog"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="fog"] #mobile-sdf-canvas {
   filter: blur(0.65px) brightness(0.94) saturate(0.82) contrast(0.9);
 }
 
 .mobile-shell[data-fx-mode="hologram"] #mobile-canvas,
+.mobile-shell[data-fx-mode="hologram"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="hologram"] #mobile-sdf-canvas {
   filter: grayscale(0.3) sepia(0.28) hue-rotate(120deg) saturate(var(--mobile-fx-saturation)) brightness(var(--mobile-fx-brightness)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(106, 255, 232, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="xray"] #mobile-canvas,
+.mobile-shell[data-fx-mode="xray"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="xray"] #mobile-sdf-canvas {
   filter: grayscale(0.72) invert(0.86) sepia(0.35) hue-rotate(142deg) saturate(calc(var(--mobile-fx-saturation) * 1.15)) contrast(1.36) brightness(0.86) drop-shadow(0 0 5px rgba(106, 255, 232, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="heat"] #mobile-canvas,
+.mobile-shell[data-fx-mode="heat"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="heat"] #mobile-sdf-canvas {
   filter: sepia(0.34) saturate(calc(var(--mobile-fx-saturation) * 1.45)) hue-rotate(-18deg) brightness(var(--mobile-fx-brightness)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(255, 90, 30, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="edge-glow"] #mobile-canvas,
+.mobile-shell[data-fx-mode="edge-glow"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="edge-glow"] #mobile-sdf-canvas {
   filter: contrast(1.5) saturate(0.74) brightness(1.05) drop-shadow(0 0 2px rgba(255, 255, 255, calc(var(--mobile-fx-alpha) * 1.35))) drop-shadow(0 0 7px rgba(106, 255, 232, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="aura"] #mobile-canvas,
+.mobile-shell[data-fx-mode="aura"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="aura"] #mobile-sdf-canvas {
   filter: brightness(var(--mobile-fx-brightness)) saturate(var(--mobile-fx-saturation)) drop-shadow(0 0 calc(var(--mobile-fx-blur) * 0.8) rgba(106, 255, 232, var(--mobile-fx-alpha))) drop-shadow(0 0 calc(var(--mobile-fx-blur) * 1.8) rgba(155, 77, 255, calc(var(--mobile-fx-alpha) * 0.7)));
 }
 
 .mobile-shell[data-fx-mode="voronoi"] #mobile-canvas,
+.mobile-shell[data-fx-mode="voronoi"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="voronoi"] #mobile-sdf-canvas {
   filter: contrast(1.22) saturate(calc(var(--mobile-fx-saturation) * 1.15));
 }
 
 .mobile-shell[data-fx-mode="caustic"] #mobile-canvas,
+.mobile-shell[data-fx-mode="caustic"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="caustic"] #mobile-sdf-canvas {
   filter: brightness(1.08) saturate(var(--mobile-fx-saturation)) contrast(1.08);
 }
 
 .mobile-shell[data-fx-mode="iridescent"] #mobile-canvas,
+.mobile-shell[data-fx-mode="iridescent"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="iridescent"] #mobile-sdf-canvas {
   filter: saturate(calc(var(--mobile-fx-saturation) * 1.24)) brightness(var(--mobile-fx-brightness)) hue-rotate(18deg) drop-shadow(0 0 7px rgba(106, 255, 232, var(--mobile-fx-alpha)));
   animation: mobile-fx-iridescent 8s ease-in-out infinite alternate;
 }
 
 .mobile-shell[data-fx-mode="flowfield"] #mobile-canvas,
+.mobile-shell[data-fx-mode="flowfield"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="flowfield"] #mobile-sdf-canvas {
   filter: saturate(var(--mobile-fx-saturation)) drop-shadow(4px 1px rgba(106, 255, 232, calc(var(--mobile-fx-alpha) * 0.85)));
 }
 
 .mobile-shell[data-fx-mode="plasma"] #mobile-canvas,
+.mobile-shell[data-fx-mode="plasma"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="plasma"] #mobile-sdf-canvas {
   filter: contrast(1.12) saturate(calc(var(--mobile-fx-saturation) * 1.45)) brightness(1.08);
 }
 
 .mobile-shell[data-fx-mode="kaleido6"] #mobile-canvas,
+.mobile-shell[data-fx-mode="kaleido6"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="kaleido6"] #mobile-sdf-canvas {
   filter: saturate(calc(var(--mobile-fx-saturation) * 1.18)) contrast(1.1);
 }
 
 .mobile-shell[data-fx-mode="dof"] #mobile-canvas,
+.mobile-shell[data-fx-mode="dof"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="dof"] #mobile-sdf-canvas {
   filter: blur(0.45px) contrast(1.12) brightness(1.04) drop-shadow(0 0 4px rgba(244, 210, 122, calc(var(--mobile-fx-alpha) * 0.7)));
 }
 
 .mobile-shell[data-fx-mode="nebula"] #mobile-canvas,
+.mobile-shell[data-fx-mode="nebula"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="nebula"] #mobile-sdf-canvas {
   filter: blur(0.35px) saturate(calc(var(--mobile-fx-saturation) * 1.12)) brightness(1.04);
 }
 
 .mobile-shell[data-fx-mode="wireframe"] #mobile-canvas,
+.mobile-shell[data-fx-mode="wireframe"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="wireframe"] #mobile-sdf-canvas {
   filter: grayscale(0.82) contrast(1.48) brightness(0.92) drop-shadow(0 0 2px rgba(106, 255, 232, calc(var(--mobile-fx-alpha) * 1.2)));
 }
 
 .mobile-shell[data-fx-mode="crystal"] #mobile-canvas,
+.mobile-shell[data-fx-mode="crystal"] #mobile-e8-chord-canvas,
 .mobile-shell[data-fx-mode="crystal"] #mobile-sdf-canvas {
   filter: contrast(1.12) saturate(var(--mobile-fx-saturation)) hue-rotate(18deg) brightness(var(--mobile-fx-brightness)) drop-shadow(0 0 var(--mobile-fx-blur) rgba(170, 220, 255, var(--mobile-fx-alpha)));
 }
@@ -235,6 +269,7 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-shell[data-fx-mode] #mobile-canvas,
+  .mobile-shell[data-fx-mode] #mobile-e8-chord-canvas,
   .mobile-shell[data-fx-mode] #mobile-sdf-canvas {
     animation: none;
   }

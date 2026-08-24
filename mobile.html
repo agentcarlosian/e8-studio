@@ -12,6 +12,7 @@
 <body>
   <main class="mobile-shell">
     <canvas id="mobile-background-canvas" aria-hidden="true"></canvas>
+    <canvas id="mobile-e8-chord-canvas" aria-hidden="true"></canvas>
     <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots and 12 rings"></canvas>
     <canvas id="mobile-sdf-canvas" aria-hidden="true"></canvas>
 
@@ -326,7 +327,7 @@
               </div>
               <div id="fx-mode-grid" class="fx-mode-grid"></div>
               <small id="fx-mode-description" class="panel-note">Use clean, unmodified shading.</small>
-              <small class="panel-note fx-cost-note">Cost badges indicate approximate GPU work. On mobile, animated E8 full chords are paced near 20 fps to protect touch response.</small>
+              <small class="panel-note fx-cost-note">Cost badges indicate approximate GPU work. E8 full chords use a dedicated GPU layer; Canvas-composited FX are paced near 20 fps to protect touch response.</small>
             </div>
             <label class="toggle-row">
               <span>
