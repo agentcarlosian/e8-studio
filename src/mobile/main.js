@@ -98,6 +98,15 @@ const MOBILE_FX_MODES = [
   { id: 'crystal', label: 'Crystal', cost: 'low', description: 'Add sharp faceted prismatic highlights.' },
 ];
 const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
+const MOBILE_FX_MODE_INDEX = Object.freeze(Object.fromEntries(MOBILE_FX_MODES.map((mode, index) => [mode.id, index])));
+const ANIMATED_CANVAS_FX = new Set([
+  'kaleidoscope', 'ripple', 'spiral', 'aura', 'caustic', 'iridescent',
+  'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
+]);
+const PATTERNED_CANVAS_FX = new Set([
+  'kaleidoscope', 'ripple', 'spiral', 'voronoi', 'caustic', 'iridescent',
+  'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
+]);
 const MOTION_PRESETS = [
   { id: 'still', label: 'Still', interaction: 'still' },
   { id: 'orbit', label: 'Orbit', interaction: 'orbit' },
@@ -847,6 +856,8 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let backgroundCanvas;
+let backgroundCtx;
 let sdfCanvas;
 let sdfGl;
 let sdfWebglUnavailable = false;
@@ -1078,8 +1089,10 @@ async function loadData() {
 
 function cacheElements() {
   els.shell = document.querySelector('.mobile-shell');
+  backgroundCanvas = document.getElementById('mobile-background-canvas');
+  backgroundCtx = backgroundCanvas.getContext('2d', { alpha: false });
   canvas = document.getElementById('mobile-canvas');
-  ctx = canvas.getContext('2d', { alpha: false });
+  ctx = canvas.getContext('2d', { alpha: true });
   sdfCanvas = document.getElementById('mobile-sdf-canvas');
   els.settingsButton = document.getElementById('settings-button');
   els.qualityChip = document.getElementById('quality-chip');
@@ -1907,13 +1920,15 @@ function canvasElementToPngBlob(sourceCanvas, errorMessage = 'Could not create P
 }
 
 function compositeRenderCanvas() {
-  if (state.modelMode !== 'sdf' || !sdfCanvas?.classList.contains('active') || !sdfGl) return canvas;
   const composite = document.createElement('canvas');
   composite.width = Math.max(1, canvas.width);
   composite.height = Math.max(1, canvas.height);
   const target = composite.getContext('2d', { alpha: false });
+  target.drawImage(backgroundCanvas, 0, 0, backgroundCanvas.width, backgroundCanvas.height, 0, 0, composite.width, composite.height);
   target.drawImage(canvas, 0, 0, composite.width, composite.height);
-  target.drawImage(sdfCanvas, 0, 0, sdfCanvas.width, sdfCanvas.height, 0, 0, composite.width, composite.height);
+  if (state.modelMode === 'sdf' && sdfCanvas?.classList.contains('active') && sdfGl) {
+    target.drawImage(sdfCanvas, 0, 0, sdfCanvas.width, sdfCanvas.height, 0, 0, composite.width, composite.height);
+  }
   return composite;
 }
 
@@ -4500,6 +4515,8 @@ function resizeCanvas() {
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
+    backgroundCanvas.width = w;
+    backgroundCanvas.height = h;
     backingStoreChanged = true;
     canvasTransformScale = null;
     metrics.canvasResizeCount++;
@@ -4511,6 +4528,8 @@ function resizeCanvas() {
   if (canvasCssWidth !== viewportWidth || canvasCssHeight !== viewportHeight) {
     canvas.style.width = `${viewportWidth}px`;
     canvas.style.height = `${viewportHeight}px`;
+    backgroundCanvas.style.width = `${viewportWidth}px`;
+    backgroundCanvas.style.height = `${viewportHeight}px`;
     canvasCssWidth = viewportWidth;
     canvasCssHeight = viewportHeight;
     metrics.canvasStyleSyncCount++;
@@ -4525,6 +4544,7 @@ function resizeCanvas() {
   settingsCanvasResizeDeferred = false;
   if (backingStoreChanged || canvasTransformScale !== scale) {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    backgroundCtx.setTransform(scale, 0, 0, scale, 0, 0);
     canvasTransformScale = scale;
     metrics.canvasTransformSetCount++;
     metrics.lastCanvasTransformSetMs = performance.now();
@@ -4711,7 +4731,15 @@ function render() {
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
-    const backgroundStats = drawMobileBackground(w, h);
+    backgroundCtx.clearRect(0, 0, w, h);
+    const foregroundCtx = ctx;
+    ctx = backgroundCtx;
+    let backgroundStats;
+    try {
+      backgroundStats = drawMobileBackground(w, h);
+    } finally {
+      ctx = foregroundCtx;
+    }
 
     const layout = layoutForCanvas();
     const paletteSet = activePaletteSet();
@@ -4910,7 +4938,123 @@ function render() {
   }
 }
 
+function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
+  const mode = state.fxMode;
+  if (mode === 'none' || state.modelMode === 'sdf' || interactionLiteFrame) {
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : 'skipped' };
+  }
+  if (!PATTERNED_CANVAS_FX.has(mode)) return { applied: false, primitives: 0, renderer: 'filter' };
+
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  const cx = width * 0.5;
+  const cy = height * 0.46;
+  const phase = stylePhase * TAU;
+  let primitives = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.globalAlpha = clamp(0.1 + strength * 0.11, 0.12, 0.28);
+
+  if (mode === 'ripple') {
+    ctx.strokeStyle = 'rgba(106,255,232,0.82)';
+    ctx.lineWidth = 2;
+    const spacing = 34;
+    const offset = (stylePhase * 26) % spacing;
+    for (let radius = offset; radius < Math.hypot(width, height); radius += spacing) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.stroke();
+      primitives++;
+    }
+  } else if (mode === 'voronoi') {
+    ctx.strokeStyle = 'rgba(106,255,232,0.72)';
+    ctx.lineWidth = 1.15;
+    const cell = 54;
+    for (let y = -cell; y < height + cell; y += cell) {
+      for (let x = -cell; x < width + cell; x += cell) {
+        const row = Math.round(y / cell);
+        const jitter = Math.sin((x + y) * 0.031) * 9;
+        ctx.beginPath();
+        ctx.moveTo(x + jitter + (row % 2 ? cell * 0.5 : 0), y);
+        ctx.lineTo(x + cell * 0.52, y + cell * 0.48);
+        ctx.lineTo(x + jitter + (row % 2 ? cell * 0.5 : 0), y + cell);
+        ctx.stroke();
+        primitives++;
+      }
+    }
+  } else if (mode === 'caustic' || mode === 'nebula' || mode === 'plasma') {
+    const centers = mode === 'caustic'
+      ? [[0.28, 0.34, '#6affe8'], [0.7, 0.62, '#f4d27a'], [0.52, 0.46, '#9b4dff']]
+      : mode === 'nebula'
+        ? [[0.25, 0.42, '#9b4dff'], [0.72, 0.5, '#4dffff'], [0.5, 0.7, '#ff6b9d']]
+        : [[0.22, 0.3, '#ff00d4'], [0.76, 0.66, '#00ffea'], [0.52, 0.48, '#9b4dff']];
+    for (let index = 0; index < centers.length; index++) {
+      const [px, py, color] = centers[index];
+      const driftX = Math.sin(phase * 0.18 + index * 2.1) * width * 0.05;
+      const driftY = Math.cos(phase * 0.16 + index * 1.7) * height * 0.04;
+      const gradient = ctx.createRadialGradient(width * px + driftX, height * py + driftY, 0, width * px + driftX, height * py + driftY, Math.max(width, height) * 0.42);
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      primitives++;
+    }
+  } else if (mode === 'flowfield') {
+    ctx.strokeStyle = 'rgba(106,255,232,0.78)';
+    ctx.lineWidth = 1.5;
+    for (let y = -30; y < height + 30; y += 28) {
+      ctx.beginPath();
+      for (let x = -30; x < width + 30; x += 18) {
+        const waveY = y + Math.sin(x * 0.025 + phase * 0.24 + y * 0.01) * 14;
+        if (x < -20) ctx.moveTo(x, waveY);
+        else ctx.lineTo(x, waveY);
+      }
+      ctx.stroke();
+      primitives++;
+    }
+  } else if (mode === 'hologram') {
+    ctx.fillStyle = 'rgba(106,255,232,0.76)';
+    for (let y = (stylePhase * 18) % 6; y < height; y += 6) {
+      ctx.fillRect(0, y, width, 1);
+      primitives++;
+    }
+  } else if (mode === 'iridescent') {
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#ff6b9d');
+    gradient.addColorStop(0.33, '#6affe8');
+    gradient.addColorStop(0.66, '#f4d27a');
+    gradient.addColorStop(1, '#9b4dff');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    primitives++;
+  } else {
+    const spokes = mode === 'kaleido6' ? 6 : mode === 'kaleidoscope' ? 12 : 18;
+    ctx.strokeStyle = mode === 'spiral' ? 'rgba(244,210,122,0.76)' : 'rgba(106,255,232,0.72)';
+    ctx.lineWidth = 2;
+    const maxRadius = Math.hypot(width, height);
+    for (let index = 0; index < spokes; index++) {
+      const angle = phase * 0.035 + index * TAU / spokes;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.quadraticCurveTo(
+        cx + Math.cos(angle + 0.72) * maxRadius * 0.32,
+        cy + Math.sin(angle + 0.72) * maxRadius * 0.32,
+        cx + Math.cos(angle) * maxRadius,
+        cy + Math.sin(angle) * maxRadius,
+      );
+      ctx.stroke();
+      primitives++;
+    }
+  }
+
+  ctx.restore();
+  return { applied: primitives > 0, primitives, renderer: 'foreground-mask' };
+}
+
 function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) {
+  const fxOverlay = drawForegroundFxOverlay(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
+  drawStats.fxOverlayApplied = fxOverlay.applied;
+  drawStats.fxOverlayPrimitives = fxOverlay.primitives;
+  drawStats.fxRenderer = state.modelMode === 'sdf' ? 'sdf-shader' : fxOverlay.renderer;
   metrics.renderCount++;
   metrics.lastDrawStats = drawStats;
   metrics.lastRenderAllFrame = projectedAllFrame;
@@ -5275,6 +5419,8 @@ uniform float uBlend;
 uniform float uBloom;
 uniform float uAniso;
 uniform float uFxStrength;
+uniform float uFxMode;
+uniform float uMotionPulse;
 uniform vec3 uColorInner;
 uniform vec3 uColorOuter;
 
@@ -5290,7 +5436,7 @@ float sdf(vec3 p) {
   float d = 1000.0;
   float nearestDistance = 1000.0;
   float nearestRing = 0.0;
-  float sphereRadius = uSphereR * (1.0 + uFxStrength * 0.025 * sin(uTime * 2.1));
+  float sphereRadius = uSphereR * (1.0 + uMotionPulse * 0.025 * sin(uTime * 2.1));
   float pointAngle = atan(p.y, p.x);
   for (int ringIndex = 0; ringIndex < 8; ringIndex++) {
     vec4 ring = uRings[ringIndex];
@@ -5349,6 +5495,10 @@ float ambientOcclusion(vec3 p, vec3 n) {
     weight *= 0.7;
   }
   return clamp(1.0 - 2.4 * occ, 0.0, 1.0);
+}
+
+vec3 fxSpectrum(float value) {
+  return 0.55 + 0.45 * cos(6.2831853 * (value + vec3(0.0, 0.33, 0.67)));
 }
 
 void main() {
@@ -5422,6 +5572,71 @@ void main() {
     + pow(abs(dot(bitangent, halfVector)), 82.0) * 0.42;
   color += vec3(1.0) * standardSpec * shadow * 0.18;
   color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.12;
+  float fxMix = clamp(uFxStrength * 0.58, 0.0, 0.92);
+  float angle = atan(p.y, p.x);
+  float radius = length(p.xy);
+  if (uFxMode > 0.5 && uFxMode < 1.5) {
+    color += mix(vec3(1.0), baseColor, 0.4) * fresnel * fxMix * 0.85;
+  } else if (uFxMode < 2.5 && uFxMode > 1.5) {
+    color *= 0.9 + 0.18 * fxMix * sin(uTime * 2.2);
+  } else if (uFxMode < 3.5 && uFxMode > 2.5) {
+    color = mix(color, vec3(color.b, color.r, color.g), fxMix * 0.28);
+  } else if (uFxMode < 4.5 && uFxMode > 3.5) {
+    color = mix(color, vec3(color.r * 1.18, color.g, color.b * 1.2), fxMix * (0.35 + 0.35 * n.x));
+  } else if (uFxMode < 5.5 && uFxMode > 4.5) {
+    float band = 0.55 + 0.45 * abs(cos(angle * 6.0));
+    color = mix(color, fxSpectrum(angle / 6.2831853) * band, fxMix * 0.46);
+  } else if (uFxMode < 6.5 && uFxMode > 5.5) {
+    float band = 0.5 + 0.5 * sin(radius * 18.0 - uTime * 1.6);
+    color += vec3(0.2, 0.82, 1.0) * band * fxMix * 0.34;
+  } else if (uFxMode < 7.5 && uFxMode > 6.5) {
+    float band = 0.5 + 0.5 * sin(angle * 8.0 + radius * 15.0 - uTime);
+    color = mix(color, vec3(1.0, 0.62, 0.18) * (0.6 + band * 0.6), fxMix * 0.36);
+  } else if (uFxMode < 8.5 && uFxMode > 7.5) {
+    float haze = smoothstep(3.0, 8.0, t);
+    color = mix(color, vec3(0.52, 0.6, 0.72), haze * fxMix * 0.58);
+  } else if (uFxMode < 9.5 && uFxMode > 8.5) {
+    float energy = clamp(dot(color, vec3(0.3, 0.58, 0.12)), 0.0, 1.0);
+    color = mix(color, mix(vec3(0.58, 0.02, 0.0), vec3(1.0, 0.88, 0.16), energy), fxMix * 0.68);
+  } else if (uFxMode < 10.5 && uFxMode > 9.5) {
+    color = mix(color * 0.58, vec3(0.55, 0.95, 1.0), fresnel * fxMix);
+  } else if (uFxMode < 11.5 && uFxMode > 10.5) {
+    color += mix(vec3(0.18, 0.82, 1.0), vec3(0.68, 0.24, 1.0), ringMix) * fresnel * fxMix * 0.72;
+  } else if (uFxMode < 12.5 && uFxMode > 11.5) {
+    float cells = abs(sin(p.x * 8.0) * sin(p.y * 8.0) * sin(p.z * 8.0));
+    color = mix(color * (0.62 + cells * 0.5), fxSpectrum(cells), fxMix * 0.34);
+  } else if (uFxMode < 13.5 && uFxMode > 12.5) {
+    float bands = pow(0.5 + 0.5 * sin(p.x * 9.0 + sin(p.y * 7.0 - uTime) * 2.4), 4.0);
+    color += vec3(0.22, 0.86, 1.0) * bands * fxMix * 0.72;
+  } else if (uFxMode < 14.5 && uFxMode > 13.5) {
+    color = mix(color, fxSpectrum(fresnel * 1.8 + angle / 6.2831853), fxMix * (0.28 + fresnel * 0.58));
+  } else if (uFxMode < 15.5 && uFxMode > 14.5) {
+    float flow = 0.5 + 0.5 * sin(dot(p, vec3(5.0, 8.0, 3.0)) - uTime * 1.2);
+    color = mix(color, vec3(0.12, 0.92, 0.82) * (0.5 + flow * 0.7), fxMix * 0.38);
+  } else if (uFxMode < 16.5 && uFxMode > 15.5) {
+    float plasma = sin(p.x * 6.0 + uTime) + sin(p.y * 7.0 - uTime * 0.7) + sin(p.z * 8.0);
+    color = mix(color, fxSpectrum(plasma * 0.14), fxMix * 0.62);
+  } else if (uFxMode < 17.5 && uFxMode > 16.5) {
+    float symmetry = 0.5 + 0.5 * cos(angle * 6.0);
+    color = mix(color, fxSpectrum(symmetry + ringMix * 0.25), fxMix * 0.48);
+  } else if (uFxMode < 18.5 && uFxMode > 17.5) {
+    float focus = 1.0 - smoothstep(4.0, 8.5, t);
+    color *= mix(0.68, 1.08, mix(1.0, focus, fxMix));
+  } else if (uFxMode < 19.5 && uFxMode > 18.5) {
+    float cloud = 0.5 + 0.5 * sin(dot(p, vec3(3.7, 5.1, 4.3)) + sin(p.x * 6.0));
+    color = mix(color, mix(vec3(0.28, 0.08, 0.55), vec3(0.16, 0.78, 0.92), cloud), fxMix * 0.46);
+  } else if (uFxMode < 20.5 && uFxMode > 19.5) {
+    color = color * (0.42 + fresnel * 0.5) + vec3(0.22, 0.86, 0.94) * fresnel * fxMix;
+  } else if (uFxMode < 21.5 && uFxMode > 20.5) {
+    float scan = step(0.48, fract(gl_FragCoord.y * 0.24 + uTime * 0.5));
+    color = mix(color, vec3(0.1, 0.94, 0.86) * (0.64 + scan * 0.36), fxMix * 0.54);
+  } else if (uFxMode < 22.5 && uFxMode > 21.5) {
+    color = mix(color * 0.16, vec3(0.38, 0.9, 1.0) * (0.2 + fresnel * 1.25), fxMix);
+  } else if (uFxMode < 23.5 && uFxMode > 22.5) {
+    float facet = floor((n.x + n.y * 1.7 + n.z * 2.3 + 3.0) * 3.0) / 3.0;
+    color = mix(color, fxSpectrum(facet * 0.17 + fresnel), fxMix * 0.5);
+    color += vec3(0.86, 0.95, 1.0) * pow(standardSpec, 0.45) * fxMix * 0.42;
+  }
   vec3 bright = max(color - vec3(0.64), vec3(0.0));
   color += bright * uBloom * 0.72;
   // A trace of deterministic dither prevents 8-bit mobile gradients from
@@ -5481,7 +5696,7 @@ function createSdfProgram(profileKey) {
   }
   const uniformNames = [
     'uResolution', 'uScreenOffset', 'uTime', 'uCameraPos', 'uCameraBasis', 'uFov', 'uRings',
-    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uColorInner', 'uColorOuter',
+    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uFxMode', 'uMotionPulse', 'uColorInner', 'uColorOuter',
   ];
   const uniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
   const position = gl.getAttribLocation(program, 'aPosition');
@@ -5690,7 +5905,9 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     gl.uniform1f(uniforms.uBlend, state.sdfBlend * rootScale);
     gl.uniform1f(uniforms.uBloom, state.sdfBloom);
     gl.uniform1f(uniforms.uAniso, state.sdfAniso);
-    gl.uniform1f(uniforms.uFxStrength, state.softFx ? state.fxStrength : 0);
+    gl.uniform1f(uniforms.uFxStrength, state.fxStrength);
+    gl.uniform1f(uniforms.uFxMode, MOBILE_FX_MODE_INDEX[state.fxMode] || 0);
+    gl.uniform1f(uniforms.uMotionPulse, state.softFx ? state.fxStrength : 0);
     gl.uniform3f(uniforms.uColorInner, inner[0], inner[1], inner[2]);
     gl.uniform3f(uniforms.uColorOuter, outer[0], outer[1], outer[2]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -7007,7 +7224,8 @@ function autoMotionValue(min, max, phaseOffset) {
 }
 
 function hasRuntimeAnimation() {
-  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || (state.modelMode === 'bloom' && state.bloomAuto));
+  const canvasFxAnimation = state.modelMode !== 'sdf' && ANIMATED_CANVAS_FX.has(state.fxMode);
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || canvasFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -7055,8 +7273,10 @@ function startMotion() {
         advanceAutoModel();
       }
     }
-    if (state.autoColor || state.softFx) {
-      stylePhase = (stylePhase + dt * (state.autoColor ? state.colorSpeed : 0.42 * state.fxStrength)) % 4096;
+    const canvasFxAnimation = state.modelMode !== 'sdf' && ANIMATED_CANVAS_FX.has(state.fxMode);
+    if (state.autoColor || state.softFx || canvasFxAnimation) {
+      const styleRate = state.autoColor ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
+      stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
       if (state.softFx) metrics.softFxFrameCount++;
     }
