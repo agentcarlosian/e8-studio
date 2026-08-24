@@ -355,6 +355,7 @@ def main() -> int:
                 app.openSettings('motion');
                 app.setState({
                     autoColor: true,
+                    autoFx: true,
                     softFx: true,
                     autoRotate: true,
                     autoZoom: true,
@@ -369,6 +370,7 @@ def main() -> int:
                     state: app.getState(),
                     controls: {
                         autoColor: document.getElementById('auto-color-toggle').checked,
+                        autoFx: document.getElementById('auto-fx-toggle').checked,
                         softFx: document.getElementById('soft-fx-toggle').checked,
                         motion: document.getElementById('motion-toggle').checked,
                         autoModel: document.getElementById('auto-model-toggle').checked,
@@ -382,8 +384,8 @@ def main() -> int:
                     }
                 };
             }""")
-            check("model replacement resets runtime state without changing desktop behavior", not model_replacement_sync["state"]["autoColor"] and not model_replacement_sync["state"]["softFx"] and not model_replacement_sync["state"]["autoRotate"] and not model_replacement_sync["state"]["autoZoom"] and not model_replacement_sync["state"]["autoExtrude"] and not model_replacement_sync["state"]["autoModel"] and abs(model_replacement_sync["state"]["rotationSpeed"] - 0.7) < 0.01 and model_replacement_sync["state"]["cameraPath"] == "manual" and abs(model_replacement_sync["state"]["cameraTilt"] - 0.28) < 0.01, str(model_replacement_sync))
-            check("model replacement immediately synchronizes Visuals and Motion controls", not model_replacement_sync["controls"]["autoColor"] and not model_replacement_sync["controls"]["softFx"] and not model_replacement_sync["controls"]["motion"] and not model_replacement_sync["controls"]["autoModel"] and model_replacement_sync["controls"]["activeFx"] == "clean" and model_replacement_sync["controls"]["fxOutput"] == "Static" and model_replacement_sync["controls"]["activeMotion"] == "still" and model_replacement_sync["controls"]["motionOutput"] == "Still" and model_replacement_sync["controls"]["activeSpeed"] == "medium" and model_replacement_sync["controls"]["speedOutput"] == "Medium" and model_replacement_sync["controls"]["cameraPath"] == "Manual", str(model_replacement_sync["controls"]))
+            check("model replacement resets runtime state without changing desktop behavior", not model_replacement_sync["state"]["autoColor"] and not model_replacement_sync["state"]["autoFx"] and not model_replacement_sync["state"]["softFx"] and not model_replacement_sync["state"]["autoRotate"] and not model_replacement_sync["state"]["autoZoom"] and not model_replacement_sync["state"]["autoExtrude"] and not model_replacement_sync["state"]["autoModel"] and abs(model_replacement_sync["state"]["rotationSpeed"] - 0.7) < 0.01 and model_replacement_sync["state"]["cameraPath"] == "manual" and abs(model_replacement_sync["state"]["cameraTilt"] - 0.28) < 0.01, str(model_replacement_sync))
+            check("model replacement immediately synchronizes Visuals and Motion controls", not model_replacement_sync["controls"]["autoColor"] and not model_replacement_sync["controls"]["autoFx"] and not model_replacement_sync["controls"]["softFx"] and not model_replacement_sync["controls"]["motion"] and not model_replacement_sync["controls"]["autoModel"] and model_replacement_sync["controls"]["activeFx"] == "clean" and model_replacement_sync["controls"]["fxOutput"] == "Static" and model_replacement_sync["controls"]["activeMotion"] == "still" and model_replacement_sync["controls"]["motionOutput"] == "Still" and model_replacement_sync["controls"]["activeSpeed"] == "medium" and model_replacement_sync["controls"]["speedOutput"] == "Medium" and model_replacement_sync["controls"]["cameraPath"] == "Manual", str(model_replacement_sync["controls"]))
             page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.hideStatus(); }")
             contextual_controls = page.evaluate("""() => {
                 const app = window.__mobileApp;
@@ -471,7 +473,7 @@ def main() -> int:
                 check(f"{name} section reachable", bool(active))
             section_nav_after = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("settings tab switches skip full control sync", section_nav_after["settingsTabSyncSkipCount"] >= section_nav_before["settingsTabSyncSkipCount"] + 5 and section_nav_after["controlSyncCount"] == section_nav_before["controlSyncCount"], str(section_nav_after))
-            check("settings section switches use cached controls", section_nav_after["settingsSectionSwitchCount"] >= section_nav_before["settingsSectionSwitchCount"] + 4 and section_nav_after["settingsSectionSwitchSkipCount"] >= section_nav_before["settingsSectionSwitchSkipCount"] + 1 and section_nav_after["lastSettingsSectionSwitch"] == "info", str(section_nav_after))
+            check("settings section switches use cached controls", section_nav_after["settingsSectionSwitchCount"] >= section_nav_before["settingsSectionSwitchCount"] + 5 and section_nav_after["lastSettingsSectionSwitch"] == "info", str(section_nav_after))
             page.get_by_role("button", name="Info", exact=True).click()
             same_section = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("same settings section skips DOM toggles", same_section["settingsSectionSwitchSkipCount"] > section_nav_after["settingsSectionSwitchSkipCount"] and same_section["settingsSectionSwitchCount"] == section_nav_after["settingsSectionSwitchCount"] and same_section["controlSyncCount"] == section_nav_after["controlSyncCount"], str(same_section))
@@ -858,6 +860,10 @@ def main() -> int:
             page.locator("#visuals-done").click()
             visuals_done_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Visuals exposes a top Done action", bool(visuals_done_box) and visuals_done_box["height"] >= 40 and not visuals_done_metrics["settingsOpen"] and visuals_done_metrics["lastInteractionType"] == "settings-done", str({"box": visuals_done_box, "metrics": visuals_done_metrics}))
+            page.evaluate("() => window.__mobileApp.openSettings()")
+            remembered_visuals = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Settings reopens to the last active Visuals tab", remembered_visuals["settingsOpen"] and remembered_visuals["settingsSection"] == "style", str(remembered_visuals))
+            page.locator("#visuals-done").click()
             page.evaluate("() => window.__mobileApp.openSettings('motion')")
             motion_done_box = page.locator("#motion-done").bounding_box()
             page.locator("#motion-done").click()
@@ -1004,7 +1010,7 @@ def main() -> int:
             sdf_motion = page.evaluate("() => window.__mobileApp.getMetrics().lastDrawStats")
             check("SDF motion retains seam-free sampling and a full-resolution baseline", sdf_motion["sdfQuality"] == "motion" and sdf_motion["sdfMarchSteps"] == 38 and sdf_motion["sdfNeighborSpan"] == 1 and sdf_motion["sdfRasterScale"] >= 1.15 and sdf_motion["sdfMotionPixelBoost"] >= 1.15 and sdf_motion["sdfRasterSize"] >= 440 and sdf_motion["sdfPixels"] > 450000, str(sdf_motion))
             page.evaluate("() => { window.__mobileApp.setState({ autoRotate: false, cameraPath: 'manual' }); window.__mobileApp.forceRender(); }")
-            page.evaluate("() => { window.__mobileApp.setState({ quality: 'sharp', palette: 'magma', background: 'plasma', backgroundBrightness: 1.1, showRings: false, showContext: false, showPetrie: true, showMirrors: true, highlightSubset: false, pointScale: 1.6, pointOpacity: 0.4, autoColor: true, softFx: true, fxMode: 'heat', fxStrength: 1.4, sdfSphereR: 0.12, sdfBlend: 0.08, sdfBloom: 0.9, sdfAniso: 0.95, rotation: 1.1, cameraTilt: 0.8, cameraPath: 'dive', autoRotate: true, e8MorphT: 0.72, zoom: 2.7, panX: 135, panY: -95 }); window.__mobileApp.openSettings('view'); }")
+            page.evaluate("() => { window.__mobileApp.setState({ quality: 'sharp', palette: 'magma', background: 'plasma', backgroundBrightness: 1.1, showRings: false, showContext: false, showPetrie: true, showMirrors: true, highlightSubset: false, pointScale: 1.6, pointOpacity: 0.4, autoColor: true, autoFx: true, softFx: true, fxMode: 'heat', fxStrength: 1.4, sdfSphereR: 0.12, sdfBlend: 0.08, sdfBloom: 0.9, sdfAniso: 0.95, rotation: 1.1, cameraTilt: 0.8, cameraPath: 'dive', autoRotate: true, e8MorphT: 0.72, zoom: 2.7, panX: 135, panY: -95 }); window.__mobileApp.openSettings('view'); }")
             page.locator('[data-action="reset-view"]').click()
             page.evaluate("() => window.__mobileApp.forceRender()")
             sdf_reset = page.evaluate("""() => ({
@@ -1016,7 +1022,7 @@ def main() -> int:
                 }
             })""")
             check("Reset gives persistent visual confirmation", sdf_reset["feedback"]["confirmed"] and sdf_reset["feedback"]["text"] == "Reset done", str(sdf_reset["feedback"]))
-            check("SDF Reset restores all visuals while preserving the selected model", sdf_reset["state"]["modelMode"] == "sdf" and sdf_reset["state"]["palette"] == "gold" and sdf_reset["state"]["background"] == "void" and sdf_reset["state"]["quality"] == "smooth" and sdf_reset["state"]["showRings"] and sdf_reset["state"]["showContext"] and not sdf_reset["state"]["showPetrie"] and not sdf_reset["state"]["showMirrors"] and sdf_reset["state"]["highlightSubset"] and sdf_reset["state"]["pointScale"] == 1 and abs(sdf_reset["state"]["pointOpacity"] - 0.72) < 0.001 and not sdf_reset["state"]["autoColor"] and not sdf_reset["state"]["softFx"] and sdf_reset["state"]["fxMode"] == "none" and abs(sdf_reset["state"]["sdfSphereR"] - 0.08) < 0.001 and abs(sdf_reset["state"]["sdfBlend"] - 0.03) < 0.001 and abs(sdf_reset["state"]["rotation"]) < 0.001 and abs(sdf_reset["state"]["cameraTilt"] - 0.28) < 0.001 and sdf_reset["state"]["cameraPath"] == "manual" and not sdf_reset["state"]["autoRotate"] and sdf_reset["state"]["e8MorphT"] == 0 and sdf_reset["state"]["zoom"] == 1 and sdf_reset["state"]["panX"] == 0 and sdf_reset["state"]["panY"] == 0 and sdf_reset["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_reset["metrics"]["lastInteractionType"] == "reset-view", str(sdf_reset))
+            check("SDF Reset restores all visuals while preserving the selected model", sdf_reset["state"]["modelMode"] == "sdf" and sdf_reset["state"]["palette"] == "gold" and sdf_reset["state"]["background"] == "void" and sdf_reset["state"]["quality"] == "smooth" and sdf_reset["state"]["showRings"] and sdf_reset["state"]["showContext"] and not sdf_reset["state"]["showPetrie"] and not sdf_reset["state"]["showMirrors"] and sdf_reset["state"]["highlightSubset"] and sdf_reset["state"]["pointScale"] == 1 and abs(sdf_reset["state"]["pointOpacity"] - 0.72) < 0.001 and not sdf_reset["state"]["autoColor"] and not sdf_reset["state"]["autoFx"] and not sdf_reset["state"]["softFx"] and sdf_reset["state"]["fxMode"] == "none" and abs(sdf_reset["state"]["sdfSphereR"] - 0.08) < 0.001 and abs(sdf_reset["state"]["sdfBlend"] - 0.03) < 0.001 and abs(sdf_reset["state"]["rotation"]) < 0.001 and abs(sdf_reset["state"]["cameraTilt"] - 0.28) < 0.001 and sdf_reset["state"]["cameraPath"] == "manual" and not sdf_reset["state"]["autoRotate"] and sdf_reset["state"]["e8MorphT"] == 0 and sdf_reset["state"]["zoom"] == 1 and sdf_reset["state"]["panX"] == 0 and sdf_reset["state"]["panY"] == 0 and sdf_reset["metrics"]["lastRenderAllFrame"]["withinView"] and sdf_reset["metrics"]["lastInteractionType"] == "reset-view", str(sdf_reset))
             page.evaluate("() => window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '120cell', palette: 'neon', background: 'vortex', quality: 'sharp', showVertices: true, rotation: 0.7, zoom: 2.2 })")
             page.locator('[data-action="reset-view"]').click()
             poly4d_reset = page.evaluate("() => window.__mobileApp.getState()")
@@ -1239,8 +1245,12 @@ def main() -> int:
                     id: button.dataset.paletteSwatch,
                     text: button.textContent.trim(),
                     active: button.classList.contains('active'),
-                    pressed: button.getAttribute('aria-pressed')
+                    pressed: button.getAttribute('aria-pressed'),
+                    visible: getComputedStyle(button).display !== 'none'
                 })),
+                expanded: document.getElementById('palette-swatch-grid').classList.contains('expanded'),
+                expandText: document.getElementById('palette-expand-button').textContent.trim(),
+                expandAria: document.getElementById('palette-expand-button').getAttribute('aria-expanded'),
                 output: document.getElementById('palette-output').textContent.trim(),
                 select: document.getElementById('palette-select').value,
                 metrics: window.__mobileApp.getMetrics()
@@ -1248,6 +1258,25 @@ def main() -> int:
             palette_ids = [button["id"] for button in palette_grid["buttons"]]
             check("Visuals section exposes the full desktop palette catalog", len(palette_grid["buttons"]) == 45 and palette_grid["metrics"]["paletteSwatchButtonCount"] == 45 and palette_ids[:4] == ["gold", "ember", "ice", "cyan"] and all(name in palette_ids for name in ["rainbow", "aurora", "ultraviolet", "solar_flare", "petrie", "vintage"]), str(palette_grid))
             check("palette swatches mark active Gold palette", palette_grid["output"] == "Gold" and palette_grid["select"] == "gold" and any(button["id"] == "gold" and button["active"] and button["pressed"] == "true" for button in palette_grid["buttons"]), str(palette_grid))
+            check("palette catalog starts as a compact two-row tray", not palette_grid["expanded"] and palette_grid["expandText"] == "Expand" and palette_grid["expandAria"] == "false" and sum(button["visible"] for button in palette_grid["buttons"]) == 6, str(palette_grid))
+            palette_expand_before = palette_grid["metrics"]
+            page.locator("#palette-expand-button").click()
+            palette_expanded = page.evaluate("""() => ({
+                visible: [...document.querySelectorAll('#palette-swatch-grid [data-palette-swatch]')].filter(button => getComputedStyle(button).display !== 'none').length,
+                expanded: document.getElementById('palette-swatch-grid').classList.contains('expanded'),
+                text: document.getElementById('palette-expand-button').textContent.trim(),
+                aria: document.getElementById('palette-expand-button').getAttribute('aria-expanded'),
+                metrics: window.__mobileApp.getMetrics()
+            })""")
+            check("Expand reveals all palettes without rebuilding the catalog", palette_expanded["visible"] == 45 and palette_expanded["expanded"] and palette_expanded["text"] == "Collapse" and palette_expanded["aria"] == "true" and palette_expanded["metrics"]["paletteExpandToggleCount"] > palette_expand_before["paletteExpandToggleCount"], str(palette_expanded))
+            page.locator("#palette-expand-button").click()
+            palette_collapsed = page.evaluate("""() => ({
+                visible: [...document.querySelectorAll('#palette-swatch-grid [data-palette-swatch]')].filter(button => getComputedStyle(button).display !== 'none').length,
+                expanded: document.getElementById('palette-swatch-grid').classList.contains('expanded'),
+                text: document.getElementById('palette-expand-button').textContent.trim(),
+                aria: document.getElementById('palette-expand-button').getAttribute('aria-expanded')
+            })""")
+            check("Collapse restores the compact palette tray", palette_collapsed["visible"] == 6 and not palette_collapsed["expanded"] and palette_collapsed["text"] == "Expand" and palette_collapsed["aria"] == "false", str(palette_collapsed))
             palette_swatch_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#palette-swatch-grid [data-palette-swatch="ember"]').click()
             palette_swatch_after = page.evaluate("""() => ({
@@ -1329,6 +1358,28 @@ def main() -> int:
             check("Effect buttons expose desktop-compatible GPU cost badges", all(button["cost"] in ["low", "medium", "high"] and button["costText"] == button["cost"] for button in fx_modes["buttons"]) and fx_costs["voronoi"] == "high" and fx_costs["trail"] == "medium" and fx_costs["glow"] == "low", str(fx_modes["buttons"]))
             fx_budget_note = page.locator(".fx-cost-note").inner_text()
             check("Effects explains the mobile dense-graph safety budget", "20 fps" in fx_budget_note and "E8 full chords" in fx_budget_note, fx_budget_note)
+            fx_shift_box = page.locator("#auto-fx-toggle").bounding_box()
+            fx_shift_before = page.evaluate("() => window.__mobileApp.getMetrics()")
+            page.locator("#auto-fx-toggle").check()
+            fx_shift_set = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                checked: document.getElementById('auto-fx-toggle').checked,
+                metrics: window.__mobileApp.getMetrics(),
+                shifted: window.__mobileApp.advanceFxShift(),
+                afterShift: window.__mobileApp.getMetrics(),
+                output: document.getElementById('fx-mode-output').textContent.trim(),
+                active: document.querySelector('#fx-mode-grid button.active')?.dataset.fxTreatment
+            })""")
+            check("FX Shift is a touch-friendly Visuals control", bool(fx_shift_box) and fx_shift_box["height"] >= 20 and fx_shift_set["state"]["autoFx"] and fx_shift_set["checked"], str({"box": fx_shift_box, "state": fx_shift_set}))
+            check("FX Shift advances the existing effect catalog", fx_shift_set["shifted"] == "glow" and fx_shift_set["afterShift"]["fxShiftCount"] > fx_shift_before["fxShiftCount"] and fx_shift_set["afterShift"]["lastFxShiftMode"] == "glow" and fx_shift_set["output"] == "Glow" and fx_shift_set["active"] == "glow", str(fx_shift_set))
+            page.evaluate("() => window.__mobileApp.closeSettings()")
+            page.wait_for_function("before => window.__mobileApp.getMetrics().autoFxFrameCount > before", arg=fx_shift_before["autoFxFrameCount"], timeout=1500)
+            fx_shift_running = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("FX Shift uses the phone-aware runtime animation loop", fx_shift_running["motionActive"] and fx_shift_running["runtimeAnimationActive"] and fx_shift_running["autoFxFrameCount"] > fx_shift_before["autoFxFrameCount"] and fx_shift_running["lastDrawStats"]["autoFx"], str(fx_shift_running))
+            page.evaluate("() => window.__mobileApp.openSettings()")
+            check("FX Shift flow reopens directly to Visuals", page.evaluate("() => window.__mobileApp.getMetrics().settingsSection") == "style")
+            page.locator("#auto-fx-toggle").uncheck()
+            page.evaluate("() => window.__mobileApp.selectFxMode('none')")
             dense_fx_budget = page.evaluate("""() => {
                 const app = window.__mobileApp;
                 app.setState({ modelMode: 'e8_2d', showEdges: true, fxMode: 'ripple', autoRotate: true, autoColor: true, softFx: true });
@@ -1612,6 +1663,7 @@ def main() -> int:
                     motion: document.getElementById('motion-toggle').checked,
                     autoModel: document.getElementById('auto-model-toggle').checked,
                     autoColor: document.getElementById('auto-color-toggle').checked,
+                    autoFx: document.getElementById('auto-fx-toggle').checked,
                     softFx: document.getElementById('soft-fx-toggle').checked,
                     activeMotion: document.querySelector('#motion-preset-grid button.active')?.dataset.motionAction,
                     motionOutput: document.getElementById('motion-preset-output').textContent.trim()
@@ -1787,6 +1839,7 @@ def main() -> int:
                     autoRotate: true,
                     autoModel: true,
                     autoColor: true,
+                    autoFx: true,
                     softFx: true,
                     rotationSpeed: 1.4,
                     selectedRoot: 42,
@@ -1822,6 +1875,7 @@ def main() -> int:
                     vertices: document.getElementById('vertices-toggle').checked,
                     autoModel: document.getElementById('auto-model-toggle').checked,
                     autoColor: document.getElementById('auto-color-toggle').checked,
+                    autoFx: document.getElementById('auto-fx-toggle').checked,
                     softFx: document.getElementById('soft-fx-toggle').checked,
                     highlight: document.getElementById('highlight-toggle').checked,
                     motion: document.getElementById('motion-toggle').checked,
@@ -1830,9 +1884,9 @@ def main() -> int:
                     zoom: document.getElementById('zoom-output').textContent
                 }
             })""")
-            expected_default_state = defaults_after["state"]["quality"] == "smooth" and defaults_after["state"]["palette"] == "gold" and defaults_after["state"]["modelMode"] == "e8_2d" and defaults_after["state"]["shape"] == "icosahedron" and defaults_after["state"]["polytope4d"] == "24cell" and defaults_after["state"]["dynkinDiagram"] == "E8" and defaults_after["state"]["subset"] == "icosahedron" and abs(defaults_after["state"]["pointScale"] - 1) < 0.01 and defaults_after["state"]["showRings"] and defaults_after["state"]["showContext"] and defaults_after["state"]["showEdges"] and defaults_after["state"]["highlightSubset"] and not defaults_after["state"]["showPetrie"] and not defaults_after["state"]["showMirrors"] and not defaults_after["state"]["showVertices"] and not defaults_after["state"]["autoRotate"] and not defaults_after["state"]["autoModel"] and not defaults_after["state"]["autoColor"] and not defaults_after["state"]["softFx"] and defaults_after["state"]["selectedRoot"] is None and abs(defaults_after["state"]["zoom"] - 1) < 0.01 and defaults_after["state"]["panX"] == 0 and defaults_after["state"]["panY"] == 0 and defaults_after["state"]["rotation"] == 0 and "staleExtraKey" not in defaults_after["state"]
+            expected_default_state = defaults_after["state"]["quality"] == "smooth" and defaults_after["state"]["palette"] == "gold" and defaults_after["state"]["modelMode"] == "e8_2d" and defaults_after["state"]["shape"] == "icosahedron" and defaults_after["state"]["polytope4d"] == "24cell" and defaults_after["state"]["dynkinDiagram"] == "E8" and defaults_after["state"]["subset"] == "icosahedron" and abs(defaults_after["state"]["pointScale"] - 1) < 0.01 and defaults_after["state"]["showRings"] and defaults_after["state"]["showContext"] and defaults_after["state"]["showEdges"] and defaults_after["state"]["highlightSubset"] and not defaults_after["state"]["showPetrie"] and not defaults_after["state"]["showMirrors"] and not defaults_after["state"]["showVertices"] and not defaults_after["state"]["autoRotate"] and not defaults_after["state"]["autoModel"] and not defaults_after["state"]["autoColor"] and not defaults_after["state"]["autoFx"] and not defaults_after["state"]["softFx"] and defaults_after["state"]["selectedRoot"] is None and abs(defaults_after["state"]["zoom"] - 1) < 0.01 and defaults_after["state"]["panX"] == 0 and defaults_after["state"]["panY"] == 0 and defaults_after["state"]["rotation"] == 0 and "staleExtraKey" not in defaults_after["state"]
             check("Defaults restores exact safe mobile state", expected_default_state, str(defaults_after["state"]))
-            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Smooth" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["edges"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["vertices"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
+            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Smooth" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["edges"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["vertices"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["autoFx"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
             check("Defaults rewrites storage and records telemetry", defaults_after["stored"]["palette"] == "gold" and defaults_after["stored"]["quality"] == "smooth" and defaults_after["stored"]["modelMode"] == "e8_2d" and defaults_after["stored"]["polytope4d"] == "24cell" and defaults_after["stored"]["dynkinDiagram"] == "E8" and "staleExtraKey" not in defaults_after["stored"] and defaults_after["metrics"]["defaultsResetCount"] > defaults_before["defaultsResetCount"] and defaults_after["metrics"]["lastInteractionType"] == "defaults-reset" and defaults_after["metrics"]["saveCount"] > defaults_before["saveCount"] and not defaults_after["metrics"]["savePending"] and defaults_after["metrics"]["settingsDeferredRenderRequestCount"] > defaults_before["settingsDeferredRenderRequestCount"] and defaults_after["metrics"]["lastSettingsDeferredRenderReason"] == "defaults-reset" and defaults_after["metrics"]["statusText"] == "Defaults restored", str(defaults_after["metrics"]))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("() => !window.__mobileApp.getMetrics().settingsCanvasResizeDeferred")
