@@ -447,6 +447,21 @@ button:disabled {
 
 .view-actions .wide-action {
   min-width: 0;
+  transition: border-color 100ms ease, background 100ms ease, color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+}
+
+.view-actions .wide-action:active {
+  border-color: var(--accent);
+  background: rgba(244, 210, 122, 0.16);
+  color: var(--accent);
+  transform: scale(0.97);
+}
+
+.view-actions [data-action="reset-view"].is-confirmed {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #08080d;
+  box-shadow: 0 0 0 2px rgba(244, 210, 122, 0.22), 0 0 18px rgba(244, 210, 122, 0.18);
 }
 
 .field {

@@ -848,6 +848,7 @@ let mobileTourPausedForSettings = false;
 let mobileTourStorageBaseState = null;
 let saveTimer = null;
 let statusTimer = null;
+let resetFeedbackTimer = null;
 let savePending = false;
 let saveRequestedAt = 0;
 let stylePhase = 0;
@@ -1057,6 +1058,7 @@ function cacheElements() {
   els.qualityChip = document.getElementById('quality-chip');
   els.sceneChip = document.getElementById('scene-chip');
   els.statusToast = document.getElementById('status-toast');
+  els.resetView = document.querySelector('[data-action="reset-view"]');
   els.sheet = document.getElementById('settings-sheet');
   els.sheetBody = els.sheet.querySelector('.sheet-body');
   els.close = document.getElementById('settings-close');
@@ -1308,7 +1310,11 @@ function bindEvents() {
       setSettingState({ quality: quality.dataset.quality }, 'quality-setting', { syncQuality: true });
       return;
     }
-    if (event.target.closest('[data-action="reset-view"]')) resetView();
+    const resetButton = event.target.closest('[data-action="reset-view"]');
+    if (resetButton) {
+      resetView(resetButton);
+      return;
+    }
   });
 
   els.highlightToggle.addEventListener('change', () => setSettingState({ highlightSubset: els.highlightToggle.checked }, 'highlight-toggle'));
@@ -2742,21 +2748,36 @@ function commitLiveControl(controlName, options = {}) {
   return true;
 }
 
-function resetView() {
+function showResetFeedback(button = els.resetView) {
+  if (!button) return false;
+  if (resetFeedbackTimer) clearTimeout(resetFeedbackTimer);
+  button.classList.add('is-confirmed');
+  button.textContent = 'Reset done';
+  resetFeedbackTimer = setTimeout(() => {
+    resetFeedbackTimer = null;
+    button.classList.remove('is-confirmed');
+    button.textContent = 'Reset';
+  }, 1200);
+  return true;
+}
+
+function resetView(button = els.resetView) {
   stopMobileTourForManualExplore();
   motionPhase = 0;
+  const activeSelection = {
+    modelMode: state.modelMode,
+    shape: state.shape,
+    polytope4d: state.polytope4d,
+    dynkinDiagram: state.dynkinDiagram,
+    learnTopic: state.learnTopic,
+  };
   setState({
-    rotation: 0,
-    cameraTilt: DEFAULT_STATE.cameraTilt,
-    cameraPath: 'manual',
-    autoRotate: false,
-    e8MorphT: 0,
-    panX: 0,
-    panY: 0,
-    zoom: 1,
-    selectedRoot: null,
+    ...defaultMobileState(),
+    ...activeSelection,
   }, { interactionType: 'reset-view' });
-  showStatus('View reset');
+  showResetFeedback(button);
+  showStatus(`${MODEL_LABELS[state.modelMode] || 'Model'} visuals reset`);
+  return true;
 }
 
 function scenePresetLabel(preset) {
@@ -5262,21 +5283,27 @@ void main() {
 
   vec3 p = rayOrigin + rayDirection * t;
   sdf(p);
-  float ringMix = gNearestRing;
+  // Nearest-ring colouring changes abruptly where two root fields meet. On a
+  // blended surface those Voronoi boundaries look like flat cell-shaded tiles.
+  // A radial gradient preserves the inner-to-outer palette progression while
+  // remaining continuous across every sphere union.
+  float ringMix = smoothstep(0.18, 1.92, length(p.xy));
   vec3 n = surfaceNormal(p);
   vec3 keyDirection = normalize(vec3(0.58, 0.72, 0.46));
   vec3 fillDirection = normalize(vec3(-0.45, 0.18, -0.28));
-  float diffuse = max(dot(n, keyDirection), 0.0);
-  float fill = max(dot(n, fillDirection), 0.0) * 0.32;
-  float fresnel = pow(1.0 - max(dot(n, -rayDirection), 0.0), 3.0);
+  float softKey = 0.5 + 0.5 * dot(n, keyDirection);
+  float softFill = 0.5 + 0.5 * dot(n, fillDirection);
+  float viewFacing = max(dot(n, -rayDirection), 0.0);
+  float fresnel = pow(1.0 - viewFacing, 2.4);
   float shadow = softShadow(p + n * 0.006, keyDirection);
   float ao = ambientOcclusion(p, n);
   vec3 baseColor = mix(uColorInner, uColorOuter, ringMix);
-  float wrap = smoothstep(-0.45, 0.9, dot(n, keyDirection));
   float hemisphere = 0.5 + 0.5 * n.y;
-  vec3 color = baseColor * (0.4 + diffuse * shadow * 0.42 + fill * 0.42 + hemisphere * 0.08) * ao;
-  color += baseColor * wrap * 0.12;
-  color += mix(vec3(0.42, 0.68, 1.0), baseColor, 0.45) * fresnel * (0.3 + uBloom * 0.24);
+  // Start from a bright, continuous material response instead of a dark
+  // Lambert base. The old low ambient at grazing angles drew a black ring
+  // around every sphere and made the smooth unions resemble cel shading.
+  vec3 color = baseColor * (0.58 + softKey * shadow * 0.22 + softFill * 0.1 + hemisphere * 0.06) * ao;
+  color += mix(vec3(0.95, 0.97, 1.0), baseColor, 0.25) * fresnel * (0.62 + uBloom * 0.16);
 
   vec3 halfVector = normalize(keyDirection - rayDirection);
   float standardSpec = pow(max(dot(n, halfVector), 0.0), 26.0);
@@ -5284,11 +5311,15 @@ void main() {
   vec3 bitangent = normalize(cross(n, tangent));
   float anisoSpec = pow(abs(dot(tangent, halfVector)), 36.0) * 0.58
     + pow(abs(dot(bitangent, halfVector)), 82.0) * 0.42;
-  color += vec3(1.0) * standardSpec * shadow * 0.28;
-  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.24;
+  color += vec3(1.0) * standardSpec * shadow * 0.18;
+  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.12;
   vec3 bright = max(color - vec3(0.64), vec3(0.0));
   color += bright * uBloom * 0.72;
-  color = color / (color + vec3(0.42));
+  // A trace of deterministic dither prevents 8-bit mobile gradients from
+  // resolving into visible lighting bands when the view is magnified.
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  color += dither / 255.0;
+  color = color / (color + vec3(0.46));
   color = pow(clamp(color, 0.0, 1.0), vec3(0.96));
   gl_FragColor = vec4(color, 1.0);
 }`;
@@ -5358,7 +5389,10 @@ function ensureSdfWebgl() {
       antialias: false,
       depth: false,
       stencil: false,
-      premultipliedAlpha: false,
+      // The SDF canvas is downsampled by the WebView compositor. Premultiplied
+      // alpha keeps transparent miss pixels from bleeding black into the
+      // opaque silhouette during that filtering step.
+      premultipliedAlpha: true,
       preserveDrawingBuffer: true,
       powerPreference: 'high-performance',
     });
@@ -5475,10 +5509,13 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     const record = sdfProgramFor(profileKey);
     const { program, profile, uniforms, position, buffer } = record;
     const gl = sdfGl;
-    const staticPixelBoost = interactionLiteFrame || hasRuntimeAnimation()
-      ? 1
-      : Math.min(window.devicePixelRatio || 1, 1.5);
-    const rasterScale = profile.scale * staticPixelBoost;
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const isStaticFrame = !interactionLiteFrame && !hasRuntimeAnimation();
+    let rasterScale = profile.scale * (isStaticFrame ? Math.min(devicePixelRatio, 1.75) : 1);
+    // Sharp is the inspection tier: render at the display's native pixel grid
+    // so WebView scaling cannot manufacture a dark filtered contour.
+    if (isStaticFrame && profileKey === 'sharp') rasterScale = Math.max(rasterScale, devicePixelRatio);
+    const staticPixelBoost = rasterScale / profile.scale;
     const width = Math.max(1, Math.round(window.innerWidth * rasterScale));
     const height = Math.max(1, Math.round(window.innerHeight * rasterScale));
     if (sdfCanvas.width !== width || sdfCanvas.height !== height) {
