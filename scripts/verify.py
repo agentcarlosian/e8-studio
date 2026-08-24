@@ -84,6 +84,7 @@ def load_json(name: str):
 
 def check_data_invariants() -> None:
     run(["node", "scripts/generate_curriculum.mjs"])
+    run(["node", "scripts/generate_stellations.mjs"])
     e8 = load_json("e8")
     if e8.get("count") != 240:
         fail("e8.count must be 240")
@@ -157,6 +158,18 @@ def check_data_invariants() -> None:
         item = polytopes.get(name)
         if not item or len(item.get("verts", [])) != verts or len(item.get("edges", [])) != edges:
             fail(f"4D polytope data mismatch for {name}")
+
+    stellations = load_json("stellations")
+    expected_stellations = {
+        "stellated_dodecahedron": (12, 30, 36),
+        "great_dodecahedron": (12, 30, 36),
+        "great_icosahedron": (12, 30, 20),
+        "great_stellated_dodecahedron": (20, 30, 36),
+    }
+    for name, (verts, edges, faces) in expected_stellations.items():
+        item = stellations.get(name)
+        if not item or (len(item.get("verts", [])), len(item.get("edges", [])), len(item.get("faces", []))) != (verts, edges, faces):
+            fail(f"Star-polyhedron data mismatch for {name}")
 
     dynkin = load_json("dynkin")
     if "E8" not in dynkin or len(dynkin["E8"].get("nodes", [])) != 8:

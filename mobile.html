@@ -85,11 +85,19 @@
             <label id="shape-field" class="field hidden">
               <span>Shape</span>
               <select id="shape-select">
-                <option value="tetrahedron">Tetrahedron</option>
-                <option value="cube">Cube</option>
-                <option value="octahedron">Octahedron</option>
-                <option value="dodecahedron">Dodecahedron</option>
-                <option value="icosahedron">Icosahedron</option>
+                <optgroup label="Platonic solids">
+                  <option value="tetrahedron">Tetrahedron</option>
+                  <option value="cube">Cube</option>
+                  <option value="octahedron">Octahedron</option>
+                  <option value="dodecahedron">Dodecahedron</option>
+                  <option value="icosahedron">Icosahedron</option>
+                </optgroup>
+                <optgroup label="Star polyhedra">
+                  <option value="stellated_dodecahedron">sDodec</option>
+                  <option value="great_dodecahedron">gDodec</option>
+                  <option value="great_icosahedron">gIcosa</option>
+                  <option value="great_stellated_dodecahedron">gsDodec</option>
+                </optgroup>
               </select>
             </label>
             <label id="polytope4d-field" class="field hidden">
@@ -100,6 +108,7 @@
                 <option value="16cell">16-cell</option>
                 <option value="24cell">24-cell</option>
                 <option value="600cell">600-cell</option>
+                <option value="120cell">120-cell</option>
               </select>
             </label>
             <label id="dynkin-field" class="field hidden">
@@ -108,13 +117,6 @@
                 <option value="E8">E8</option>
                 <option value="E7">E7</option>
                 <option value="E6">E6</option>
-                <option value="D6">D6</option>
-                <option value="D5">D5</option>
-                <option value="D4">D4</option>
-                <option value="A7">A7</option>
-                <option value="A5">A5</option>
-                <option value="A4">A4</option>
-                <option value="A3">A3</option>
               </select>
             </label>
             <label class="toggle-row">
@@ -144,6 +146,13 @@
                 <small>Show the eight simple-reflection mirror lines.</small>
               </span>
               <input id="mirrors-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row">
+              <span>
+                <strong>Vertex nodes</strong>
+                <small>Show point markers on solids and 4D polytopes.</small>
+              </span>
+              <input id="vertices-toggle" type="checkbox">
             </label>
             <label class="field">
               <span>Subset</span>

@@ -44,6 +44,7 @@ def inline_mobile_data() -> str:
         "e8_math": json.loads((ROOT / "data" / "e8_math.json").read_text(encoding="utf-8")),
         "mckay_subsets": json.loads((ROOT / "data" / "mckay_subsets.json").read_text(encoding="utf-8")),
         "platonic": json.loads((ROOT / "data" / "platonic.json").read_text(encoding="utf-8")),
+        "stellations": json.loads((ROOT / "data" / "stellations.json").read_text(encoding="utf-8")),
         "polytopes4d": json.loads((ROOT / "data" / "polytopes4d.json").read_text(encoding="utf-8")),
         "dynkin": json.loads((ROOT / "data" / "dynkin.json").read_text(encoding="utf-8")),
         "mckay": json.loads((ROOT / "data" / "mckay.json").read_text(encoding="utf-8")),

@@ -38,6 +38,7 @@ def main() -> int:
     commit_epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
     built_at = datetime.fromtimestamp(commit_epoch, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
+    run("node", "scripts/generate_stellations.mjs")
     run(sys.executable, "scripts/build_offline.py")
     run(sys.executable, "scripts/build_singlefile.py")
     run(sys.executable, "scripts/build_mobile_singlefile.py")
