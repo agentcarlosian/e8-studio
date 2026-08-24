@@ -166,6 +166,7 @@ const RENDER_PALETTES = Object.fromEntries(
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
 const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'dynkin']);
+const TOUCH_ORBIT_MODEL_MODES = new Set(['bloom', 'sdf', 'platonic', 'poly4d']);
 const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
 const STAR_SHAPES = new Set([
   'stellated_dodecahedron',
@@ -3615,7 +3616,7 @@ function activeSceneSummary() {
       chipSmall: `${label} / ${verts}v`,
       topbarLabel: `${label} ${family}, ${verts} vertices, ${edges} edges`,
       canvasLabel: `${label} ${family} visualization with ${verts} vertices and ${edges} edges`,
-      infoCopy: `${label} renders desktop ${family} geometry on the mobile Canvas 2D path. Drag, pinch, or enable Motion to inspect it; the McKay bridge links ${bridgeCopy} to ${info.roots || 'ADE roots'}.`,
+      infoCopy: `${label} renders desktop ${family} geometry on the mobile Canvas 2D path. Drag to rotate, pinch to zoom, or enable Motion to inspect it; the McKay bridge links ${bridgeCopy} to ${info.roots || 'ADE roots'}.`,
     };
   }
   if (state.modelMode === 'poly4d') {
@@ -3628,7 +3629,7 @@ function activeSceneSummary() {
       chipSmall: `${label} / ${verts}v`,
       topbarLabel: `${label} 4D polytope, ${verts} vertices, ${edges} edges`,
       canvasLabel: `${label} 4D polytope projection with ${verts} vertices and ${edges} edges`,
-      infoCopy: `${label} is projected from 4D into a depth view and then drawn with Canvas 2D. Motion rotates the projection without switching to a heavy mobile renderer.`,
+      infoCopy: `${label} is projected from 4D into a depth view and then drawn with Canvas 2D. Drag to rotate, pinch to zoom, or enable Motion to animate the projection.`,
     };
   }
   if (state.modelMode === 'dynkin') {
@@ -3653,7 +3654,7 @@ function activeSceneSummary() {
       chipSmall: `${bloomPhaseLabel()} / ${state.bloomAmount.toFixed(2)}`,
       topbarLabel: `Designed Bloom timeline at ${state.bloomAmount.toFixed(2)}, ${bloomPhaseLabel()} phase`,
       canvasLabel: `Designed Bloom visualization in the ${bloomPhaseLabel()} phase`,
-      infoCopy: 'Designed Bloom follows the desktop construction: the source solid grows through the 600-cell and twin H4 stages, then opens into the E8 Coxeter plane. Open View to scrub the timeline or start Auto.',
+      infoCopy: 'Designed Bloom follows the desktop construction: the source solid grows through the 600-cell and twin H4 stages, then opens into the E8 Coxeter plane. Drag to rotate, or open View to scrub the timeline or start Auto.',
     };
   }
   if (state.modelMode === 'sdf') {
@@ -3662,7 +3663,7 @@ function activeSceneSummary() {
       chipSmall: 'implicit surface',
       topbarLabel: 'E8 SDF, 240 smoothly joined root spheres',
       canvasLabel: 'E8 signed-distance-field visualization with 240 fused Coxeter-plane root spheres',
-      infoCopy: 'The SDF view smoothly joins all 240 Coxeter-plane root spheres into one shaded implicit surface. It preserves the desktop raymarcher composition at a conservative internal resolution for phone performance.',
+      infoCopy: 'The SDF view smoothly joins all 240 Coxeter-plane root spheres into one shaded implicit surface. Drag to rotate and tilt it; pinch to zoom. It preserves the desktop raymarcher composition at a conservative internal resolution for phone performance.',
     };
   }
   return {
@@ -6971,6 +6972,12 @@ function syncChromeFade(reason = 'input') {
   return true;
 }
 
+function touchDragMode() {
+  if (TOUCH_ORBIT_MODEL_MODES.has(state.modelMode)) return 'orbit';
+  if (state.modelMode === 'e8_2d' && state.e8MorphT > 0.0001) return 'orbit';
+  return 'pan';
+}
+
 function onPointerDown(event) {
   if (mobileTourActive) stopMobileTour({ interactionType: 'touch-stop-tour' });
   try {
@@ -6996,6 +7003,7 @@ function onPointerDown(event) {
     panY: state.panY,
     rotation: state.rotation,
     cameraTilt: state.cameraTilt,
+    mode: touchDragMode(),
     moved: false,
   };
 }
@@ -7020,8 +7028,8 @@ function onPointerMove(event) {
     return;
   }
   drag.moved = true;
-  if (state.modelMode === 'sdf') {
-    markInteraction('camera-drag');
+  if (drag.mode === 'orbit') {
+    markInteraction('orbit-drag');
     state.rotation = drag.rotation + dx * 0.008;
     state.cameraTilt = clamp(drag.cameraTilt - dy * 0.006, -Math.PI / 3, Math.PI / 3);
     state.cameraPath = 'manual';
@@ -7036,6 +7044,7 @@ function onPointerMove(event) {
 
 function onPointerUp(event) {
   const wasTap = drag && drag.id === event.pointerId && !drag.moved && !gesture;
+  const dragMode = drag?.mode || 'pan';
   activePointers.delete(event.pointerId);
   try {
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -7062,7 +7071,8 @@ function onPointerUp(event) {
     return;
   }
   drag = null;
-  syncChromeFade(wasTap ? 'tap-end' : 'pan-end');
+  const dragEndReason = `${dragMode}-end`;
+  syncChromeFade(wasTap ? 'tap-end' : dragEndReason);
   if (wasTap) {
     if (consumeDoubleTap(event.clientX, event.clientY)) {
       fitAllRoots('double-tap-fit-all', { clearSelection: true });
@@ -7074,10 +7084,10 @@ function onPointerUp(event) {
     selectNearest(event.clientX, event.clientY);
   }
   else {
-    markInteraction('pan-end');
+    markInteraction(dragEndReason);
     syncControls();
     saveState();
-    requestSettledRenderAfterInput('pan-end');
+    requestSettledRenderAfterInput(dragEndReason);
   }
   syncMotionLoop();
 }
