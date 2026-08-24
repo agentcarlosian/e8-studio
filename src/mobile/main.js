@@ -451,7 +451,11 @@ void main() {
   // WebGL lines have no portable glow width, so carry that energy in alpha to
   // keep Rainbow Ripple legible without adding another 21,840-line pass.
   float rippleBrightness = 0.34 + wave01 * 1.16;
-  float alpha = clamp(mix(aStyle.y, 0.12 * rippleBrightness, uRipple) * uAlphaBoost, 0.0, 0.56);
+  // All active FX need enough chord energy to carry their color. The old
+  // class alpha left 15,120 long chords far dimmer than Ripple, making the
+  // point layer appear to own the treatment even when chord RGB had changed.
+  float fxAlpha = mix(aStyle.y, 0.118 * (0.72 + pulse * 0.28), min(0.9, uFxColorMix));
+  float alpha = clamp(mix(fxAlpha, 0.12 * rippleBrightness, uRipple) * uAlphaBoost, 0.0, 0.56);
   vec3 chordColor = mix(baseColor, effectColor, uFxColorMix);
   chordColor = mix(chordColor, vec3(1.0), clamp(uColorLift, 0.0, 0.22));
   vColor = vec4(chordColor, alpha);
@@ -5443,7 +5447,6 @@ function render() {
       e8ChordAlphaBoost: 1,
       e8ChordColorLift: 0,
       e8ChordFxColorMix: 0,
-      e8ChordRecoveryPass: false,
       e8EdgesSkippedForInteraction: 0,
       ripplePointCount: 0,
       rippleEdgeSegments: 0,
@@ -5636,9 +5639,9 @@ function captureCanvasFxSource() {
   fxSourceContext.globalCompositeOperation = 'source-over';
   fxSourceContext.filter = 'none';
   fxSourceContext.clearRect(0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
-  if (isE8ChordGpuActive()) {
-    fxSourceContext.drawImage(e8ChordCanvas, 0, 0, e8ChordCanvas.width, e8ChordCanvas.height, 0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
-  }
+  // GPU E8 chords carry their FX directly in the vertex shader, just like
+  // Ripple. Keep them out of the root compositor so their color is not
+  // attenuated by several full-screen Canvas passes.
   fxSourceContext.drawImage(canvas, 0, 0);
   return true;
 }
@@ -5703,41 +5706,12 @@ function drawCanvasKaleidoscope(width, height, cx, cy, segments, phase, strength
   return segments;
 }
 
-function drawE8ChordRecoveryPass(width, height) {
-  if (
-    state.modelMode !== 'e8_2d' ||
-    state.fxMode === 'none' ||
-    state.fxMode === 'ripple' ||
-    !isE8ChordGpuActive()
-  ) return false;
-
-  const zoomProgress = e8ChordZoomProgress();
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.22 + zoomProgress * 0.38;
-  ctx.filter = `brightness(${(1.08 + zoomProgress * 0.24).toFixed(3)}) saturate(1.08)`;
-  ctx.drawImage(
-    e8ChordCanvas,
-    0,
-    0,
-    e8ChordCanvas.width,
-    e8ChordCanvas.height,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
-  );
-  ctx.restore();
-  return true;
-}
-
 function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
   const mode = state.fxMode;
   if (mode === 'none' || mode === 'ripple' || state.modelMode === 'sdf' || interactionLiteFrame) {
-    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped', chordRecovery: false };
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped' };
   }
-  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable', chordRecovery: false };
+  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable' };
 
   const strength = clamp(state.fxStrength, 0.25, 1.5);
   const layout = layoutForCanvas();
@@ -5957,15 +5931,10 @@ function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
     primitives++;
   } else {
     drawOriginal();
-    return { applied: false, primitives: 1, renderer: 'fallback', chordRecovery: false };
+    return { applied: false, primitives: 1, renderer: 'fallback' };
   }
 
-  // The effect compositor intentionally transforms and attenuates the source.
-  // Restore one inexpensive chord-only pass so deep E8 zooms retain a crisp
-  // structural reference without paying for another topology traversal.
-  const chordRecovery = drawE8ChordRecoveryPass(width, height);
-  if (chordRecovery) primitives++;
-  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}`, chordRecovery };
+  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}` };
 }
 
 function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
@@ -6071,11 +6040,12 @@ function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
 
 function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) {
   const canvasFxPass = applyNativeCanvasFx(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
-  setE8ChordCanvasComposited(isE8ChordGpuActive() && canvasFxPass.applied);
+  // All GPU chord treatments remain a direct layer. This gives every FX the
+  // same full-strength color path that made Ripple successful.
+  setE8ChordCanvasComposited(false);
   drawStats.canvasFxPassApplied = canvasFxPass.applied;
   drawStats.canvasFxPassPrimitives = canvasFxPass.primitives;
   drawStats.canvasFxPassRenderer = canvasFxPass.renderer;
-  drawStats.e8ChordRecoveryPass = canvasFxPass.chordRecovery;
   if (canvasFxPass.applied) {
     drawStats.nativeFxApplied = true;
     drawStats.nativeFxPrimitives += canvasFxPass.primitives;
@@ -7319,7 +7289,8 @@ function e8ChordFxColorMix() {
   if (!modeIndex) return 0;
   if (state.fxMode === 'ripple') return 1;
   const baseMix = E8_CHORD_FX_COLOR_MIX[modeIndex] || 0.6;
-  return clamp(baseMix * (0.65 + clamp(state.fxStrength, 0.25, 1.5) * 0.35), 0, 0.96);
+  const fullFieldMix = 0.72 + baseMix * 0.28;
+  return clamp(fullFieldMix * (0.78 + clamp(state.fxStrength, 0.25, 1.5) * 0.22), 0, 0.98);
 }
 
 function e8ChordPaletteColorAt(paletteSet, value) {
