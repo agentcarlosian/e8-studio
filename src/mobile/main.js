@@ -287,7 +287,12 @@ const MOTION_FRAME_INTERVAL_MS = 33;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
-const MOBILE_E8_EDGE_LIMIT = 1080;
+// The desktop Coxeter overlay's principal line family is the complete
+// distance-squared-2 root graph: every root has exactly 56 neighbours.  Keep
+// that topology intact on mobile.  Subsampling the pair list by array order
+// gave different roots between 4 and 17 lines and produced an asymmetric,
+// visibly incorrect web when the user zoomed in.
+const MOBILE_E8_CHORD_DISTANCE_SQUARED = 2;
 const RIPPLE_COLOR_BANDS = 12;
 const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
@@ -4509,7 +4514,15 @@ function renderScale() {
   // The SDF's continuous shading exposes upscaling artifacts far more than
   // points or wireframes do. Keep it at a full CSS-pixel backing store even
   // in Smooth mode; its own raster still follows the selected quality tier.
-  return state.modelMode === 'sdf' ? Math.max(1, scale) : scale;
+  if (state.modelMode === 'sdf') return Math.max(1, scale);
+  // Smooth mode intentionally uses a small backing store, but sub-pixel
+  // Coxeter chords become visibly stair-stepped when magnified.  Raise the
+  // floor only for close E8 edge inspection; interaction frames already skip
+  // the dense edge graph, so pinch gestures remain responsive.
+  if (state.modelMode === 'e8_2d' && state.showEdges && state.zoom > 1.15) {
+    return Math.max(1, scale);
+  }
+  return scale;
 }
 
 function activePaletteSet() {
@@ -4578,9 +4591,9 @@ function deferSettingsCanvasResize() {
   return false;
 }
 
-function buildMobileE8ChordEdges(roots, limit = MOBILE_E8_EDGE_LIMIT) {
+function buildMobileE8ChordEdges(roots) {
   if (!Array.isArray(roots) || roots.length < 2) return [];
-  const candidates = [];
+  const edges = [];
   for (let i = 0; i < roots.length; i++) {
     const a = roots[i];
     if (!Array.isArray(a)) continue;
@@ -4592,17 +4605,12 @@ function buildMobileE8ChordEdges(roots, limit = MOBILE_E8_EDGE_LIMIT) {
         const delta = a[axis] - b[axis];
         distanceSquared += delta * delta;
       }
-      // The desktop E8 edge overlay begins with the shortest non-zero chord
-      // class (distance sqrt(2)). Sampling that graph keeps its visual grammar
-      // without asking a phone Canvas to animate all 6,720 segments.
-      if (Math.abs(distanceSquared - 2) < 0.01) candidates.push([i, j]);
+      if (Math.abs(distanceSquared - MOBILE_E8_CHORD_DISTANCE_SQUARED) < 0.01) {
+        edges.push([i, j]);
+      }
     }
   }
-  if (candidates.length <= limit) return candidates;
-  const sampled = [];
-  const stride = candidates.length / limit;
-  for (let index = 0; index < limit; index++) sampled.push(candidates[Math.floor(index * stride)]);
-  return sampled;
+  return edges;
 }
 
 function preparePoints() {
@@ -4610,6 +4618,13 @@ function preparePoints() {
   const roots = data.e8.roots8d || [];
   e8ChordEdges = buildMobileE8ChordEdges(roots);
   metrics.e8ChordEdgeCount = e8ChordEdges.length;
+  const e8ChordDegrees = Array.from({ length: roots.length }, () => 0);
+  for (const [a, b] of e8ChordEdges) {
+    e8ChordDegrees[a]++;
+    e8ChordDegrees[b]++;
+  }
+  metrics.e8ChordDegreeMin = e8ChordDegrees.length ? Math.min(...e8ChordDegrees) : 0;
+  metrics.e8ChordDegreeMax = e8ChordDegrees.length ? Math.max(...e8ChordDegrees) : 0;
   platonicGeometry = { ...(data.platonic || {}), ...(data.stellations || {}) };
   platonicFaceCache = new Map();
   polytope4DGeometry = data.polytopes4d || {};
@@ -4926,11 +4941,14 @@ function render() {
 
     if (state.showEdges && !interactionLiteFrame) {
       const edgeStats = drawPaletteEdgeField(points, e8ChordEdges, layout, paletteSet, {
-        baseAlpha: 0.22,
-        baseWidth: 0.72,
-        shadowBlur: 1.4,
+        // Match the desktop's transparent LineSegments treatment.  The full
+        // 56-neighbour graph needs much less per-chord energy than the former
+        // 1,080-line sample, especially where many chords cross the centre.
+        baseAlpha: 0.085,
+        baseWidth: 0.62,
+        shadowBlur: 0.65,
         alwaysPalette: true,
-        composite: 'lighter',
+        composite: 'source-over',
       });
       drawStats.e8ChordEdges = edgeStats.segments;
       drawStats.e8ChordEdgeStrokes = edgeStats.strokes;
