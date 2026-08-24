@@ -359,14 +359,20 @@
               <span class="field-heading">Tilt <output id="camera-tilt-output">16°</output></span>
               <input id="camera-tilt" type="range" min="-60" max="60" step="1" value="16">
             </label>
-            <label class="field">
-              <span class="field-heading">Zoom <output id="camera-zoom-output">100%</output></span>
-              <input id="camera-zoom" type="range" min="0.55" max="3.2" step="0.05" value="1">
-            </label>
-            <label class="field">
-              <span class="field-heading">Extrude <output id="camera-extrude-output">0.00</output></span>
-              <input id="camera-extrude" type="range" min="0" max="1" step="0.01" value="0">
-            </label>
+            <div class="field">
+              <span class="field-heading">
+                <span>Zoom <output id="camera-zoom-output">100%</output></span>
+                <button id="camera-zoom-auto" class="motion-auto-toggle" type="button" data-motion-action="toggle-zoom-auto" aria-pressed="false" aria-label="Auto-animate Zoom">⟳ Auto</button>
+              </span>
+              <input id="camera-zoom" type="range" min="0.55" max="3.2" step="0.05" value="1" aria-label="Zoom">
+            </div>
+            <div class="field">
+              <span class="field-heading">
+                <span>Extrude <output id="camera-extrude-output">0.00</output></span>
+                <button id="camera-extrude-auto" class="motion-auto-toggle" type="button" data-motion-action="toggle-extrude-auto" aria-pressed="false" aria-label="Auto-animate Extrude">⟳ Auto</button>
+              </span>
+              <input id="camera-extrude" type="range" min="0" max="1" step="0.01" value="0" aria-label="Extrude">
+            </div>
             <label class="toggle-row">
               <span>
                 <strong>Auto-rotate</strong>

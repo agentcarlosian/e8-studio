@@ -1251,9 +1251,31 @@ def main() -> int:
                 tilt: document.getElementById('camera-tilt-output').textContent,
                 zoom: document.getElementById('camera-zoom-output').textContent,
                 extrude: document.getElementById('camera-extrude-output').textContent,
+                zoomAuto: { pressed: document.getElementById('camera-zoom-auto').getAttribute('aria-pressed'), height: document.getElementById('camera-zoom-auto').getBoundingClientRect().height },
+                extrudeAuto: { pressed: document.getElementById('camera-extrude-auto').getAttribute('aria-pressed'), height: document.getElementById('camera-extrude-auto').getBoundingClientRect().height },
                 path: document.getElementById('camera-path-output').textContent
             })""")
-            check("Motion exposes full camera paths and transforms", len(camera_controls["buttons"]) == 4 and all(button["height"] >= 40 for button in camera_controls["buttons"]) and camera_controls["rotation"] == "0°" and camera_controls["tilt"] == "16°" and camera_controls["zoom"] == "100%" and camera_controls["extrude"] == "0.00" and camera_controls["path"] == "Manual", str(camera_controls))
+            check("Motion exposes full camera paths and transforms", len(camera_controls["buttons"]) == 4 and all(button["height"] >= 40 for button in camera_controls["buttons"]) and camera_controls["rotation"] == "0°" and camera_controls["tilt"] == "16°" and camera_controls["zoom"] == "100%" and camera_controls["extrude"] == "0.00" and camera_controls["zoomAuto"]["pressed"] == "false" and camera_controls["extrudeAuto"]["pressed"] == "false" and camera_controls["zoomAuto"]["height"] >= 28 and camera_controls["extrudeAuto"]["height"] >= 28 and camera_controls["path"] == "Manual", str(camera_controls))
+            auto_transform_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            page.locator('[data-motion-action="toggle-zoom-auto"]').click()
+            page.locator('[data-motion-action="toggle-extrude-auto"]').click()
+            auto_transform_set = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                zoomPressed: document.getElementById('camera-zoom-auto').getAttribute('aria-pressed'),
+                extrudePressed: document.getElementById('camera-extrude-auto').getAttribute('aria-pressed'),
+                motionOutput: document.getElementById('motion-preset-output').textContent.trim()
+            })""")
+            check("Zoom and Extrude expose independent desktop-style Auto controls", auto_transform_set["state"]["autoZoom"] and auto_transform_set["state"]["autoExtrude"] and auto_transform_set["zoomPressed"] == "true" and auto_transform_set["extrudePressed"] == "true" and auto_transform_set["motionOutput"] == "Custom", str(auto_transform_set))
+            page.evaluate("() => window.__mobileApp.closeSettings()")
+            page.wait_for_function("before => { const m = window.__mobileApp.getMetrics(); return m.autoZoomFrameCount > before.zoom && m.autoExtrudeFrameCount > before.extrude; }", arg={"zoom": auto_transform_before["metrics"]["autoZoomFrameCount"], "extrude": auto_transform_before["metrics"]["autoExtrudeFrameCount"]}, timeout=1500)
+            page.wait_for_timeout(420)
+            auto_transform_running = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("Zoom and Extrude travel in and out through the runtime motion loop", auto_transform_running["metrics"]["motionActive"] and auto_transform_running["metrics"]["runtimeAnimationActive"] and auto_transform_running["metrics"]["autoZoomFrameCount"] > auto_transform_before["metrics"]["autoZoomFrameCount"] and auto_transform_running["metrics"]["autoExtrudeFrameCount"] > auto_transform_before["metrics"]["autoExtrudeFrameCount"] and abs(auto_transform_running["state"]["zoom"] - auto_transform_before["state"]["zoom"]) > 0.01 and abs(auto_transform_running["state"]["e8MorphT"] - auto_transform_before["state"]["e8MorphT"]) > 0.001 and auto_transform_running["metrics"]["lastDrawStats"]["e8ExtrudedPoints"] == 240 and auto_transform_running["metrics"]["lastDrawStats"]["e8Extrude"] > 0.001, str(auto_transform_running))
+            page.evaluate("() => window.__mobileApp.openSettings('motion')")
+            page.locator('[data-motion-action="toggle-zoom-auto"]').click()
+            page.locator('[data-motion-action="toggle-extrude-auto"]').click()
+            auto_transform_stopped = page.evaluate("() => window.__mobileApp.getState()")
+            check("Zoom and Extrude Auto controls stop independently", not auto_transform_stopped["autoZoom"] and not auto_transform_stopped["autoExtrude"], str(auto_transform_stopped))
             page.locator('[data-motion-action="camera-dive"]').click()
             dive_camera = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -1264,7 +1286,7 @@ def main() -> int:
             check("Dive path starts camera motion without changing models", dive_camera["state"]["cameraPath"] == "dive" and dive_camera["state"]["autoRotate"] and not dive_camera["state"]["autoModel"] and dive_camera["path"] == "Dive" and dive_camera["pressed"] == "true" and dive_camera["motion"], str(dive_camera))
             page.locator('[data-motion-action="camera-reset"]').click()
             camera_reset = page.evaluate("() => window.__mobileApp.getState()")
-            check("Camera Reset restores the desktop-like baseline", camera_reset["cameraPath"] == "manual" and not camera_reset["autoRotate"] and abs(camera_reset["rotation"]) < 0.001 and abs(camera_reset["cameraTilt"] - 0.28) < 0.001 and abs(camera_reset["zoom"] - 1) < 0.001 and camera_reset["e8MorphT"] == 0, str(camera_reset))
+            check("Camera Reset restores the desktop-like baseline", camera_reset["cameraPath"] == "manual" and not camera_reset["autoRotate"] and not camera_reset["autoZoom"] and not camera_reset["autoExtrude"] and abs(camera_reset["rotation"]) < 0.001 and abs(camera_reset["cameraTilt"] - 0.28) < 0.001 and abs(camera_reset["zoom"] - 1) < 0.001 and camera_reset["e8MorphT"] == 0, str(camera_reset))
             orbit_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('[data-motion-action="orbit"]').click()
             orbit_after = page.evaluate("""() => ({
@@ -1319,7 +1341,7 @@ def main() -> int:
                     activeFx: document.querySelector('#fx-preset-grid button.active')?.dataset.fxPreset
                 }
             })""")
-            check("Still preset stops all runtime showcase toggles", not still_after["state"]["autoRotate"] and not still_after["state"]["autoModel"] and not still_after["state"]["autoColor"] and not still_after["state"]["softFx"] and not still_after["controls"]["motion"] and not still_after["controls"]["autoModel"] and not still_after["controls"]["autoColor"] and not still_after["controls"]["softFx"] and still_after["controls"]["activeMotion"] == "still" and still_after["controls"]["motionOutput"] == "Still" and still_after["controls"]["activeFx"] == "clean" and still_after["metrics"]["lastSettingsControlSyncSkip"] == "auto-preset-still", str(still_after))
+            check("Still preset stops all runtime showcase toggles", not still_after["state"]["autoRotate"] and not still_after["state"]["autoZoom"] and not still_after["state"]["autoExtrude"] and not still_after["state"]["autoModel"] and not still_after["state"]["autoColor"] and not still_after["state"]["softFx"] and not still_after["controls"]["motion"] and not still_after["controls"]["autoModel"] and not still_after["controls"]["autoColor"] and not still_after["controls"]["softFx"] and still_after["controls"]["activeMotion"] == "still" and still_after["controls"]["motionOutput"] == "Still" and still_after["controls"]["activeFx"] == "clean" and still_after["metrics"]["lastSettingsControlSyncSkip"] == "auto-preset-still", str(still_after))
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             page.evaluate("() => { window.__mobileApp.setState({ autoColor: false, softFx: false, palette: 'cyan' }); window.__mobileApp.forceRender(); window.__mobileApp.openSettings('style'); }")
             surprise_button = page.locator("#surprise-button").bounding_box()

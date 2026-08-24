@@ -26,6 +26,8 @@ const DEFAULT_STATE = {
   bloomSpeed: 0.08,
   bloomTwinH4: true,
   autoRotate: false,
+  autoZoom: false,
+  autoExtrude: false,
   autoModel: false,
   autoColor: false,
   colorSpeed: 0.72,
@@ -56,6 +58,12 @@ const MOTION_SPEED_PRESETS = [
   { id: 'medium', label: 'Med', name: 'Medium', value: 0.7 },
   { id: 'fast', label: 'Fast', value: 1.2 },
 ];
+// The manual slider keeps its full inspection range. Auto uses a narrower
+// cinematic band so 2D views visibly breathe without spending half the cycle
+// cropped far beyond a phone screen.
+const AUTO_ZOOM_MIN = 0.7;
+const AUTO_ZOOM_MAX = 1.65;
+const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
   { id: 'clean', label: 'Clean', autoColor: false, softFx: false },
   { id: 'pulse', label: 'Pulse', autoColor: false, softFx: true },
@@ -667,6 +675,8 @@ let metrics = {
   lastAutoModelTarget: null,
   autoColorFrameCount: 0,
   softFxFrameCount: 0,
+  autoZoomFrameCount: 0,
+  autoExtrudeFrameCount: 0,
   lastStylePhase: 0,
   lastRuntimePalette: null,
   lastMotionFrameRenderMs: null,
@@ -853,6 +863,8 @@ let savePending = false;
 let saveRequestedAt = 0;
 let stylePhase = 0;
 let motionPhase = 0;
+let autoZoomPhaseOffset = 0;
+let autoExtrudePhaseOffset = 0;
 let autoModelElapsed = 0;
 let autoModelIndex = 0;
 let drag = null;
@@ -1011,6 +1023,8 @@ function normalizeState(next) {
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
+  if (typeof next.autoZoom !== 'boolean') next.autoZoom = false;
+  if (typeof next.autoExtrude !== 'boolean') next.autoExtrude = false;
   if (typeof next.bloomAuto !== 'boolean') next.bloomAuto = false;
   if (typeof next.bloomTwinH4 !== 'boolean') next.bloomTwinH4 = true;
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
@@ -1157,8 +1171,10 @@ function cacheElements() {
   els.cameraTiltOutput = document.getElementById('camera-tilt-output');
   els.cameraZoom = document.getElementById('camera-zoom');
   els.cameraZoomOutput = document.getElementById('camera-zoom-output');
+  els.cameraZoomAuto = document.getElementById('camera-zoom-auto');
   els.cameraExtrude = document.getElementById('camera-extrude');
   els.cameraExtrudeOutput = document.getElementById('camera-extrude-output');
+  els.cameraExtrudeAuto = document.getElementById('camera-extrude-auto');
   els.sectionTabs = [...els.sheet.querySelectorAll('[data-section-tab]')];
   els.sectionPanels = [...els.sheet.querySelectorAll('[data-section]')];
   els.qualityButtons = [...els.sheet.querySelectorAll('[data-quality]')];
@@ -1425,12 +1441,12 @@ function bindEvents() {
   });
   els.cameraTilt.addEventListener('change', () => commitLiveControl('camera-tilt'));
   els.cameraZoom.addEventListener('input', () => {
-    previewState({ zoom: Number(els.cameraZoom.value) }, 'camera-zoom');
+    previewState({ zoom: Number(els.cameraZoom.value), autoZoom: false }, 'camera-zoom');
     syncCameraControls();
   });
   els.cameraZoom.addEventListener('change', () => commitLiveControl('camera-zoom'));
   els.cameraExtrude.addEventListener('input', () => {
-    previewState({ e8MorphT: Number(els.cameraExtrude.value) }, 'camera-extrude');
+    previewState({ e8MorphT: Number(els.cameraExtrude.value), autoExtrude: false }, 'camera-extrude');
     syncCameraControls();
   });
   els.cameraExtrude.addEventListener('change', () => commitLiveControl('camera-extrude'));
@@ -1508,6 +1524,8 @@ function handleMotionAction(action) {
   if (action === 'camera-dive') return selectCameraPath('dive');
   if (action === 'camera-spiral') return selectCameraPath('spiral');
   if (action === 'camera-reset') return resetCameraMotion();
+  if (action === 'toggle-zoom-auto') return toggleCameraAuto('zoom');
+  if (action === 'toggle-extrude-auto') return toggleCameraAuto('extrude');
   return false;
 }
 
@@ -2514,6 +2532,8 @@ function mobileSurprise() {
     showContext: true,
     quality: 'smooth',
     autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
     autoModel: false,
     autoColor: false,
     softFx: false,
@@ -2555,6 +2575,8 @@ function setAutoPreset(mode) {
       shape: 'icosahedron',
       selectedRoot: null,
       autoRotate: true,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: true,
       autoColor: true,
       softFx: true,
@@ -2563,12 +2585,16 @@ function setAutoPreset(mode) {
   } else if (mode === 'orbit') {
     patch = {
       autoRotate: true,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: false,
       cameraPath: 'orbit',
     };
   } else {
     patch = {
       autoRotate: false,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: false,
       autoColor: false,
       softFx: false,
@@ -2638,7 +2664,11 @@ function setState(patch, options = {}) {
   }
   const previousQuality = state.quality;
   const previousAutoModel = state.autoModel;
+  const previousAutoZoom = state.autoZoom;
+  const previousAutoExtrude = state.autoExtrude;
   state = next;
+  if (state.autoZoom && !previousAutoZoom) syncAutoMotionPhase('zoom');
+  if (state.autoExtrude && !previousAutoExtrude) syncAutoMotionPhase('extrude');
   if (state.autoModel && (!previousAutoModel || patch.modelMode != null || patch.shape != null || patch.polytope4d != null || patch.dynkinDiagram != null)) {
     autoModelIndex = currentAutoModelIndex();
     autoModelElapsed = AUTO_MODEL_INTERVAL_S;
@@ -3189,13 +3219,13 @@ function motionPresetLabel(preset) {
 }
 
 function activeMotionPreset() {
-  if (state.autoRotate && state.autoModel && state.autoColor && state.softFx) {
+  if (state.autoRotate && state.autoModel && state.autoColor && state.softFx && !state.autoZoom && !state.autoExtrude) {
     return MOTION_PRESETS.find(preset => preset.id === 'showcase') || null;
   }
-  if (state.autoRotate && !state.autoModel && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
+  if (state.autoRotate && !state.autoModel && !state.autoZoom && !state.autoExtrude && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
     return MOTION_PRESETS.find(preset => preset.id === 'orbit') || null;
   }
-  if (!state.autoRotate && !state.autoModel && !state.autoColor && !state.softFx) {
+  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.softFx) {
     return MOTION_PRESETS.find(preset => preset.id === 'still') || null;
   }
   return null;
@@ -3214,8 +3244,16 @@ function syncCameraControls() {
   if (els.cameraTiltOutput) els.cameraTiltOutput.textContent = `${Math.round(state.cameraTilt * 180 / Math.PI)}°`;
   if (els.cameraZoom) els.cameraZoom.value = String(state.zoom);
   if (els.cameraZoomOutput) els.cameraZoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
+  if (els.cameraZoomAuto) {
+    els.cameraZoomAuto.classList.toggle('active', state.autoZoom);
+    els.cameraZoomAuto.setAttribute('aria-pressed', state.autoZoom ? 'true' : 'false');
+  }
   if (els.cameraExtrude) els.cameraExtrude.value = String(state.e8MorphT);
   if (els.cameraExtrudeOutput) els.cameraExtrudeOutput.textContent = state.e8MorphT.toFixed(2);
+  if (els.cameraExtrudeAuto) {
+    els.cameraExtrudeAuto.classList.toggle('active', state.autoExtrude);
+    els.cameraExtrudeAuto.setAttribute('aria-pressed', state.autoExtrude ? 'true' : 'false');
+  }
   document.querySelectorAll('.camera-path-grid [data-motion-action]').forEach(button => {
     const path = button.dataset.motionAction?.replace('camera-', '');
     const active = path !== 'reset' && path === state.cameraPath && state.autoRotate;
@@ -3225,10 +3263,22 @@ function syncCameraControls() {
   return true;
 }
 
+function toggleCameraAuto(kind) {
+  const key = kind === 'zoom' ? 'autoZoom' : kind === 'extrude' ? 'autoExtrude' : null;
+  if (!key) return false;
+  const enabled = !state[key];
+  const result = setManualRuntimeState({ [key]: enabled }, `${kind}-auto-toggle`, {
+    syncMotionPreset: true,
+    syncMotionCamera: true,
+  });
+  showStatus(`${kind === 'zoom' ? 'Zoom' : 'Extrude'} auto ${enabled ? 'on' : 'off'}`);
+  return result;
+}
+
 function selectCameraPath(path) {
   if (!['orbit', 'dive', 'spiral'].includes(path)) return false;
   motionPhase = 0;
-  const result = setManualRuntimeState({ cameraPath: path, autoRotate: true }, `camera-path-${path}`, {
+  const result = setManualRuntimeState({ cameraPath: path, autoRotate: true, autoZoom: false }, `camera-path-${path}`, {
     syncMotionPreset: true,
     syncMotionCamera: true,
   });
@@ -3243,6 +3293,8 @@ function resetCameraMotion() {
     cameraTilt: DEFAULT_STATE.cameraTilt,
     cameraPath: 'manual',
     autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
     zoom: 1,
     e8MorphT: 0,
     panX: 0,
@@ -3284,12 +3336,16 @@ function selectMotionPreset(id) {
   if (mobileTourActive) stopMobileTour({ interactionType: 'mobile-tour-manual-runtime-stop', status: false });
   const previous = {
     autoRotate: state.autoRotate,
+    autoZoom: state.autoZoom,
+    autoExtrude: state.autoExtrude,
     autoModel: state.autoModel,
     autoColor: state.autoColor,
     softFx: state.softFx,
   };
   const result = setAutoPreset(preset.interaction);
   const changed = previous.autoRotate !== state.autoRotate
+    || previous.autoZoom !== state.autoZoom
+    || previous.autoExtrude !== state.autoExtrude
     || previous.autoModel !== state.autoModel
     || previous.autoColor !== state.autoColor
     || previous.softFx !== state.softFx;
@@ -3421,6 +3477,8 @@ function scenePatchForTarget(target) {
     highlightSubset: DEFAULT_STATE.highlightSubset,
     subset: DEFAULT_STATE.subset,
     autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
     autoModel: false,
     autoColor: false,
     softFx: false,
@@ -4883,27 +4941,47 @@ function projectPointsIntoCache(layout, drawStats) {
   const originY = layout.cy + state.panY;
   const scale = layout.scale;
   const pointScale = state.pointScale;
+  const extrude = state.e8MorphT;
   for (const p of points) {
     const x = p.x * cos - p.y * sin;
     const y = p.x * sin + p.y * cos;
-    p.sx = originX + x * scale;
-    p.sy = originY + y * scale;
-    p.size = p.baseSize * pointScale;
+    const flatX = originX + x * scale;
+    const flatY = originY + y * scale;
+    let depthSize = 1;
+    if (extrude > 0.0001) {
+      // Match the desktop Coxeter extrusion: outer rings travel farther in Z,
+      // then blend continuously from the canonical flat projection into the
+      // orbitable 3D field. Keeping the flat endpoint explicit avoids a jump
+      // when the slider or its Auto oscillator first leaves zero.
+      const projected = projectModelPoint(p.x, p.y, p.norm * 0.62, layout, 1, false);
+      p.sx = flatX + (projected.x - flatX) * extrude;
+      p.sy = flatY + (projected.y - flatY) * extrude;
+      p.depth = projected.z * extrude;
+      depthSize = 0.84 + projected.perspective * 0.16;
+      drawStats.projectionObjectAllocs++;
+    } else {
+      p.sx = flatX;
+      p.sy = flatY;
+      p.depth = 0;
+    }
+    p.size = p.baseSize * pointScale * depthSize;
     drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
     drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.baseSizeCacheHits++;
   }
+  drawStats.e8Extrude = extrude;
+  drawStats.e8ExtrudedPoints = extrude > 0.0001 ? points.length : 0;
 }
 
-function projectModelPoint(x, y, z, layout, modelScale = 1) {
+function projectModelPoint(x, y, z, layout, modelScale = 1, scaleExtrudeDepth = true) {
   const yaw = state.rotation;
   const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
   const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
   const pathZoom = state.cameraPath === 'dive' && state.autoRotate
     ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
     : 1;
-  z *= 1 + state.e8MorphT * 0.75;
+  if (scaleExtrudeDepth) z *= 1 + state.e8MorphT * 0.75;
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   const cp = Math.cos(pitch);
@@ -6733,8 +6811,25 @@ function syncMotionLoop() {
   else stopMotion();
 }
 
+function syncAutoMotionPhase(kind) {
+  const isZoom = kind === 'zoom';
+  const min = isZoom ? AUTO_ZOOM_MIN : 0;
+  const max = isZoom ? AUTO_ZOOM_MAX : 1;
+  const value = isZoom ? state.zoom : state.e8MorphT;
+  const normalized = clamp((value - min) / (max - min), 0, 1);
+  const offset = Math.asin(clamp(normalized * 2 - 1, -1, 1)) - motionPhase * AUTO_MOTION_RATE;
+  if (isZoom) autoZoomPhaseOffset = offset;
+  else autoExtrudePhaseOffset = offset;
+  return offset;
+}
+
+function autoMotionValue(min, max, phaseOffset) {
+  const wave = 0.5 + 0.5 * Math.sin(motionPhase * AUTO_MOTION_RATE + phaseOffset);
+  return min + (max - min) * wave;
+}
+
 function hasRuntimeAnimation() {
-  return !!(state.autoRotate || state.autoModel || state.autoColor || state.softFx || (state.modelMode === 'bloom' && state.bloomAuto));
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -6754,10 +6849,20 @@ function startMotion() {
     }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (state.autoRotate) {
+    if (state.autoRotate || state.autoZoom || state.autoExtrude) {
       motionPhase = (motionPhase + dt * state.rotationSpeed) % 4096;
+    }
+    if (state.autoRotate) {
       const pathRate = state.cameraPath === 'dive' ? 0.30 : state.cameraPath === 'spiral' ? 0.62 : 0.48;
       state.rotation += dt * state.rotationSpeed * pathRate;
+    }
+    if (state.autoZoom) {
+      state.zoom = autoMotionValue(AUTO_ZOOM_MIN, AUTO_ZOOM_MAX, autoZoomPhaseOffset);
+      metrics.autoZoomFrameCount++;
+    }
+    if (state.autoExtrude) {
+      state.e8MorphT = autoMotionValue(0, 1, autoExtrudePhaseOffset);
+      metrics.autoExtrudeFrameCount++;
     }
     if (state.modelMode === 'bloom' && state.bloomAuto) {
       state.bloomAmount = (state.bloomAmount + dt * state.bloomSpeed) % 1;
@@ -6993,6 +7098,7 @@ function updateGesture() {
     return;
   }
   gesture.moved = true;
+  state.autoZoom = false;
   state.zoom = clamp(gesture.zoom * (snap.distance / gesture.distance), 0.55, 3.2);
   state.panX = gesture.panX + (snap.centerX - gesture.centerX);
   state.panY = gesture.panY + (snap.centerY - gesture.centerY);
@@ -7019,11 +7125,13 @@ function onWheel(event) {
 }
 
 function setZoom(value) {
+  state.autoZoom = false;
   state.zoom = clamp(Number(value) || 1, 0.55, 3.2);
   markInteraction('zoom-control');
   saveState();
   syncControls();
   requestRender();
+  syncMotionLoop();
   return state.zoom;
 }
 
@@ -7198,6 +7306,7 @@ function frameSdfModel(interactionType, options = {}) {
   setState({
     cameraPath: 'manual',
     autoRotate: false,
+    autoZoom: false,
     zoom: nextZoom,
     panX: targetX - window.innerWidth * 0.5,
     panY: targetY - layout.cy,
@@ -7225,12 +7334,14 @@ function framePointList(list, interactionType, options = {}) {
   const modelCenterX = (modelBounds.minX + modelBounds.maxX) / 2;
   const modelCenterY = (modelBounds.minY + modelBounds.maxY) / 2;
   markInteraction(interactionType);
+  state.autoZoom = false;
   state.zoom = nextZoom;
   state.panX = targetX - nextLayout.cx - modelCenterX * nextLayout.scale;
   state.panY = targetY - nextLayout.cy - modelCenterY * nextLayout.scale;
   syncControls();
   if (options.save !== false) saveState();
   requestRender();
+  syncMotionLoop();
   return true;
 }
 
@@ -7764,6 +7875,8 @@ async function init() {
   installMobileCurriculum(data.curriculum);
   state.learnTopic = LEGACY_LEARN_TOPIC_MAP[state.learnTopic] || state.learnTopic;
   state = normalizeState(state);
+  syncAutoMotionPhase('zoom');
+  syncAutoMotionPhase('extrude');
   renderLearnTopics();
   preparePoints();
   renderCartanMatrix();
