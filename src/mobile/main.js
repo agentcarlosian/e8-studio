@@ -16,6 +16,7 @@ const DEFAULT_STATE = {
   showContext: true,
   showPetrie: false,
   showMirrors: false,
+  showVertices: false,
   highlightSubset: true,
   subset: 'icosahedron',
   pointScale: 1.0,
@@ -137,9 +138,22 @@ const RENDER_PALETTES = Object.fromEntries(
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
 const SUPPORTED_MODEL_MODES = new Set(['e8_2d', 'e8_3d', 'platonic', 'poly4d', 'dynkin']);
-const SUPPORTED_SHAPES = new Set(['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron']);
-const SUPPORTED_POLYTOPES4D = new Set(['5cell', 'tesseract', '16cell', '24cell', '600cell']);
-const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['A3', 'A4', 'A5', 'A7', 'D4', 'D5', 'D6', 'E6', 'E7', 'E8']);
+const STAR_SHAPES = new Set([
+  'stellated_dodecahedron',
+  'great_dodecahedron',
+  'great_icosahedron',
+  'great_stellated_dodecahedron',
+]);
+const SUPPORTED_SHAPES = new Set([
+  'tetrahedron',
+  'cube',
+  'octahedron',
+  'dodecahedron',
+  'icosahedron',
+  ...STAR_SHAPES,
+]);
+const SUPPORTED_POLYTOPES4D = new Set(['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell']);
+const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['E6', 'E7', 'E8']);
 const MODEL_LABELS = {
   e8_2d: 'E8',
   e8_3d: 'E8 3D',
@@ -153,6 +167,10 @@ const SHAPE_LABELS = {
   octahedron: 'Octahedron',
   dodecahedron: 'Dodecahedron',
   icosahedron: 'Icosahedron',
+  stellated_dodecahedron: 'Small stellated dodecahedron',
+  great_dodecahedron: 'Great dodecahedron',
+  great_icosahedron: 'Great icosahedron',
+  great_stellated_dodecahedron: 'Great stellated dodecahedron',
 };
 const POLYTOPE4D_LABELS = {
   '5cell': '5-cell',
@@ -160,15 +178,9 @@ const POLYTOPE4D_LABELS = {
   '16cell': '16-cell',
   '24cell': '24-cell',
   '600cell': '600-cell',
+  '120cell': '120-cell',
 };
 const DYNKIN_LABELS = {
-  A3: 'A3',
-  A4: 'A4',
-  A5: 'A5',
-  A7: 'A7',
-  D4: 'D4',
-  D5: 'D5',
-  D6: 'D6',
   E6: 'E6',
   E7: 'E7',
   E8: 'E8',
@@ -219,8 +231,13 @@ const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'platonic', shape: 'octahedron' },
   { modelMode: 'platonic', shape: 'dodecahedron' },
   { modelMode: 'platonic', shape: 'icosahedron' },
+  { modelMode: 'platonic', shape: 'stellated_dodecahedron' },
+  { modelMode: 'platonic', shape: 'great_dodecahedron' },
+  { modelMode: 'platonic', shape: 'great_icosahedron' },
+  { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' },
   { modelMode: 'poly4d', polytope4d: '24cell' },
   { modelMode: 'poly4d', polytope4d: '600cell' },
+  { modelMode: 'poly4d', polytope4d: '120cell' },
   { modelMode: 'dynkin', dynkinDiagram: 'E8' },
 ];
 const SCENE_PRESETS = [
@@ -231,11 +248,16 @@ const SCENE_PRESETS = [
   { id: 'octahedron', label: 'Oct', target: { modelMode: 'platonic', shape: 'octahedron' } },
   { id: 'dodecahedron', label: 'Dod', target: { modelMode: 'platonic', shape: 'dodecahedron' } },
   { id: 'icosahedron', label: 'Ico', target: { modelMode: 'platonic', shape: 'icosahedron' } },
+  { id: 'stellated-dodecahedron', label: 'sDod', target: { modelMode: 'platonic', shape: 'stellated_dodecahedron' } },
+  { id: 'great-dodecahedron', label: 'gDod', target: { modelMode: 'platonic', shape: 'great_dodecahedron' } },
+  { id: 'great-icosahedron', label: 'gIco', target: { modelMode: 'platonic', shape: 'great_icosahedron' } },
+  { id: 'great-stellated-dodecahedron', label: 'gsDod', target: { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' } },
   { id: '5cell', label: '5-cell', target: { modelMode: 'poly4d', polytope4d: '5cell' } },
   { id: 'tesseract', label: 'Tess', target: { modelMode: 'poly4d', polytope4d: 'tesseract' } },
   { id: '16cell', label: '16', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
   { id: '24cell', label: '24', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
   { id: '600cell', label: '600', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
+  { id: '120cell', label: '120', target: { modelMode: 'poly4d', polytope4d: '120cell' } },
   { id: 'dynkin-e8', label: 'Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E8' } },
 ];
 const MOBILE_TOUR_STEPS = [
@@ -301,6 +323,16 @@ const MODEL_SHORTCUT_GROUPS = [
     ],
   },
   {
+    id: 'stars',
+    label: 'Star polyhedra',
+    items: [
+      { id: 'shape-stellated_dodecahedron', label: 'sDod', name: 'Small stellated dodecahedron', target: { modelMode: 'platonic', shape: 'stellated_dodecahedron' } },
+      { id: 'shape-great_dodecahedron', label: 'gDod', name: 'Great dodecahedron', target: { modelMode: 'platonic', shape: 'great_dodecahedron' } },
+      { id: 'shape-great_icosahedron', label: 'gIco', name: 'Great icosahedron', target: { modelMode: 'platonic', shape: 'great_icosahedron' } },
+      { id: 'shape-great_stellated_dodecahedron', label: 'gsDod', name: 'Great stellated dodecahedron', target: { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' } },
+    ],
+  },
+  {
     id: 'poly4d',
     label: '4D',
     items: [
@@ -309,19 +341,13 @@ const MODEL_SHORTCUT_GROUPS = [
       { id: 'poly-16cell', label: '16', name: '16-cell', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
       { id: 'poly-24cell', label: '24', name: '24-cell', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
       { id: 'poly-600cell', label: '600', name: '600-cell', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
+      { id: 'poly-120cell', label: '120', name: '120-cell', target: { modelMode: 'poly4d', polytope4d: '120cell' } },
     ],
   },
   {
     id: 'dynkin',
     label: 'Dynkin',
     items: [
-      { id: 'dynkin-A3', label: 'A3', name: 'A3 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A3' } },
-      { id: 'dynkin-A4', label: 'A4', name: 'A4 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A4' } },
-      { id: 'dynkin-A5', label: 'A5', name: 'A5 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A5' } },
-      { id: 'dynkin-A7', label: 'A7', name: 'A7 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A7' } },
-      { id: 'dynkin-D4', label: 'D4', name: 'D4 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D4' } },
-      { id: 'dynkin-D5', label: 'D5', name: 'D5 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D5' } },
-      { id: 'dynkin-D6', label: 'D6', name: 'D6 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D6' } },
       { id: 'dynkin-E6', label: 'E6', name: 'E6 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E6' } },
       { id: 'dynkin-E7', label: 'E7', name: 'E7 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E7' } },
       { id: 'dynkin-E8', label: 'E8', name: 'E8 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E8' } },
@@ -372,6 +398,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'autoModel',
   'autoColor',
   'softFx',
+  'showVertices',
 ];
 
 let metrics = {
@@ -915,6 +942,7 @@ function normalizeState(next) {
   if (typeof next.showContext !== 'boolean') next.showContext = true;
   if (typeof next.showPetrie !== 'boolean') next.showPetrie = false;
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
+  if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
@@ -939,17 +967,18 @@ function markInteraction(type) {
 
 async function loadData() {
   if (window.MOBILE_DATA) return window.MOBILE_DATA;
-  const [e8, e8Math, mckaySubsets, platonic, polytopes4d, dynkin, mckay, curriculum] = await Promise.all([
+  const [e8, e8Math, mckaySubsets, platonic, stellations, polytopes4d, dynkin, mckay, curriculum] = await Promise.all([
     fetch('data/e8.json').then(r => r.json()),
     fetch('data/e8_math.json').then(r => r.json()),
     fetch('data/mckay_subsets.json').then(r => r.json()),
     fetch('data/platonic.json').then(r => r.json()),
+    fetch('data/stellations.json').then(r => r.json()),
     fetch('data/polytopes4d.json').then(r => r.json()),
     fetch('data/dynkin.json').then(r => r.json()),
     fetch('data/mckay.json').then(r => r.json()),
     fetch('data/curriculum.json').then(r => r.json()),
   ]);
-  return { e8, e8_math: e8Math, mckay_subsets: mckaySubsets, platonic, polytopes4d, dynkin, mckay, curriculum };
+  return { e8, e8_math: e8Math, mckay_subsets: mckaySubsets, platonic, stellations, polytopes4d, dynkin, mckay, curriculum };
 }
 
 function cacheElements() {
@@ -990,6 +1019,7 @@ function cacheElements() {
   els.contextToggle = document.getElementById('context-toggle');
   els.petrieToggle = document.getElementById('petrie-toggle');
   els.mirrorsToggle = document.getElementById('mirrors-toggle');
+  els.verticesToggle = document.getElementById('vertices-toggle');
   els.modelSelect = document.getElementById('model-select');
   els.shapeField = document.getElementById('shape-field');
   els.shapeSelect = document.getElementById('shape-select');
@@ -1188,6 +1218,7 @@ function bindEvents() {
   els.contextToggle.addEventListener('change', () => setSettingState({ showContext: els.contextToggle.checked }, 'context-toggle'));
   els.petrieToggle.addEventListener('change', () => setSettingState({ showPetrie: els.petrieToggle.checked }, 'petrie-toggle'));
   els.mirrorsToggle.addEventListener('change', () => setSettingState({ showMirrors: els.mirrorsToggle.checked }, 'mirrors-toggle'));
+  els.verticesToggle.addEventListener('change', () => setSettingState({ showVertices: els.verticesToggle.checked }, 'vertices-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
     autoModel: false,
@@ -2300,6 +2331,7 @@ function mobileSurprise() {
     showRings: Math.random() > 0.18,
     showPetrie: Math.random() < 0.34,
     showMirrors: Math.random() < 0.28,
+    showVertices: false,
     highlightSubset: true,
     showContext: true,
     quality: 'smooth',
@@ -3116,6 +3148,7 @@ function scenePatchForTarget(target) {
     showContext: DEFAULT_STATE.showContext,
     showPetrie: DEFAULT_STATE.showPetrie,
     showMirrors: DEFAULT_STATE.showMirrors,
+    showVertices: DEFAULT_STATE.showVertices,
     highlightSubset: DEFAULT_STATE.highlightSubset,
     subset: DEFAULT_STATE.subset,
     autoRotate: false,
@@ -3231,6 +3264,7 @@ function syncControlValues() {
   els.contextToggle.checked = state.showContext;
   els.petrieToggle.checked = state.showPetrie;
   els.mirrorsToggle.checked = state.showMirrors;
+  els.verticesToggle.checked = state.showVertices;
   syncSubsetControls();
   els.rootRange.value = String(state.selectedRoot ?? 0);
   els.rootOutput.textContent = state.selectedRoot == null ? 'None' : `#${state.selectedRoot}`;
@@ -3272,16 +3306,18 @@ function activeSceneSummary() {
   if (state.modelMode === 'platonic') {
     const shape = platonicGeometry[state.shape];
     const label = SHAPE_LABELS[state.shape] || state.shape;
+    const family = STAR_SHAPES.has(state.shape) ? 'star polyhedron' : 'Platonic solid';
     const verts = shape?.verts?.length || 0;
     const edges = shape?.edges?.length || 0;
     const source = activeMckaySource();
     const info = mckayInfo[source] || {};
+    const bridgeCopy = STAR_SHAPES.has(state.shape) ? 'its icosahedral symmetry' : 'this source';
     return {
       chipStrong: MODEL_LABELS.platonic,
       chipSmall: `${label} / ${verts}v`,
-      topbarLabel: `${label} Platonic solid, ${verts} vertices, ${edges} edges`,
-      canvasLabel: `${label} Platonic solid visualization with ${verts} vertices and ${edges} edges`,
-      infoCopy: `${label} renders desktop Platonic solid data on the mobile Canvas 2D path. Drag, pinch, or enable Motion to inspect it; the McKay bridge links this source to ${info.roots || 'ADE roots'}.`,
+      topbarLabel: `${label} ${family}, ${verts} vertices, ${edges} edges`,
+      canvasLabel: `${label} ${family} visualization with ${verts} vertices and ${edges} edges`,
+      infoCopy: `${label} renders desktop ${family} geometry on the mobile Canvas 2D path. Drag, pinch, or enable Motion to inspect it; the McKay bridge links ${bridgeCopy} to ${info.roots || 'ADE roots'}.`,
     };
   }
   if (state.modelMode === 'poly4d') {
@@ -3348,13 +3384,14 @@ function syncSceneAccessibility(scene) {
 }
 
 function activeMckaySource() {
+  if (state.modelMode === 'platonic' && STAR_SHAPES.has(state.shape)) return 'icosahedron';
   if (state.modelMode === 'platonic' && mckayInfo[state.shape]) return state.shape;
   if (state.modelMode === 'dynkin') {
     if (state.dynkinDiagram === 'E6') return 'tetrahedron';
     if (state.dynkinDiagram === 'E7') return 'cube';
     if (state.dynkinDiagram === 'E8') return 'icosahedron';
   }
-  if (state.modelMode === 'poly4d' && state.polytope4d === '600cell') return 'icosahedron';
+  if (state.modelMode === 'poly4d' && (state.polytope4d === '600cell' || state.polytope4d === '120cell')) return 'icosahedron';
   if (mckayInfo[state.subset]) return state.subset;
   if (mckayInfo[state.shape]) return state.shape;
   return 'icosahedron';
@@ -4065,7 +4102,7 @@ function deferSettingsCanvasResize() {
 function preparePoints() {
   const proj = data.e8.proj2d;
   const roots = data.e8.roots8d || [];
-  platonicGeometry = data.platonic || {};
+  platonicGeometry = { ...(data.platonic || {}), ...(data.stellations || {}) };
   platonicFaceCache = new Map();
   polytope4DGeometry = data.polytopes4d || {};
   dynkinGeometry = data.dynkin || {};
@@ -4625,6 +4662,26 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   drawStats.modelEdgeStrokes = shape.edges?.length ? 1 : 0;
   ctx.restore();
 
+  if (state.showVertices) {
+    const ordered = projected
+      .map((point, idx) => ({ point, idx }))
+      .sort((a, b) => a.point.z - b.point.z);
+    ctx.save();
+    ctx.globalAlpha = state.pointOpacity;
+    for (const entry of ordered) {
+      const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
+      const radius = Math.max(2.4, 4.2 * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
+      ctx.beginPath();
+      ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
+      ctx.fillStyle = paletteSet.colors[entry.idx % paletteSet.colors.length];
+      ctx.fill();
+      drawStats.directPoints++;
+      drawStats.directPointFills++;
+      drawStats.modelVertexFills++;
+    }
+    ctx.restore();
+  }
+
   return frame;
 }
 
@@ -4666,7 +4723,8 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   const projected = verts4.map(v => {
     const rotated = rotate4DVector(v, state.rotation);
     const [x, y, z] = project4DTo3D(rotated);
-    const point = projectModelPoint(x, y, z, layout, polyName === '600cell' ? 1.22 : 1.16);
+    const dense = polyName === '600cell' || polyName === '120cell';
+    const point = projectModelPoint(x, y, z, layout, dense ? 1.22 : 1.16);
     point.w = rotated[3];
     return point;
   });
@@ -4679,10 +4737,11 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   const frame = projectedModelFrameMetrics(projected);
 
   ctx.save();
-  ctx.lineWidth = polyName === '600cell' ? (interactionLiteFrame ? 0.55 : 0.72) : (interactionLiteFrame ? 1 : 1.35);
+  const dense = polyName === '600cell' || polyName === '120cell';
+  ctx.lineWidth = dense ? (interactionLiteFrame ? 0.55 : 0.72) : (interactionLiteFrame ? 1 : 1.35);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.globalAlpha = polyName === '600cell' ? 0.48 : 0.66;
+  ctx.globalAlpha = dense ? 0.48 : 0.66;
   ctx.strokeStyle = paletteSet.petrieStroke;
   ctx.beginPath();
   for (const edge of poly.edges || []) {
@@ -4696,24 +4755,28 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
   ctx.restore();
 
-  const classes = Array.isArray(poly.conjugacy_classes) ? poly.conjugacy_classes : null;
-  const ordered = projected
-    .map((point, idx) => ({ point, idx }))
-    .sort((a, b) => a.point.z - b.point.z);
-  ctx.save();
-  for (const entry of ordered) {
-    const cls = classes ? classes[entry.idx] || 0 : entry.idx;
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
-    const baseRadius = polyName === '600cell' ? 3.1 : 4.8;
-    const radius = Math.max(2.4, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
-    ctx.beginPath();
-    ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
-    ctx.fillStyle = paletteSet.colors[cls % paletteSet.colors.length];
-    ctx.fill();
-    drawStats.directPoints++;
-    drawStats.directPointFills++;
+  if (state.showVertices) {
+    const classes = Array.isArray(poly.conjugacy_classes) ? poly.conjugacy_classes : null;
+    const ordered = projected
+      .map((point, idx) => ({ point, idx }))
+      .sort((a, b) => a.point.z - b.point.z);
+    ctx.save();
+    ctx.globalAlpha = state.pointOpacity;
+    for (const entry of ordered) {
+      const cls = classes ? classes[entry.idx] || 0 : entry.idx;
+      const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
+      const baseRadius = dense ? 2.7 : 4.2;
+      const radius = Math.max(2, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
+      ctx.beginPath();
+      ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
+      ctx.fillStyle = paletteSet.colors[cls % paletteSet.colors.length];
+      ctx.fill();
+      drawStats.directPoints++;
+      drawStats.directPointFills++;
+      drawStats.modelVertexFills++;
+    }
+    ctx.restore();
   }
-  ctx.restore();
   return frame;
 }
 

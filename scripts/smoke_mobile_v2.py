@@ -195,7 +195,7 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             scene_grid_ids = [button["id"] for button in scene_grid["buttons"]]
-            check("View section exposes compact scene preset grid", len(scene_grid["buttons"]) == 13 and scene_grid["metrics"]["scenePresetButtonCount"] == 13 and "tetrahedron" in scene_grid_ids and "600cell" in scene_grid_ids and "dynkin-e8" in scene_grid_ids, str(scene_grid))
+            check("View section exposes compact scene preset grid", len(scene_grid["buttons"]) == 18 and scene_grid["metrics"]["scenePresetButtonCount"] == 18 and "tetrahedron" in scene_grid_ids and "great-icosahedron" in scene_grid_ids and "600cell" in scene_grid_ids and "120cell" in scene_grid_ids and "dynkin-e8" in scene_grid_ids, str(scene_grid))
             check("scene preset grid marks active E8 scene", scene_grid["output"] == "E8" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for button in scene_grid["buttons"]), str(scene_grid))
             model_shortcuts = page.evaluate("""() => ({
                 groups: [...document.querySelectorAll('#model-shortcut-groups [data-model-shortcut-group]')].map(group => ({
@@ -212,7 +212,9 @@ def main() -> int:
             })""")
             model_shortcut_ids = [button["id"] for group in model_shortcuts["groups"] for button in group["buttons"]]
             model_shortcut_group_counts = {group["id"]: len(group["buttons"]) for group in model_shortcuts["groups"]}
-            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 22 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 22 and model_shortcut_group_counts == {"e8": 2, "solids": 5, "poly4d": 5, "dynkin": 10} and "shape-icosahedron" in model_shortcut_ids and "poly-600cell" in model_shortcut_ids and "dynkin-A3" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 20 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 20 and model_shortcut_group_counts == {"e8": 2, "solids": 5, "stars": 4, "poly4d": 6, "dynkin": 3} and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            dynkin_options = page.locator("#dynkin-select option").evaluate_all("options => options.map(option => option.value)")
+            check("mobile Dynkin catalog matches desktop-facing E-series", dynkin_options == ["E8", "E7", "E6"], str(dynkin_options))
             check("model shortcuts mark active E8 Coxeter", model_shortcuts["output"] == "E8 Coxeter" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for group in model_shortcuts["groups"] for button in group["buttons"]), str(model_shortcuts))
             model_shortcut_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#model-shortcut-groups [data-model-shortcut="shape-cube"]').click()
@@ -243,7 +245,7 @@ def main() -> int:
                 }
             })""")
             check("model shortcut selects 4D polytope", model_shortcut_poly["state"]["modelMode"] == "poly4d" and model_shortcut_poly["state"]["polytope4d"] == "tesseract" and model_shortcut_poly["controls"]["modelMode"] == "poly4d" and model_shortcut_poly["controls"]["polytope4d"] == "tesseract" and model_shortcut_poly["controls"]["polyVisible"] and model_shortcut_poly["controls"]["shapeHidden"] and model_shortcut_poly["controls"]["activeShortcut"] == "poly-tesseract" and model_shortcut_poly["controls"]["output"] == "Tesseract" and model_shortcut_poly["metrics"]["lastModelShortcutId"] == "poly-tesseract", str(model_shortcut_poly))
-            page.locator('#model-shortcut-groups [data-model-shortcut="dynkin-D6"]').click()
+            page.locator('#model-shortcut-groups [data-model-shortcut="dynkin-E6"]').click()
             model_shortcut_dynkin = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
@@ -256,7 +258,7 @@ def main() -> int:
                     output: document.getElementById('model-shortcut-output').textContent.trim()
                 }
             })""")
-            check("model shortcut selects non-E8 Dynkin diagram", model_shortcut_dynkin["state"]["modelMode"] == "dynkin" and model_shortcut_dynkin["state"]["dynkinDiagram"] == "D6" and model_shortcut_dynkin["controls"]["modelMode"] == "dynkin" and model_shortcut_dynkin["controls"]["dynkinDiagram"] == "D6" and model_shortcut_dynkin["controls"]["dynkinVisible"] and model_shortcut_dynkin["controls"]["polyHidden"] and model_shortcut_dynkin["controls"]["activeShortcut"] == "dynkin-D6" and model_shortcut_dynkin["controls"]["output"] == "D6 Dynkin" and model_shortcut_dynkin["metrics"]["lastModelShortcutTarget"]["dynkinDiagram"] == "D6", str(model_shortcut_dynkin))
+            check("model shortcut selects non-E8 Dynkin diagram", model_shortcut_dynkin["state"]["modelMode"] == "dynkin" and model_shortcut_dynkin["state"]["dynkinDiagram"] == "E6" and model_shortcut_dynkin["controls"]["modelMode"] == "dynkin" and model_shortcut_dynkin["controls"]["dynkinDiagram"] == "E6" and model_shortcut_dynkin["controls"]["dynkinVisible"] and model_shortcut_dynkin["controls"]["polyHidden"] and model_shortcut_dynkin["controls"]["activeShortcut"] == "dynkin-E6" and model_shortcut_dynkin["controls"]["output"] == "E6 Dynkin" and model_shortcut_dynkin["metrics"]["lastModelShortcutTarget"]["dynkinDiagram"] == "E6", str(model_shortcut_dynkin))
             page.locator("#dynkin-select").select_option("E7")
             model_shortcut_select_sync = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -823,11 +825,19 @@ def main() -> int:
             })""")
             check("McKay bridge follows active Platonic source", platonic_mckay["metrics"]["lastMckaySource"] == "dodecahedron" and platonic_mckay["metrics"]["lastMckayRoots"] == "E8" and "Dodecahedron" in platonic_mckay["text"] and "28 illustrative E8 highlights" in platonic_mckay["text"], str(platonic_mckay))
             check("Context note follows active Platonic source", platonic_mckay["metrics"]["lastCuriosityTitle"] == "Platonic source" and "Dodecahedron is the active symmetry source" in platonic_mckay["curiosity"], str(platonic_mckay))
-            check("Platonic scene labels describe active solid", "Dodecahedron Platonic solid" in platonic_mckay["topbar"] and "20 vertices" in platonic_mckay["canvas"] and "desktop Platonic solid data" in platonic_mckay["info"] and platonic_mckay["metrics"]["lastSceneLabel"] == platonic_mckay["topbar"], str(platonic_mckay))
+            check("Platonic scene labels describe active solid", "Dodecahedron Platonic solid" in platonic_mckay["topbar"] and "20 vertices" in platonic_mckay["canvas"] and "desktop Platonic solid geometry" in platonic_mckay["info"] and platonic_mckay["metrics"]["lastSceneLabel"] == platonic_mckay["topbar"], str(platonic_mckay))
             platonic_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
             check("geometry data export follows Platonic solid", platonic_data["ok"] and platonic_data["geometry"]["kind"] == "polyhedron" and platonic_data["geometry"]["name"] == "dodecahedron" and len(platonic_data["geometry"]["verts"]) == 20 and len(platonic_data["geometry"]["edges"]) == 30 and len(platonic_data["geometry"]["faces"]) > 0 and platonic_data["geometry"]["mckay"]["roots"] == "E8", str(platonic_data["geometry"]))
             platonic_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows Platonic solid", platonic_obj["ok"] and platonic_obj["obj"]["kind"] == "polyhedron" and platonic_obj["obj"]["name"] == "dodecahedron" and platonic_obj["obj"]["vertices"] == 20 and platonic_obj["obj"]["lines"] == 30 and platonic_obj["obj"]["faces"] == 36, str(platonic_obj["obj"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#shape-select").select_option("great_icosahedron")
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+            star_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Great icosahedron renders generated desktop star geometry", star_metrics["lastModelMode"] == "platonic" and star_metrics["lastShape"] == "great_icosahedron" and star_metrics["lastDrawStats"]["modelVertices"] == 12 and star_metrics["lastDrawStats"]["modelEdges"] == 30 and star_metrics["lastDrawStats"]["modelFaces"] == 20 and star_metrics["lastDrawStats"]["modelFaceFills"] == 20 and star_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(star_metrics["lastDrawStats"]))
+            check("Star-polyhedron scene copy is accurate", "Great icosahedron star polyhedron" in star_metrics["lastSceneLabel"] and "Platonic solid" not in star_metrics["lastSceneLabel"] and star_metrics["lastMckaySource"] == "icosahedron", str(star_metrics))
+            star_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
+            check("geometry data export follows star polyhedron", star_data["ok"] and star_data["geometry"]["name"] == "great_icosahedron" and len(star_data["geometry"]["verts"]) == 12 and len(star_data["geometry"]["edges"]) == 30 and len(star_data["geometry"]["faces"]) == 20, str(star_data["geometry"]))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#model-select").select_option("poly4d")
@@ -836,7 +846,7 @@ def main() -> int:
             page.locator("#polytope4d-select").select_option("600cell")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             poly_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("4D 600-cell renders desktop polytope data", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
+            check("4D 600-cell renders desktop polytope data without vertex spheres", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["lastDrawStats"]["modelVertexFills"] == 0 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
             poly_info = page.evaluate("""() => ({
                 selection: document.getElementById('info-selection').innerText,
@@ -851,6 +861,23 @@ def main() -> int:
             check("geometry data export follows 4D polytope", poly_data["ok"] and poly_data["geometry"]["kind"] == "4d-polytope" and poly_data["geometry"]["name"] == "600cell" and len(poly_data["geometry"]["verts"]) == 120 and len(poly_data["geometry"]["edges"]) == 720, str(poly_data["geometry"].keys()))
             poly_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows projected 4D polytope", poly_obj["ok"] and poly_obj["obj"]["kind"] == "4d-polytope-projected-obj" and poly_obj["obj"]["name"] == "600cell" and poly_obj["obj"]["vertices"] == 120 and poly_obj["obj"]["lines"] == 720 and poly_obj["obj"]["faces"] == 0, str(poly_obj["obj"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#polytope4d-select").select_option("120cell")
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+            cell120_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("4D 120-cell is exposed and renders without vertex spheres", cell120_metrics["lastPolytope4D"] == "120cell" and cell120_metrics["lastDrawStats"]["modelVertices"] == 600 and cell120_metrics["lastDrawStats"]["modelEdges"] == 1200 and cell120_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(cell120_metrics["lastDrawStats"]))
+            cell120_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
+            check("geometry data export follows 120-cell", cell120_data["ok"] and cell120_data["geometry"]["name"] == "120cell" and len(cell120_data["geometry"]["verts"]) == 600 and len(cell120_data["geometry"]["edges"]) == 1200, str(cell120_data["geometry"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#vertices-toggle").check()
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+            vertices_on = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("Vertex nodes toggle restores optional 4D point markers", vertices_on["state"]["showVertices"] and vertices_on["metrics"]["lastDrawStats"]["modelVertexFills"] == 600, str(vertices_on))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#vertices-toggle").uncheck()
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+            vertices_off = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("Vertex nodes toggle removes optional point markers cleanly", not vertices_off["state"]["showVertices"] and vertices_off["metrics"]["lastDrawStats"]["modelVertexFills"] == 0, str(vertices_off))
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '24cell', autoModel: true, autoRotate: true, autoColor: false, softFx: false, rotation: 0 }); window.__mobileApp.forceRender(); }")
             poly_auto_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.wait_for_function("before => window.__mobileApp.getMetrics().autoModelSwitchCount > before && window.__mobileApp.getState().modelMode === 'poly4d'", arg=poly_auto_before["autoModelSwitchCount"], timeout=4000)
@@ -888,7 +915,7 @@ def main() -> int:
             page.mouse.click(dynkin_node["x"], dynkin_node["y"])
             dynkin_tap_after = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics(), info: document.getElementById('info-selection').innerText })")
             check("Dynkin E8 node tap selects matching simple root", dynkin_tap_after["state"]["selectedRoot"] == 1 and dynkin_tap_after["state"]["subset"] == "simple_roots" and dynkin_tap_after["metrics"]["dynkinNodeSelectCount"] > dynkin_tap_before["dynkinNodeSelectCount"] and dynkin_tap_after["metrics"]["lastDynkinNodeSelect"]["node"] == 3 and dynkin_tap_after["metrics"]["lastInteractionType"] == "dynkin-node-select" and "Root #1 (alpha 3)" in dynkin_tap_after["info"], str(dynkin_tap_after))
-            page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '600cell', autoModel: true, autoRotate: true, autoColor: false, softFx: false, selectedRoot: null, rotation: 0 }); window.__mobileApp.forceRender(); }")
+            page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '120cell', autoModel: true, autoRotate: true, autoColor: false, softFx: false, selectedRoot: null, rotation: 0 }); window.__mobileApp.forceRender(); }")
             dynkin_auto_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.wait_for_function("before => window.__mobileApp.getMetrics().autoModelSwitchCount > before && window.__mobileApp.getState().modelMode === 'dynkin'", arg=dynkin_auto_before["autoModelSwitchCount"], timeout=4000)
             dynkin_auto_after = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -1113,12 +1140,13 @@ def main() -> int:
                     softFx: document.getElementById('soft-fx-toggle').checked,
                     petrie: document.getElementById('petrie-toggle').checked,
                     mirrors: document.getElementById('mirrors-toggle').checked,
+                    vertices: document.getElementById('vertices-toggle').checked,
                     motion: document.getElementById('motion-toggle').checked,
                     quality: document.getElementById('quality-chip').textContent
                 }
             })""")
             check("Surprise shuffles safe mobile state", surprise_after["state"]["palette"] != surprise_before["state"]["palette"] and surprise_after["state"]["subset"] != surprise_before["state"]["subset"] and surprise_after["state"]["quality"] == "smooth" and not surprise_after["state"]["autoRotate"] and not surprise_after["state"]["autoModel"] and not surprise_after["state"]["autoColor"] and not surprise_after["state"]["softFx"] and surprise_after["state"]["selectedRoot"] is None and abs(surprise_after["state"]["zoom"] - 1) < 0.01 and surprise_after["state"]["panX"] == 0 and surprise_after["state"]["panY"] == 0, str(surprise_after))
-            check("Surprise syncs visible controls without full sync", surprise_after["controls"]["palette"] == surprise_after["state"]["palette"] and surprise_after["controls"]["subset"] == surprise_after["state"]["subset"] and abs(surprise_after["controls"]["pointScale"] - surprise_after["state"]["pointScale"]) < 0.01 and surprise_after["controls"]["rings"] == surprise_after["state"]["showRings"] and not surprise_after["controls"]["autoModel"] and not surprise_after["controls"]["autoColor"] and not surprise_after["controls"]["softFx"] and surprise_after["controls"]["petrie"] == surprise_after["state"]["showPetrie"] and surprise_after["controls"]["mirrors"] == surprise_after["state"]["showMirrors"] and not surprise_after["controls"]["motion"] and surprise_after["controls"]["quality"] == "Smooth" and surprise_after["metrics"]["controlSyncCount"] == surprise_before["metrics"]["controlSyncCount"] and surprise_after["metrics"]["settingsControlSyncSkipCount"] > surprise_before["metrics"]["settingsControlSyncSkipCount"] and surprise_after["metrics"]["lastSettingsControlSyncSkip"] == "surprise", str(surprise_after))
+            check("Surprise syncs visible controls without full sync", surprise_after["controls"]["palette"] == surprise_after["state"]["palette"] and surprise_after["controls"]["subset"] == surprise_after["state"]["subset"] and abs(surprise_after["controls"]["pointScale"] - surprise_after["state"]["pointScale"]) < 0.01 and surprise_after["controls"]["rings"] == surprise_after["state"]["showRings"] and not surprise_after["controls"]["autoModel"] and not surprise_after["controls"]["autoColor"] and not surprise_after["controls"]["softFx"] and surprise_after["controls"]["petrie"] == surprise_after["state"]["showPetrie"] and surprise_after["controls"]["mirrors"] == surprise_after["state"]["showMirrors"] and not surprise_after["controls"]["vertices"] and not surprise_after["state"]["showVertices"] and not surprise_after["controls"]["motion"] and surprise_after["controls"]["quality"] == "Smooth" and surprise_after["metrics"]["controlSyncCount"] == surprise_before["metrics"]["controlSyncCount"] and surprise_after["metrics"]["settingsControlSyncSkipCount"] > surprise_before["metrics"]["settingsControlSyncSkipCount"] and surprise_after["metrics"]["lastSettingsControlSyncSkip"] == "surprise", str(surprise_after))
             check("Surprise defers hidden render and records telemetry", surprise_after["metrics"]["surpriseCount"] > surprise_before["metrics"]["surpriseCount"] and surprise_after["metrics"]["lastInteractionType"] == "surprise" and surprise_after["metrics"]["lastSurprisePatch"]["palette"] == surprise_after["state"]["palette"] and surprise_after["metrics"]["settingsDeferredRenderRequestCount"] > surprise_before["metrics"]["settingsDeferredRenderRequestCount"] and surprise_after["metrics"]["lastSettingsDeferredRenderReason"] == "surprise" and surprise_after["metrics"]["renderCount"] == surprise_before["metrics"]["renderCount"] and surprise_after["metrics"]["statusText"] == "Surprise ready", str(surprise_after["metrics"]))
             page.evaluate("""() => {
                 window.__mobileApp.setState({
@@ -1133,6 +1161,7 @@ def main() -> int:
                     showRings: true,
                     showPetrie: false,
                     showMirrors: false,
+                    showVertices: false,
                     highlightSubset: true,
                     showContext: true,
                     autoRotate: false,
@@ -1180,6 +1209,7 @@ def main() -> int:
                     showRings: false,
                     showPetrie: true,
                     showMirrors: true,
+                    showVertices: true,
                     highlightSubset: false,
                     showContext: false,
                     autoRotate: true,
@@ -1216,6 +1246,7 @@ def main() -> int:
                     context: document.getElementById('context-toggle').checked,
                     petrie: document.getElementById('petrie-toggle').checked,
                     mirrors: document.getElementById('mirrors-toggle').checked,
+                    vertices: document.getElementById('vertices-toggle').checked,
                     autoModel: document.getElementById('auto-model-toggle').checked,
                     autoColor: document.getElementById('auto-color-toggle').checked,
                     softFx: document.getElementById('soft-fx-toggle').checked,
@@ -1226,9 +1257,9 @@ def main() -> int:
                     zoom: document.getElementById('zoom-output').textContent
                 }
             })""")
-            expected_default_state = defaults_after["state"]["quality"] == "smooth" and defaults_after["state"]["palette"] == "gold" and defaults_after["state"]["modelMode"] == "e8_2d" and defaults_after["state"]["shape"] == "icosahedron" and defaults_after["state"]["polytope4d"] == "24cell" and defaults_after["state"]["dynkinDiagram"] == "E8" and defaults_after["state"]["subset"] == "icosahedron" and abs(defaults_after["state"]["pointScale"] - 1) < 0.01 and defaults_after["state"]["showRings"] and defaults_after["state"]["showContext"] and defaults_after["state"]["highlightSubset"] and not defaults_after["state"]["showPetrie"] and not defaults_after["state"]["showMirrors"] and not defaults_after["state"]["autoRotate"] and not defaults_after["state"]["autoModel"] and not defaults_after["state"]["autoColor"] and not defaults_after["state"]["softFx"] and defaults_after["state"]["selectedRoot"] is None and abs(defaults_after["state"]["zoom"] - 1) < 0.01 and defaults_after["state"]["panX"] == 0 and defaults_after["state"]["panY"] == 0 and defaults_after["state"]["rotation"] == 0 and "staleExtraKey" not in defaults_after["state"]
+            expected_default_state = defaults_after["state"]["quality"] == "smooth" and defaults_after["state"]["palette"] == "gold" and defaults_after["state"]["modelMode"] == "e8_2d" and defaults_after["state"]["shape"] == "icosahedron" and defaults_after["state"]["polytope4d"] == "24cell" and defaults_after["state"]["dynkinDiagram"] == "E8" and defaults_after["state"]["subset"] == "icosahedron" and abs(defaults_after["state"]["pointScale"] - 1) < 0.01 and defaults_after["state"]["showRings"] and defaults_after["state"]["showContext"] and defaults_after["state"]["highlightSubset"] and not defaults_after["state"]["showPetrie"] and not defaults_after["state"]["showMirrors"] and not defaults_after["state"]["showVertices"] and not defaults_after["state"]["autoRotate"] and not defaults_after["state"]["autoModel"] and not defaults_after["state"]["autoColor"] and not defaults_after["state"]["softFx"] and defaults_after["state"]["selectedRoot"] is None and abs(defaults_after["state"]["zoom"] - 1) < 0.01 and defaults_after["state"]["panX"] == 0 and defaults_after["state"]["panY"] == 0 and defaults_after["state"]["rotation"] == 0 and "staleExtraKey" not in defaults_after["state"]
             check("Defaults restores exact safe mobile state", expected_default_state, str(defaults_after["state"]))
-            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Smooth" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
+            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Smooth" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["vertices"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
             check("Defaults rewrites storage and records telemetry", defaults_after["stored"]["palette"] == "gold" and defaults_after["stored"]["quality"] == "smooth" and defaults_after["stored"]["modelMode"] == "e8_2d" and defaults_after["stored"]["polytope4d"] == "24cell" and defaults_after["stored"]["dynkinDiagram"] == "E8" and "staleExtraKey" not in defaults_after["stored"] and defaults_after["metrics"]["defaultsResetCount"] > defaults_before["defaultsResetCount"] and defaults_after["metrics"]["lastInteractionType"] == "defaults-reset" and defaults_after["metrics"]["saveCount"] > defaults_before["saveCount"] and not defaults_after["metrics"]["savePending"] and defaults_after["metrics"]["settingsDeferredRenderRequestCount"] > defaults_before["settingsDeferredRenderRequestCount"] and defaults_after["metrics"]["lastSettingsDeferredRenderReason"] == "defaults-reset" and defaults_after["metrics"]["statusText"] == "Defaults restored", str(defaults_after["metrics"]))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("() => !window.__mobileApp.getMetrics().settingsCanvasResizeDeferred")
