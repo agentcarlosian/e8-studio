@@ -322,6 +322,8 @@ uniform float uPathZoom;
 uniform float uExtrude;
 uniform float uRipple;
 uniform float uRipplePhase;
+uniform float uAlphaBoost;
+uniform float uColorLift;
 uniform vec3 uPalette0;
 uniform vec3 uPalette1;
 uniform vec3 uPalette2;
@@ -370,8 +372,9 @@ void main() {
   // WebGL lines have no portable glow width, so carry that energy in alpha to
   // keep Rainbow Ripple legible without adding another 21,840-line pass.
   float rippleBrightness = 0.34 + wave01 * 1.16;
-  float alpha = mix(aStyle.y, 0.12 * rippleBrightness, uRipple);
-  vColor = vec4(paletteAt(colorT), alpha);
+  float alpha = clamp(mix(aStyle.y, 0.12 * rippleBrightness, uRipple) * uAlphaBoost, 0.0, 0.56);
+  vec3 chordColor = mix(paletteAt(colorT), vec3(1.0), clamp(uColorLift, 0.0, 0.22));
+  vColor = vec4(chordColor, alpha);
 }`;
 const E8_CHORD_FRAGMENT_SHADER = `
 precision mediump float;
@@ -4974,7 +4977,7 @@ function ensureE8ChordWebgl() {
     };
     const uniformNames = [
       'uResolution', 'uOrigin', 'uScale', 'uRotation', 'uPitch', 'uPathZoom',
-      'uExtrude', 'uRipple', 'uRipplePhase',
+      'uExtrude', 'uRipple', 'uRipplePhase', 'uAlphaBoost', 'uColorLift',
       'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
     ];
     e8ChordUniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
@@ -5036,6 +5039,8 @@ function drawE8ChordWebglField(layout, paletteSet) {
     gl.uniform1f(e8ChordUniforms.uExtrude, state.e8MorphT);
     gl.uniform1f(e8ChordUniforms.uRipple, state.fxMode === 'ripple' ? 1 : 0);
     gl.uniform1f(e8ChordUniforms.uRipplePhase, ripplePhaseAngle());
+    gl.uniform1f(e8ChordUniforms.uAlphaBoost, e8ChordAlphaBoost());
+    gl.uniform1f(e8ChordUniforms.uColorLift, e8ChordColorLift());
     for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
       const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
       gl.uniform3f(
@@ -5067,6 +5072,8 @@ function drawE8ChordWebglField(layout, paletteSet) {
       renderer: 'webgl-lines',
       gpuDrawCalls: 1,
       vertices: e8ChordVertexCount,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
     };
   } catch (error) {
     e8ChordWebglUnavailable = true;
@@ -5347,6 +5354,9 @@ function render() {
       e8ChordRenderer: 'none',
       e8ChordGpuDrawCalls: 0,
       e8ChordGpuVertices: 0,
+      e8ChordAlphaBoost: 1,
+      e8ChordColorLift: 0,
+      e8ChordRecoveryPass: false,
       e8EdgesSkippedForInteraction: 0,
       ripplePointCount: 0,
       rippleEdgeSegments: 0,
@@ -5432,6 +5442,8 @@ function render() {
       drawStats.e8ChordRenderer = edgeStats.renderer;
       drawStats.e8ChordGpuDrawCalls = edgeStats.gpuDrawCalls;
       drawStats.e8ChordGpuVertices = edgeStats.vertices;
+      drawStats.e8ChordAlphaBoost = edgeStats.alphaBoost;
+      drawStats.e8ChordColorLift = edgeStats.colorLift;
       drawStats.modelEdges += edgeStats.segments;
       drawStats.modelEdgeStrokes += edgeStats.strokes;
       recordRippleEdgeStats(drawStats, edgeStats);
@@ -5603,12 +5615,41 @@ function drawCanvasKaleidoscope(width, height, cx, cy, segments, phase, strength
   return segments;
 }
 
+function drawE8ChordRecoveryPass(width, height) {
+  if (
+    state.modelMode !== 'e8_2d' ||
+    state.fxMode === 'none' ||
+    state.fxMode === 'ripple' ||
+    !isE8ChordGpuActive()
+  ) return false;
+
+  const zoomProgress = e8ChordZoomProgress();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.22 + zoomProgress * 0.38;
+  ctx.filter = `brightness(${(1.08 + zoomProgress * 0.24).toFixed(3)}) saturate(1.08)`;
+  ctx.drawImage(
+    e8ChordCanvas,
+    0,
+    0,
+    e8ChordCanvas.width,
+    e8ChordCanvas.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  ctx.restore();
+  return true;
+}
+
 function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
   const mode = state.fxMode;
   if (mode === 'none' || mode === 'ripple' || state.modelMode === 'sdf' || interactionLiteFrame) {
-    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped' };
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped', chordRecovery: false };
   }
-  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable' };
+  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable', chordRecovery: false };
 
   const strength = clamp(state.fxStrength, 0.25, 1.5);
   const layout = layoutForCanvas();
@@ -5828,10 +5869,15 @@ function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
     primitives++;
   } else {
     drawOriginal();
-    return { applied: false, primitives: 1, renderer: 'fallback' };
+    return { applied: false, primitives: 1, renderer: 'fallback', chordRecovery: false };
   }
 
-  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}` };
+  // The effect compositor intentionally transforms and attenuates the source.
+  // Restore one inexpensive chord-only pass so deep E8 zooms retain a crisp
+  // structural reference without paying for another topology traversal.
+  const chordRecovery = drawE8ChordRecoveryPass(width, height);
+  if (chordRecovery) primitives++;
+  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}`, chordRecovery };
 }
 
 function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
@@ -5941,6 +5987,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   drawStats.canvasFxPassApplied = canvasFxPass.applied;
   drawStats.canvasFxPassPrimitives = canvasFxPass.primitives;
   drawStats.canvasFxPassRenderer = canvasFxPass.renderer;
+  drawStats.e8ChordRecoveryPass = canvasFxPass.chordRecovery;
   if (canvasFxPass.applied) {
     drawStats.nativeFxApplied = true;
     drawStats.nativeFxPrimitives += canvasFxPass.primitives;
@@ -7163,6 +7210,29 @@ function paletteColorAt(paletteSet, value) {
   return `rgb(${channels[0]},${channels[1]},${channels[2]})`;
 }
 
+function e8ChordZoomProgress() {
+  if (state.modelMode !== 'e8_2d') return 0;
+  const zoom = clamp(Number(state.zoom) || 1, 1, E8_COXETER_ZOOM_MAX);
+  return clamp(Math.log(zoom) / Math.log(E8_COXETER_ZOOM_MAX), 0, 1);
+}
+
+function e8ChordAlphaBoost() {
+  const fxBoost = state.fxMode === 'none' ? 0 : 0.45;
+  return 1 + e8ChordZoomProgress() * 1.55 + fxBoost;
+}
+
+function e8ChordColorLift() {
+  const fxLift = state.fxMode === 'none' ? 0 : 0.05;
+  return clamp(0.02 + e8ChordZoomProgress() * 0.12 + fxLift, 0, 0.2);
+}
+
+function e8ChordPaletteColorAt(paletteSet, value) {
+  const channels = paletteChannelsAt(paletteSet, value);
+  const lift = e8ChordColorLift();
+  const lifted = channels.map(channel => Math.round(channel + (255 - channel) * lift));
+  return `rgb(${lifted[0]},${lifted[1]},${lifted[2]})`;
+}
+
 function ripplePhaseAngle() {
   // stylePhase advances at a battery-friendly mobile rate. This multiplier
   // restores the roughly four-radians-per-second wave travel used on desktop.
@@ -7195,7 +7265,17 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
     (_, index) => chordClasses?.[index]?.length || 0,
   );
   if (!populated.length) {
-    return { segments: 0, strokes: 0, classes: 0, classCounts, colorBands: 0, brightnessBands: 0, ripple: false };
+    return {
+      segments: 0,
+      strokes: 0,
+      classes: 0,
+      classCounts,
+      colorBands: 0,
+      brightnessBands: 0,
+      ripple: false,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+    };
   }
 
   // Ripple needs per-chord radial buckets. All other treatments use the
@@ -7203,13 +7283,19 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
   // two Canvas strokes for the canonical E8 data.
   if (state.fxMode === 'ripple') {
     const edgeStats = drawPaletteEdgeField(projected, e8ChordEdges, layout, paletteSet, {
-      baseAlpha: 0.06,
+      baseAlpha: 0.06 * e8ChordAlphaBoost(),
       baseWidth: 0.58,
       shadowBlur: 0.55,
       alwaysPalette: true,
       composite: 'source-over',
     });
-    return { ...edgeStats, classes: populated.length, classCounts };
+    return {
+      ...edgeStats,
+      classes: populated.length,
+      classCounts,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+    };
   }
 
   let segments = 0;
@@ -7220,8 +7306,12 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.62;
   for (const { chordClass, edges } of populated) {
-    const color = paletteColorAt(paletteSet, chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1));
-    ctx.globalAlpha = DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE;
+    const color = e8ChordPaletteColorAt(paletteSet, chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1));
+    ctx.globalAlpha = clamp(
+      DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE * e8ChordAlphaBoost(),
+      0,
+      0.56,
+    );
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 0.45;
@@ -7254,6 +7344,8 @@ function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
     colorBands: populated.length,
     brightnessBands: 1,
     ripple: false,
+    alphaBoost: e8ChordAlphaBoost(),
+    colorLift: e8ChordColorLift(),
   };
 }
 
