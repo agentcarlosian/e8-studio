@@ -134,7 +134,7 @@ def main() -> int:
                 width: document.getElementById('scene-chip').getBoundingClientRect().width,
                 scrollWidth: document.getElementById('scene-chip').scrollWidth
             })""")
-            check("scene chip advances to Bloom", scene_step_forward["state"]["modelMode"] == "bloom" and scene_step_forward["chip"] == "Bloom 240 / bloom", str(scene_step_forward))
+            check("scene chip advances to Bloom", scene_step_forward["state"]["modelMode"] == "bloom" and scene_step_forward["chip"] == "Bloom Shape / 0.00", str(scene_step_forward))
             check("Bloom scene chip copy fits the compact control", scene_step_forward["width"] <= 124 and scene_step_forward["scrollWidth"] <= scene_step_forward["width"] + 1, str(scene_step_forward))
             check("scene chip updates compact accessibility label", "Designed Bloom" in scene_step_forward["label"] and scene_step_forward["metrics"]["lastSceneChipLabel"] == scene_step_forward["label"], str(scene_step_forward))
             check("scene chip uses lightweight sync path", scene_step_forward["metrics"]["sceneChipStepCount"] > scene_step_before["sceneChipStepCount"] and scene_step_forward["metrics"]["sceneChipSyncSkipCount"] > scene_step_before["sceneChipSyncSkipCount"] and scene_step_forward["metrics"]["controlSyncCount"] == scene_step_before["controlSyncCount"] and scene_step_forward["metrics"]["lastInteractionType"] == "scene-chip-next", str(scene_step_forward["metrics"]))
@@ -161,7 +161,7 @@ def main() -> int:
                     chip: chip.textContent.trim().replace(/\\s+/g, ' ')
                 };
             }""")
-            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "bloom" and scene_swipe_next["chip"] == "Bloom 240 / bloom", str(scene_swipe_next))
+            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "bloom" and scene_swipe_next["chip"] == "Bloom Shape / 0.00", str(scene_swipe_next))
             check("scene chip swipe left records gesture telemetry", scene_swipe_next["metrics"]["sceneChipSwipeCount"] > scene_swipe_before["sceneChipSwipeCount"] and scene_swipe_next["metrics"]["lastSceneChipGesture"] == "swipe-next" and scene_swipe_next["metrics"]["lastSceneChipSwipeDirection"] == "next" and scene_swipe_next["metrics"]["lastInteractionType"] == "scene-chip-swipe-next", str(scene_swipe_next["metrics"]))
             scene_swipe_prev = page.evaluate("""() => {
                 const chip = document.getElementById('scene-chip');
@@ -814,21 +814,58 @@ def main() -> int:
             page.wait_for_function("count => window.__mobileApp.getMetrics().viewportChangeCount > count", arg=tiny_metrics["viewportChangeCount"])
             legacy_depth_mode = page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'e8_2d' }); return window.__mobileApp.setState({ modelMode: 'e8_3d' }).modelMode; }")
             check("legacy E8 3D state migrates to Bloom", legacy_depth_mode == "bloom", str(legacy_depth_mode))
-            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'bloom', selectedRoot: null, autoRotate: false }); window.__mobileApp.forceRender(); }")
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'bloom', bloomAmount: 0, bloomAuto: false, bloomTwinH4: true, selectedRoot: null, autoRotate: false }); window.__mobileApp.forceRender(); }")
+            bloom_source_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Bloom begins as the source solid instead of a line mash", bloom_source_metrics["lastModelMode"] == "bloom" and bloom_source_metrics["lastDrawStats"]["bloomPhase"] == "Shape" and bloom_source_metrics["lastDrawStats"]["bloomVisiblePoints"] == 12 and bloom_source_metrics["lastDrawStats"]["modelProjectedVertices"] == 12 and bloom_source_metrics["lastDrawStats"]["bloomSourceEdges"] == 30 and bloom_source_metrics["lastDrawStats"]["bloomTwinTrails"] == 0 and bloom_source_metrics["lastDrawStats"]["modelEdges"] == 30 and bloom_source_metrics["lastProjectionSource"] == "bloom-depth-points", str(bloom_source_metrics["lastDrawStats"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            bloom_controls = page.evaluate("""() => ({
+                visible: !document.getElementById('bloom-timeline-field').classList.contains('hidden'),
+                value: document.getElementById('bloom-time').value,
+                time: document.getElementById('bloom-time-output').textContent,
+                phase: document.getElementById('bloom-phase-output').textContent,
+                auto: document.getElementById('bloom-auto-button').textContent,
+                twinPressed: document.getElementById('bloom-twin-button').getAttribute('aria-pressed'),
+                timelineTop: document.getElementById('bloom-timeline-field').getBoundingClientRect().top,
+                scenesTop: document.querySelector('.scene-preset-panel').getBoundingClientRect().top
+            })""")
+            check("View exposes the Bloom timeline controls above the scene catalog", bloom_controls["visible"] and bloom_controls["value"] == "0" and bloom_controls["time"] == "0.00" and bloom_controls["phase"] == "Shape" and bloom_controls["auto"] == "Auto" and bloom_controls["twinPressed"] == "true" and bloom_controls["timelineTop"] < bloom_controls["scenesTop"], str(bloom_controls))
+            page.locator("#bloom-time").evaluate("el => { el.value = '0.65'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }")
+            bloom_scrub = page.evaluate("() => ({ state: window.__mobileApp.getState(), time: document.getElementById('bloom-time-output').textContent, phase: document.getElementById('bloom-phase-output').textContent })")
+            check("Bloom timeline scrubs and labels the twin phase", abs(bloom_scrub["state"]["bloomAmount"] - 0.65) < 0.001 and not bloom_scrub["state"]["bloomAuto"] and bloom_scrub["time"] == "0.65" and bloom_scrub["phase"] == "Twin H4", str(bloom_scrub))
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             bloom_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("Bloom renders the E8 depth cloud with filaments", bloom_metrics["lastModelMode"] == "bloom" and bloom_metrics["lastDrawStats"]["modelProjectedVertices"] == 240 and bloom_metrics["lastDrawStats"]["points"] == 240 and bloom_metrics["lastDrawStats"]["modelEdges"] == 120 and bloom_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and bloom_metrics["e8Projection3DCount"] >= 1 and bloom_metrics["bloomDrawCount"] >= 1 and bloom_metrics["lastProjectionSource"] == "bloom-depth-points", str(bloom_metrics["lastDrawStats"]))
+            check("Bloom twin phase renders structured H4 layers with only correspondence trails", bloom_metrics["lastModelMode"] == "bloom" and bloom_metrics["lastDrawStats"]["modelProjectedVertices"] == 240 and bloom_metrics["lastDrawStats"]["points"] == 240 and bloom_metrics["lastDrawStats"]["bloomFirstCellPoints"] == 120 and bloom_metrics["lastDrawStats"]["bloomTwinPoints"] == 120 and bloom_metrics["lastDrawStats"]["bloomTwinTrails"] == 12 and bloom_metrics["lastDrawStats"]["modelEdges"] == 12 and bloom_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and bloom_metrics["e8Projection3DCount"] >= 1 and bloom_metrics["bloomDrawCount"] >= 1 and bloom_metrics["lastProjectionSource"] == "bloom-depth-points", str(bloom_metrics["lastDrawStats"]))
             bloom_labels = page.evaluate("""() => ({
                 topbar: document.querySelector('.topbar').getAttribute('aria-label'),
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label'),
                 info: document.getElementById('info-copy').textContent,
                 metrics: window.__mobileApp.getMetrics()
             })""")
-            check("Bloom labels replace the old generic depth copy", "Designed Bloom" in bloom_labels["topbar"] and "luminous depth cloud" in bloom_labels["canvas"] and "luminous root filaments" in bloom_labels["info"] and bloom_labels["metrics"]["lastInfoCopy"] == bloom_labels["info"], str(bloom_labels))
+            check("Bloom labels describe the construction timeline", "Designed Bloom timeline" in bloom_labels["topbar"] and "Twin H4 phase" in bloom_labels["canvas"] and "600-cell and twin H4 stages" in bloom_labels["info"] and bloom_labels["metrics"]["lastInfoCopy"] == bloom_labels["info"], str(bloom_labels))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator("#bloom-twin-button").click()
+            twin_off = page.evaluate("() => ({ state: window.__mobileApp.getState(), pressed: document.getElementById('bloom-twin-button').getAttribute('aria-pressed') })")
+            check("Twin H4 control toggles the layer contrast", not twin_off["state"]["bloomTwinH4"] and twin_off["pressed"] == "false", str(twin_off))
+            page.locator("#bloom-twin-button").click()
+            page.locator("#bloom-auto-button").click()
+            bloom_auto_armed = page.evaluate("() => ({ state: window.__mobileApp.getState(), text: document.getElementById('bloom-auto-button').textContent, metrics: window.__mobileApp.getMetrics() })")
+            check("Bloom Auto control arms as Pause", bloom_auto_armed["state"]["bloomAuto"] and bloom_auto_armed["state"]["bloomTwinH4"] and bloom_auto_armed["text"] == "Pause", str(bloom_auto_armed))
+            page.evaluate("() => window.__mobileApp.closeSettings()")
+            page.wait_for_function("before => window.__mobileApp.getMetrics().bloomAutoFrameCount > before", arg=bloom_auto_armed["metrics"]["bloomAutoFrameCount"], timeout=1500)
+            bloom_auto_running = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("Bloom Auto advances the timeline through the motion loop", bloom_auto_running["state"]["bloomAmount"] > 0.65 and bloom_auto_running["metrics"]["motionActive"] and bloom_auto_running["metrics"]["bloomAutoFrameCount"] > bloom_auto_armed["metrics"]["bloomAutoFrameCount"], str(bloom_auto_running))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            page.locator('[data-bloom-action="reset"]').click()
+            bloom_reset = page.evaluate("() => ({ state: window.__mobileApp.getState(), time: document.getElementById('bloom-time-output').textContent, phase: document.getElementById('bloom-phase-output').textContent, auto: document.getElementById('bloom-auto-button').textContent })")
+            check("Bloom Reset restores the source and pauses animation", bloom_reset["state"]["bloomAmount"] == 0 and not bloom_reset["state"]["bloomAuto"] and bloom_reset["time"] == "0.00" and bloom_reset["phase"] == "Shape" and bloom_reset["auto"] == "Auto", str(bloom_reset))
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ bloomAmount: 1 }); window.__mobileApp.forceRender(); }")
+            bloom_coxeter = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Bloom ends on all 240 Coxeter-plane roots", bloom_coxeter["lastDrawStats"]["bloomPhase"] == "Coxeter" and bloom_coxeter["lastDrawStats"]["bloomVisiblePoints"] == 240 and bloom_coxeter["lastDrawStats"]["bloomPhase2D"] == 1 and bloom_coxeter["lastDrawStats"]["modelEdges"] == 0, str(bloom_coxeter["lastDrawStats"]))
             bloom_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
             check("OBJ export follows Bloom's underlying root cloud", bloom_obj["ok"] and bloom_obj["obj"]["kind"] == "e8-root-point-cloud-3d-obj" and bloom_obj["obj"]["name"] == "e8-designed-bloom" and bloom_obj["obj"]["vertices"] == 240 and bloom_obj["obj"]["points"] == 240 and "# kind: e8-root-point-cloud-3d-obj" in bloom_obj["obj"]["text"], str(bloom_obj["obj"]))
             page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'sdf', selectedRoot: 7, autoRotate: false }); window.__mobileApp.forceRender(); }")
             sdf_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("SDF renders the desktop-inspired 240-root implicit surface", sdf_metrics["lastModelMode"] == "sdf" and sdf_metrics["selectedRoot"] is None and sdf_metrics["lastDrawStats"]["sdfSpheres"] == 240 and sdf_metrics["lastDrawStats"]["sdfRasterSize"] >= 100 and sdf_metrics["lastDrawStats"]["sdfPixels"] > 1000 and sdf_metrics["lastDrawStats"]["modelFaceFills"] == 1 and sdf_metrics["sdfDrawCount"] >= 1 and sdf_metrics["lastProjectionSource"] == "sdf-raster", str(sdf_metrics["lastDrawStats"]))
+            check("SDF renders a high-resolution 240-root implicit surface", sdf_metrics["lastModelMode"] == "sdf" and sdf_metrics["selectedRoot"] is None and sdf_metrics["renderScale"] >= 1 and sdf_metrics["lastDrawStats"]["sdfSpheres"] == 240 and sdf_metrics["lastDrawStats"]["sdfRasterSize"] >= 320 and sdf_metrics["lastDrawStats"]["sdfPixels"] > 6000 and sdf_metrics["lastDrawStats"]["modelFaceFills"] == 1 and sdf_metrics["sdfDrawCount"] >= 1 and sdf_metrics["lastProjectionSource"] == "sdf-raster", str(sdf_metrics["lastDrawStats"]))
             sdf_labels = page.evaluate("""() => ({
                 topbar: document.querySelector('.topbar').getAttribute('aria-label'),
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label'),
@@ -845,7 +882,7 @@ def main() -> int:
             page.locator("#shape-select").select_option("dodecahedron")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             platonic_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("Platonic dodecahedron renders faces and edges without vertex spheres", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaceFills"] > 0 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
+            check("Platonic dodecahedron renders bright edges without vertex spheres", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaceFills"] > 0 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["lastDrawStats"]["modelEdgeWidth"] >= 2.2 and platonic_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.95 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
             platonic_mckay = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
@@ -878,7 +915,7 @@ def main() -> int:
             page.locator("#polytope4d-select").select_option("600cell")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             poly_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("4D 600-cell renders desktop polytope data without vertex spheres", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["lastDrawStats"]["modelVertexFills"] == 0 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
+            check("4D 600-cell renders brighter desktop polytope edges without vertex spheres", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["lastDrawStats"]["modelEdgeWidth"] >= 1.0 and poly_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.7 and poly_metrics["lastDrawStats"]["modelVertexFills"] == 0 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
             poly_info = page.evaluate("""() => ({
                 selection: document.getElementById('info-selection').innerText,

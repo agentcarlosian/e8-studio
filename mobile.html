@@ -58,6 +58,21 @@
               <button class="wide-action" type="button" data-action="reset-view">Reset</button>
               <button class="wide-action" type="button" data-view-action="fit-all">Fit all</button>
             </div>
+            <div id="bloom-timeline-field" class="bloom-timeline-panel hidden" aria-label="Bloom timeline">
+              <div class="browse-head">
+                <strong>Bloom timeline</strong>
+                <output id="bloom-phase-output">Shape</output>
+              </div>
+              <label class="field bloom-time-field">
+                <span class="field-heading">Time <output id="bloom-time-output">0.00</output></span>
+                <input id="bloom-time" type="range" min="0" max="1" step="0.005" value="0">
+              </label>
+              <div class="browse-actions bloom-actions">
+                <button id="bloom-auto-button" type="button" data-bloom-action="toggle-auto">Auto</button>
+                <button id="bloom-twin-button" type="button" data-bloom-action="toggle-twin">Twin H4</button>
+                <button type="button" data-bloom-action="reset">Reset</button>
+              </div>
+            </div>
             <div class="scene-preset-panel" aria-label="Scene presets">
               <div class="browse-head">
                 <strong>Scenes</strong>
