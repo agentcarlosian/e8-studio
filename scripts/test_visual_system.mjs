@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { THEMES, THEME_LABELS, DEFAULT_THEME } from '../src/ui/theme.js';
 import { PALETTE_GROUPS, PALETTE_NAMES, PALETTE_PRESETS, paletteFamily, palettePreviewCSS } from '../src/ui/palettes.js';
 import { BACKGROUND_PRESETS, BG_MODES, backgroundModesForQuality, coerceBackgroundForQuality } from '../src/ui/backgrounds.js';
+import { shouldWritePlatonicFaceDepth } from '../src/views/platonic.view.js';
 
 const REQUIRED_THEME_KEYS = [
   '--bg-0', '--bg-1', '--bg-2', '--bg-3', '--line', '--line-soft',
@@ -79,5 +80,12 @@ assert.ok(backgroundModesForQuality('medium').length > backgroundModesForQuality
 assert.equal(backgroundModesForQuality('high').length, BG_MODES.length);
 assert.equal(coerceBackgroundForQuality('quantum', 'low'), 'void');
 assert.equal(coerceBackgroundForQuality('quantum', 'high'), 'quantum');
+
+for (const shape of ['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron']) {
+  assert.equal(shouldWritePlatonicFaceDepth(shape), true, `${shape} faces write depth`);
+}
+for (const shape of ['stellated_dodecahedron', 'great_dodecahedron', 'great_icosahedron', 'great_stellated_dodecahedron']) {
+  assert.equal(shouldWritePlatonicFaceDepth(shape), false, `${shape} transparent overlaps do not write depth`);
+}
 
 console.log(`Visual system tests passed: ${Object.keys(THEMES).length} themes, ${PALETTE_NAMES.length} palettes.`);

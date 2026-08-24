@@ -55,6 +55,7 @@ def main() -> int:
             check("canvas has mobile-sized backing store", metrics["canvas"]["width"] > 0 and metrics["canvas"]["height"] > 0, str(metrics))
             initial_draw = metrics["lastDrawStats"]
             check("initial draw renders all roots", initial_draw["points"] == 240 and initial_draw["rings"] == 8, str(initial_draw))
+            check("E8 roots keep the dense inner rings legible", 1.8 <= initial_draw["minPointRadius"] <= initial_draw["maxPointRadius"] <= 3.1 and initial_draw["maxPointRadius"] / initial_draw["minPointRadius"] < 1.7, str(initial_draw))
             check("initial draw has no context ray stroke", initial_draw["rays"] == 0 and initial_draw["rayStrokes"] == 0, str(initial_draw))
             check("rings are batched into one stroke", initial_draw["ringStrokes"] == 1, str(initial_draw))
             check("base points batch across the full palette", initial_draw["batchedPoints"] == 228 and initial_draw["pointBatchFills"] == 5 and initial_draw["directPoints"] == 12, str(initial_draw))
@@ -124,15 +125,18 @@ def main() -> int:
 
             scene_step_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator("#scene-chip").click()
-            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'e8_3d'")
+            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'bloom'")
             scene_step_forward = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
                 chip: document.getElementById('scene-chip').textContent.trim().replace(/\\s+/g, ' '),
-                label: document.getElementById('scene-chip').getAttribute('aria-label')
+                label: document.getElementById('scene-chip').getAttribute('aria-label'),
+                width: document.getElementById('scene-chip').getBoundingClientRect().width,
+                scrollWidth: document.getElementById('scene-chip').scrollWidth
             })""")
-            check("scene chip advances to E8 3D", scene_step_forward["state"]["modelMode"] == "e8_3d" and scene_step_forward["chip"] == "E8 3D 240 roots / depth", str(scene_step_forward))
-            check("scene chip updates compact accessibility label", "E8 3D roots" in scene_step_forward["label"] and scene_step_forward["metrics"]["lastSceneChipLabel"] == scene_step_forward["label"], str(scene_step_forward))
+            check("scene chip advances to Bloom", scene_step_forward["state"]["modelMode"] == "bloom" and scene_step_forward["chip"] == "Bloom 240 / bloom", str(scene_step_forward))
+            check("Bloom scene chip copy fits the compact control", scene_step_forward["width"] <= 124 and scene_step_forward["scrollWidth"] <= scene_step_forward["width"] + 1, str(scene_step_forward))
+            check("scene chip updates compact accessibility label", "Designed Bloom" in scene_step_forward["label"] and scene_step_forward["metrics"]["lastSceneChipLabel"] == scene_step_forward["label"], str(scene_step_forward))
             check("scene chip uses lightweight sync path", scene_step_forward["metrics"]["sceneChipStepCount"] > scene_step_before["sceneChipStepCount"] and scene_step_forward["metrics"]["sceneChipSyncSkipCount"] > scene_step_before["sceneChipSyncSkipCount"] and scene_step_forward["metrics"]["controlSyncCount"] == scene_step_before["controlSyncCount"] and scene_step_forward["metrics"]["lastInteractionType"] == "scene-chip-next", str(scene_step_forward["metrics"]))
             page.evaluate("() => window.__mobileApp.stepScene(-1)")
             page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'e8_2d'")
@@ -157,7 +161,7 @@ def main() -> int:
                     chip: chip.textContent.trim().replace(/\\s+/g, ' ')
                 };
             }""")
-            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "e8_3d" and scene_swipe_next["chip"] == "E8 3D 240 roots / depth", str(scene_swipe_next))
+            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "bloom" and scene_swipe_next["chip"] == "Bloom 240 / bloom", str(scene_swipe_next))
             check("scene chip swipe left records gesture telemetry", scene_swipe_next["metrics"]["sceneChipSwipeCount"] > scene_swipe_before["sceneChipSwipeCount"] and scene_swipe_next["metrics"]["lastSceneChipGesture"] == "swipe-next" and scene_swipe_next["metrics"]["lastSceneChipSwipeDirection"] == "next" and scene_swipe_next["metrics"]["lastInteractionType"] == "scene-chip-swipe-next", str(scene_swipe_next["metrics"]))
             scene_swipe_prev = page.evaluate("""() => {
                 const chip = document.getElementById('scene-chip');
@@ -195,7 +199,8 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             scene_grid_ids = [button["id"] for button in scene_grid["buttons"]]
-            check("View section exposes compact scene preset grid", len(scene_grid["buttons"]) == 18 and scene_grid["metrics"]["scenePresetButtonCount"] == 18 and "tetrahedron" in scene_grid_ids and "great-icosahedron" in scene_grid_ids and "600cell" in scene_grid_ids and "120cell" in scene_grid_ids and "dynkin-e8" in scene_grid_ids, str(scene_grid))
+            check("View section exposes compact scene preset grid", len(scene_grid["buttons"]) == 15 and scene_grid["metrics"]["scenePresetButtonCount"] == 15 and "bloom" in scene_grid_ids and "sdf" in scene_grid_ids and "tetrahedron" in scene_grid_ids and "600cell" in scene_grid_ids and "120cell" in scene_grid_ids and "dynkin-e8" in scene_grid_ids, str(scene_grid))
+            check("Scenes omit redundant star-polyhedron shortcuts", all(name not in scene_grid_ids for name in ["stellated-dodecahedron", "great-dodecahedron", "great-icosahedron", "great-stellated-dodecahedron"]), str(scene_grid_ids))
             check("scene preset grid marks active E8 scene", scene_grid["output"] == "E8" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for button in scene_grid["buttons"]), str(scene_grid))
             model_shortcuts = page.evaluate("""() => ({
                 groups: [...document.querySelectorAll('#model-shortcut-groups [data-model-shortcut-group]')].map(group => ({
@@ -212,7 +217,9 @@ def main() -> int:
             })""")
             model_shortcut_ids = [button["id"] for group in model_shortcuts["groups"] for button in group["buttons"]]
             model_shortcut_group_counts = {group["id"]: len(group["buttons"]) for group in model_shortcuts["groups"]}
-            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 20 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 20 and model_shortcut_group_counts == {"e8": 2, "solids": 5, "stars": 4, "poly4d": 6, "dynkin": 3} and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 21 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 21 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            model_options = page.locator("#model-select option").evaluate_all("options => options.map(option => option.value)")
+            check("model selector replaces legacy E8 3D with Bloom and SDF", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "dynkin"], str(model_options))
             dynkin_options = page.locator("#dynkin-select option").evaluate_all("options => options.map(option => option.value)")
             check("mobile Dynkin catalog matches desktop-facing E-series", dynkin_options == ["E8", "E7", "E6"], str(dynkin_options))
             check("model shortcuts mark active E8 Coxeter", model_shortcuts["output"] == "E8 Coxeter" and any(button["id"] == "e8_2d" and button["active"] and button["pressed"] == "true" for group in model_shortcuts["groups"] for button in group["buttons"]), str(model_shortcuts))
@@ -267,8 +274,8 @@ def main() -> int:
                 output: document.getElementById('model-shortcut-output').textContent.trim()
             })""")
             check("fallback Dynkin select syncs model shortcut", model_shortcut_select_sync["state"]["dynkinDiagram"] == "E7" and model_shortcut_select_sync["activeShortcut"] == "dynkin-E7" and model_shortcut_select_sync["output"] == "E7 Dynkin" and model_shortcut_select_sync["metrics"]["lastSettingsControlSyncSkip"] == "dynkin-select", str(model_shortcut_select_sync))
-            page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_3d')")
-            model_shortcut_e8_3d = page.evaluate("""() => ({
+            page.evaluate("() => window.__mobileApp.selectModelShortcut('bloom')")
+            model_shortcut_bloom = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
                 controls: {
@@ -277,7 +284,18 @@ def main() -> int:
                     output: document.getElementById('model-shortcut-output').textContent.trim()
                 }
             })""")
-            check("debug API selects E8 3D model shortcut", model_shortcut_e8_3d["state"]["modelMode"] == "e8_3d" and model_shortcut_e8_3d["controls"]["modelMode"] == "e8_3d" and model_shortcut_e8_3d["controls"]["activeShortcut"] == "e8_3d" and model_shortcut_e8_3d["controls"]["output"] == "E8 3D roots" and model_shortcut_e8_3d["metrics"]["lastModelShortcutId"] == "e8_3d", str(model_shortcut_e8_3d))
+            check("debug API selects Bloom model shortcut", model_shortcut_bloom["state"]["modelMode"] == "bloom" and model_shortcut_bloom["controls"]["modelMode"] == "bloom" and model_shortcut_bloom["controls"]["activeShortcut"] == "bloom" and model_shortcut_bloom["controls"]["output"] == "Designed Bloom" and model_shortcut_bloom["metrics"]["lastModelShortcutId"] == "bloom", str(model_shortcut_bloom))
+            page.evaluate("() => window.__mobileApp.selectModelShortcut('sdf')")
+            model_shortcut_sdf = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                metrics: window.__mobileApp.getMetrics(),
+                controls: {
+                    modelMode: document.getElementById('model-select').value,
+                    activeShortcut: document.querySelector('#model-shortcut-groups button.active')?.dataset.modelShortcut,
+                    output: document.getElementById('model-shortcut-output').textContent.trim()
+                }
+            })""")
+            check("debug API selects SDF model shortcut", model_shortcut_sdf["state"]["modelMode"] == "sdf" and model_shortcut_sdf["controls"]["modelMode"] == "sdf" and model_shortcut_sdf["controls"]["activeShortcut"] == "sdf" and model_shortcut_sdf["controls"]["output"] == "E8 distance field" and model_shortcut_sdf["metrics"]["lastModelShortcutId"] == "sdf", str(model_shortcut_sdf))
             page.evaluate("() => window.__mobileApp.selectModelShortcut('e8_2d')")
             scene_preset_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#scene-preset-grid [data-scene-preset="16cell"]').click()
@@ -448,7 +466,7 @@ def main() -> int:
                     box: button.getBoundingClientRect()
                 }))
             })""")
-            check("Info section exposes compact guided tour", tour_card["tour"]["count"] == 5 and tour_card["tour"]["index"] == 0 and tour_card["output"] == "Ready" and tour_card["step"] == "1/5" and "E8 Coxeter plane" in tour_card["copy"] and tour_card["metrics"]["mobileTourButtonCount"] == 3 and all(button["box"]["height"] >= 40 for button in tour_card["buttons"]), str(tour_card))
+            check("Info section exposes compact guided tour", tour_card["tour"]["count"] == 6 and tour_card["tour"]["index"] == 0 and tour_card["output"] == "Ready" and tour_card["step"] == "1/6" and "E8 Coxeter plane" in tour_card["copy"] and tour_card["metrics"]["mobileTourButtonCount"] == 3 and all(button["box"]["height"] >= 40 for button in tour_card["buttons"]), str(tour_card))
             check("Tour card keeps start action explicit", any(button["id"] == "mobile-tour-toggle" and button["text"] == "Start" and button["pressed"] == "false" for button in tour_card["buttons"]), str(tour_card["buttons"]))
             check("Tour step buttons are disabled until started", all(button["disabled"] and button["ariaDisabled"] == "true" for button in tour_card["buttons"] if button["id"] in ["mobile-tour-prev", "mobile-tour-next"]), str(tour_card["buttons"]))
             tour_start_before = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -474,14 +492,14 @@ def main() -> int:
                     stored: window.__mobileApp.getStoredState()
                 };
             }""")
-            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'e8_3d'")
+            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'bloom'")
             tour_next = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 tour: window.__mobileApp.getMobileTourState(),
                 metrics: window.__mobileApp.getMetrics(),
                 stored: window.__mobileApp.getStoredState()
             })""")
-            check("Tour Next steps to E8 3D without extra chrome", tour_next["tour"]["active"] and not tour_next["tour"]["timerActive"] and tour_next["tour"]["index"] == 1 and tour_next["tour"]["step"]["id"] == "e8-depth" and tour_next["state"]["modelMode"] == "e8_3d", str(tour_next))
+            check("Tour Next steps to Bloom without extra chrome", tour_next["tour"]["active"] and not tour_next["tour"]["timerActive"] and tour_next["tour"]["index"] == 1 and tour_next["tour"]["step"]["id"] == "designed-bloom" and tour_next["state"]["modelMode"] == "bloom", str(tour_next))
             check("Tour Next remains static and render-on-demand", not tour_next["state"]["autoRotate"] and not tour_next["state"]["autoModel"] and not tour_next["state"]["autoColor"] and not tour_next["state"]["softFx"] and not tour_next["metrics"]["runtimeAnimationActive"] and not tour_next["metrics"]["motionActive"], str(tour_next))
             check("Tour step records scene and no saved config change", tour_next["metrics"]["mobileTourNextCount"] > tour_next_before["mobileTourNextCount"] and tour_next["metrics"]["lastMobileTourAction"] == "mobile-tour-next" and tour_next["metrics"]["lastInteractionType"] == "mobile-tour-next" and tour_next["stored"]["modelMode"] == "e8_2d", str(tour_next))
             page.evaluate("() => window.__mobileApp.openSettings('info')")
@@ -492,7 +510,7 @@ def main() -> int:
                 toggle: document.getElementById('mobile-tour-toggle').textContent.trim(),
                 copy: document.getElementById('mobile-tour-copy').innerText
             })""")
-            check("Tour card reflects paused active step when reopened", tour_open["metrics"]["settingsOpen"] and tour_open["output"] == "Paused" and tour_open["step"] == "2/5" and tour_open["toggle"] == "Stop" and "E8 depth view" in tour_open["copy"], str(tour_open))
+            check("Tour card reflects paused active step when reopened", tour_open["metrics"]["settingsOpen"] and tour_open["output"] == "Paused" and tour_open["step"] == "2/6" and tour_open["toggle"] == "Stop" and "Designed Bloom" in tour_open["copy"], str(tour_open))
             check("Tour timer pauses while Info sheet is open", tour_open["metrics"]["mobileTourPausedForSettings"] and not tour_open["metrics"]["mobileTourTimerActive"] and tour_open["metrics"]["mobileTourPauseCount"] >= 1, str(tour_open["metrics"]))
             tour_stop_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("debug back closes settings before stopping tour", page.evaluate("() => window.__mobileApp.handleBackNavigation()"))
@@ -794,18 +812,32 @@ def main() -> int:
             page.set_viewport_size({"width": 390, "height": 844})
             page.wait_for_function("() => window.__mobileApp.getMetrics().viewport.width === 390")
             page.wait_for_function("count => window.__mobileApp.getMetrics().viewportChangeCount > count", arg=tiny_metrics["viewportChangeCount"])
-            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'e8_3d', selectedRoot: null, autoRotate: false }); window.__mobileApp.forceRender(); }")
-            e8_3d_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("E8 3D model renders root cloud", e8_3d_metrics["lastModelMode"] == "e8_3d" and e8_3d_metrics["lastDrawStats"]["modelProjectedVertices"] == 240 and e8_3d_metrics["lastDrawStats"]["points"] == 240 and e8_3d_metrics["e8Projection3DCount"] >= 1, str(e8_3d_metrics["lastDrawStats"]))
-            e8_3d_labels = page.evaluate("""() => ({
+            legacy_depth_mode = page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'e8_2d' }); return window.__mobileApp.setState({ modelMode: 'e8_3d' }).modelMode; }")
+            check("legacy E8 3D state migrates to Bloom", legacy_depth_mode == "bloom", str(legacy_depth_mode))
+            page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'bloom', selectedRoot: null, autoRotate: false }); window.__mobileApp.forceRender(); }")
+            bloom_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Bloom renders the E8 depth cloud with filaments", bloom_metrics["lastModelMode"] == "bloom" and bloom_metrics["lastDrawStats"]["modelProjectedVertices"] == 240 and bloom_metrics["lastDrawStats"]["points"] == 240 and bloom_metrics["lastDrawStats"]["modelEdges"] == 120 and bloom_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and bloom_metrics["e8Projection3DCount"] >= 1 and bloom_metrics["bloomDrawCount"] >= 1 and bloom_metrics["lastProjectionSource"] == "bloom-depth-points", str(bloom_metrics["lastDrawStats"]))
+            bloom_labels = page.evaluate("""() => ({
                 topbar: document.querySelector('.topbar').getAttribute('aria-label'),
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label'),
                 info: document.getElementById('info-copy').textContent,
                 metrics: window.__mobileApp.getMetrics()
             })""")
-            check("E8 3D labels replace Coxeter-only copy", "depth projection" in e8_3d_labels["topbar"] and "depth projection" in e8_3d_labels["canvas"] and "lightweight depth coordinate" in e8_3d_labels["info"] and e8_3d_labels["metrics"]["lastInfoCopy"] == e8_3d_labels["info"], str(e8_3d_labels))
-            e8_3d_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
-            check("OBJ export follows E8 3D point cloud", e8_3d_obj["ok"] and e8_3d_obj["obj"]["kind"] == "e8-root-point-cloud-3d-obj" and e8_3d_obj["obj"]["vertices"] == 240 and e8_3d_obj["obj"]["points"] == 240 and "# kind: e8-root-point-cloud-3d-obj" in e8_3d_obj["obj"]["text"], str(e8_3d_obj["obj"]))
+            check("Bloom labels replace the old generic depth copy", "Designed Bloom" in bloom_labels["topbar"] and "luminous depth cloud" in bloom_labels["canvas"] and "luminous root filaments" in bloom_labels["info"] and bloom_labels["metrics"]["lastInfoCopy"] == bloom_labels["info"], str(bloom_labels))
+            bloom_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
+            check("OBJ export follows Bloom's underlying root cloud", bloom_obj["ok"] and bloom_obj["obj"]["kind"] == "e8-root-point-cloud-3d-obj" and bloom_obj["obj"]["name"] == "e8-designed-bloom" and bloom_obj["obj"]["vertices"] == 240 and bloom_obj["obj"]["points"] == 240 and "# kind: e8-root-point-cloud-3d-obj" in bloom_obj["obj"]["text"], str(bloom_obj["obj"]))
+            page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'sdf', selectedRoot: 7, autoRotate: false }); window.__mobileApp.forceRender(); }")
+            sdf_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("SDF renders the desktop-inspired 240-root implicit surface", sdf_metrics["lastModelMode"] == "sdf" and sdf_metrics["selectedRoot"] is None and sdf_metrics["lastDrawStats"]["sdfSpheres"] == 240 and sdf_metrics["lastDrawStats"]["sdfRasterSize"] >= 100 and sdf_metrics["lastDrawStats"]["sdfPixels"] > 1000 and sdf_metrics["lastDrawStats"]["modelFaceFills"] == 1 and sdf_metrics["sdfDrawCount"] >= 1 and sdf_metrics["lastProjectionSource"] == "sdf-raster", str(sdf_metrics["lastDrawStats"]))
+            sdf_labels = page.evaluate("""() => ({
+                topbar: document.querySelector('.topbar').getAttribute('aria-label'),
+                canvas: document.getElementById('mobile-canvas').getAttribute('aria-label'),
+                info: document.getElementById('info-copy').textContent,
+                metrics: window.__mobileApp.getMetrics()
+            })""")
+            check("SDF labels describe the faithful implicit renderer", "E8 SDF" in sdf_labels["topbar"] and "240 smoothly joined root spheres" in sdf_labels["topbar"] and "signed-distance-field" in sdf_labels["canvas"] and "all 240 Coxeter-plane root spheres" in sdf_labels["info"] and sdf_labels["metrics"]["lastInfoCopy"] == sdf_labels["info"], str(sdf_labels))
+            sdf_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
+            check("OBJ export follows SDF's Coxeter-plane sphere centres", sdf_obj["ok"] and sdf_obj["obj"]["kind"] == "e8-root-point-cloud-2d-obj" and sdf_obj["obj"]["name"] == "e8-distance-field" and sdf_obj["obj"]["vertices"] == 240 and sdf_obj["obj"]["points"] == 240 and "centres underlying the mobile SDF" in sdf_obj["obj"]["text"], str(sdf_obj["obj"]))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#model-select").select_option("platonic")
             model_select_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
