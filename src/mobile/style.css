@@ -134,7 +134,7 @@ button:disabled {
 
 .mobile-shell[data-fx-mode="ripple"] #mobile-canvas,
 .mobile-shell[data-fx-mode="ripple"] #mobile-sdf-canvas {
-  filter: saturate(var(--mobile-fx-saturation)) contrast(1.1) drop-shadow(0 0 5px rgba(106, 255, 232, var(--mobile-fx-alpha)));
+  filter: saturate(calc(var(--mobile-fx-saturation) * 1.12)) contrast(1.1) brightness(1.04) drop-shadow(0 0 5px rgba(255, 255, 255, var(--mobile-fx-alpha)));
 }
 
 .mobile-shell[data-fx-mode="spiral"] #mobile-canvas,

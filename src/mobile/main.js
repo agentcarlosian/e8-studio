@@ -16,6 +16,7 @@ const DEFAULT_STATE = {
   showContext: true,
   showPetrie: false,
   showMirrors: false,
+  showEdges: false,
   showVertices: false,
   highlightSubset: true,
   subset: 'icosahedron',
@@ -78,7 +79,7 @@ const MOBILE_FX_MODES = [
   { id: 'trail', label: 'Trail', cost: 'medium', description: 'Echo color behind moving geometry.' },
   { id: 'chromatic', label: 'Chrom', name: 'Chromatic', cost: 'low', description: 'Separate color channels across the form.' },
   { id: 'kaleidoscope', label: 'Kaleid', name: 'Kaleidoscope', cost: 'medium', description: 'Mirror light into a kaleidoscopic pattern.' },
-  { id: 'ripple', label: 'Ripple', cost: 'low', description: 'Send a radial wave across the view.' },
+  { id: 'ripple', label: 'Ripple', cost: 'low', description: 'Pulse vertices and structural edges in radial waves.' },
   { id: 'spiral', label: 'Spiral', cost: 'low', description: 'Twist light around the view axis.' },
   { id: 'fog', label: 'Fog', cost: 'low', description: 'Fade the structure into atmospheric depth.' },
   { id: 'heat', label: 'Heat', cost: 'low', description: 'Map warm energy bands across the form.' },
@@ -104,7 +105,7 @@ const ANIMATED_CANVAS_FX = new Set([
   'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
 ]);
 const PATTERNED_CANVAS_FX = new Set([
-  'kaleidoscope', 'ripple', 'spiral', 'voronoi', 'caustic', 'iridescent',
+  'kaleidoscope', 'spiral', 'voronoi', 'caustic', 'iridescent',
   'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
 ]);
 const MOTION_PRESETS = [
@@ -285,6 +286,9 @@ const MOTION_FRAME_INTERVAL_MS = 33;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
+const MOBILE_E8_EDGE_LIMIT = 1080;
+const RIPPLE_COLOR_BANDS = 12;
+const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
 const DRAW_SELECTED = 2;
 const DRAW_NEIGHBOR = 4;
@@ -849,6 +853,7 @@ let subsetSets = {};
 let subsetLists = {};
 let petrieCycle = [];
 let petrieSet = EMPTY_SET;
+let e8ChordEdges = [];
 let simpleRootIndices = [];
 let simpleRootOrdinalByIndex = new Map();
 let cartanMatrix = [];
@@ -862,6 +867,7 @@ let sdfCanvas;
 let sdfGl;
 let sdfWebglUnavailable = false;
 let sdfRingUniformData = new Float32Array(8 * 4);
+let sdfPaletteUniformData = new Float32Array(5 * 3);
 const sdfPrograms = new Map();
 let sdfRasterCanvas;
 let sdfRasterContext;
@@ -1043,6 +1049,7 @@ function normalizeState(next) {
   if (typeof next.showContext !== 'boolean') next.showContext = true;
   if (typeof next.showPetrie !== 'boolean') next.showPetrie = false;
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
+  if (typeof next.showEdges !== 'boolean') next.showEdges = false;
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
@@ -1129,6 +1136,7 @@ function cacheElements() {
   els.contextToggle = document.getElementById('context-toggle');
   els.petrieToggle = document.getElementById('petrie-toggle');
   els.mirrorsToggle = document.getElementById('mirrors-toggle');
+  els.edgesToggle = document.getElementById('edges-toggle');
   els.verticesToggle = document.getElementById('vertices-toggle');
   els.modelSelect = document.getElementById('model-select');
   els.bloomTimelineField = document.getElementById('bloom-timeline-field');
@@ -1365,6 +1373,7 @@ function bindEvents() {
   els.contextToggle.addEventListener('change', () => setSettingState({ showContext: els.contextToggle.checked }, 'context-toggle'));
   els.petrieToggle.addEventListener('change', () => setSettingState({ showPetrie: els.petrieToggle.checked }, 'petrie-toggle'));
   els.mirrorsToggle.addEventListener('change', () => setSettingState({ showMirrors: els.mirrorsToggle.checked }, 'mirrors-toggle'));
+  els.edgesToggle.addEventListener('change', () => setSettingState({ showEdges: els.edgesToggle.checked }, 'edges-toggle'));
   els.verticesToggle.addEventListener('change', () => setSettingState({ showVertices: els.verticesToggle.checked }, 'vertices-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
@@ -3618,6 +3627,7 @@ function syncControlValues() {
   els.contextToggle.checked = state.showContext;
   els.petrieToggle.checked = state.showPetrie;
   els.mirrorsToggle.checked = state.showMirrors;
+  els.edgesToggle.checked = state.showEdges;
   els.verticesToggle.checked = state.showVertices;
   syncSubsetControls();
   els.rootRange.value = String(state.selectedRoot ?? 0);
@@ -4563,9 +4573,38 @@ function deferSettingsCanvasResize() {
   return false;
 }
 
+function buildMobileE8ChordEdges(roots, limit = MOBILE_E8_EDGE_LIMIT) {
+  if (!Array.isArray(roots) || roots.length < 2) return [];
+  const candidates = [];
+  for (let i = 0; i < roots.length; i++) {
+    const a = roots[i];
+    if (!Array.isArray(a)) continue;
+    for (let j = i + 1; j < roots.length; j++) {
+      const b = roots[j];
+      if (!Array.isArray(b)) continue;
+      let distanceSquared = 0;
+      for (let axis = 0; axis < Math.min(a.length, b.length); axis++) {
+        const delta = a[axis] - b[axis];
+        distanceSquared += delta * delta;
+      }
+      // The desktop E8 edge overlay begins with the shortest non-zero chord
+      // class (distance sqrt(2)). Sampling that graph keeps its visual grammar
+      // without asking a phone Canvas to animate all 6,720 segments.
+      if (Math.abs(distanceSquared - 2) < 0.01) candidates.push([i, j]);
+    }
+  }
+  if (candidates.length <= limit) return candidates;
+  const sampled = [];
+  const stride = candidates.length / limit;
+  for (let index = 0; index < limit; index++) sampled.push(candidates[Math.floor(index * stride)]);
+  return sampled;
+}
+
 function preparePoints() {
   const proj = data.e8.proj2d;
   const roots = data.e8.roots8d || [];
+  e8ChordEdges = buildMobileE8ChordEdges(roots);
+  metrics.e8ChordEdgeCount = e8ChordEdges.length;
   platonicGeometry = { ...(data.platonic || {}), ...(data.stellations || {}) };
   platonicFaceCache = new Map();
   polytope4DGeometry = data.polytopes4d || {};
@@ -4809,6 +4848,17 @@ function render() {
       modelProjectedVertices: 0,
       modelEdges: 0,
       modelEdgeStrokes: 0,
+      e8ChordEdges: 0,
+      e8ChordEdgeStrokes: 0,
+      e8EdgesSkippedForInteraction: 0,
+      ripplePointCount: 0,
+      rippleEdgeSegments: 0,
+      rippleEdgeStrokes: 0,
+      rippleColorBands: 0,
+      rippleBrightnessBands: 0,
+      nativeFxApplied: false,
+      nativeFxPrimitives: 0,
+      nativeFxRenderer: null,
       modelFaces: 0,
       modelFaceFills: 0,
       modelVertexFills: 0,
@@ -4840,7 +4890,7 @@ function render() {
     if (state.modelMode === 'bloom') {
       const visibleBloomPoints = projectBloomIntoCache(layout, drawStats);
       const projectedAllFrame = projectedPointFrameMetrics(visibleBloomPoints);
-      drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
+      drawBloomModel(layout, paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -4865,6 +4915,24 @@ function render() {
 
     projectPointsIntoCache(layout, drawStats);
     const projectedAllFrame = projectedPointFrameMetrics(allRootList);
+
+    if (state.showEdges && !interactionLiteFrame) {
+      const edgeStats = drawPaletteEdgeField(points, e8ChordEdges, layout, paletteSet, {
+        baseAlpha: 0.22,
+        baseWidth: 0.72,
+        shadowBlur: 1.4,
+        alwaysPalette: true,
+        composite: 'lighter',
+      });
+      drawStats.e8ChordEdges = edgeStats.segments;
+      drawStats.e8ChordEdgeStrokes = edgeStats.strokes;
+      drawStats.modelEdges += edgeStats.segments;
+      drawStats.modelEdgeStrokes += edgeStats.strokes;
+      recordRippleEdgeStats(drawStats, edgeStats);
+    }
+    else if (state.showEdges) {
+      drawStats.e8EdgesSkippedForInteraction = e8ChordEdges.length;
+    }
 
     if (state.showMirrors) {
       const mirrorStats = drawMirrorLines(layout, paletteSet);
@@ -4954,18 +5022,7 @@ function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
   ctx.globalCompositeOperation = 'source-atop';
   ctx.globalAlpha = clamp(0.1 + strength * 0.11, 0.12, 0.28);
 
-  if (mode === 'ripple') {
-    ctx.strokeStyle = 'rgba(106,255,232,0.82)';
-    ctx.lineWidth = 2;
-    const spacing = 34;
-    const offset = (stylePhase * 26) % spacing;
-    for (let radius = offset; radius < Math.hypot(width, height); radius += spacing) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.stroke();
-      primitives++;
-    }
-  } else if (mode === 'voronoi') {
+  if (mode === 'voronoi') {
     ctx.strokeStyle = 'rgba(106,255,232,0.72)';
     ctx.lineWidth = 1.15;
     const cell = 54;
@@ -5054,7 +5111,11 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   const fxOverlay = drawForegroundFxOverlay(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
   drawStats.fxOverlayApplied = fxOverlay.applied;
   drawStats.fxOverlayPrimitives = fxOverlay.primitives;
-  drawStats.fxRenderer = state.modelMode === 'sdf' ? 'sdf-shader' : fxOverlay.renderer;
+  drawStats.fxRenderer = state.modelMode === 'sdf'
+    ? 'sdf-shader'
+    : drawStats.nativeFxApplied
+      ? drawStats.nativeFxRenderer
+      : fxOverlay.renderer;
   metrics.renderCount++;
   metrics.lastDrawStats = drawStats;
   metrics.lastRenderAllFrame = projectedAllFrame;
@@ -5139,7 +5200,14 @@ function projectPointsIntoCache(layout, drawStats) {
       p.sy = flatY;
       p.depth = 0;
     }
-    p.size = p.baseSize * pointScale * depthSize;
+    const rippleScale = ripplePointScale(p.r);
+    p.size = p.baseSize * pointScale * depthSize * rippleScale;
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
     drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
     drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
@@ -5258,7 +5326,14 @@ function projectBloomIntoCache(layout, drawStats) {
     p.sx = projected.x;
     p.sy = projected.y;
     p.depth = projected.z;
-    p.size = Math.max(1.35, p.bloomBaseSize * state.pointScale * (0.75 + projected.perspective * 0.34));
+    const rippleScale = ripplePointScale(Math.hypot(p.bloomX, p.bloomY));
+    p.size = Math.max(1.35, p.bloomBaseSize * state.pointScale * (0.75 + projected.perspective * 0.34) * rippleScale);
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
     drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
     drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
@@ -5279,7 +5354,7 @@ function projectBloomIntoCache(layout, drawStats) {
   return visibleIndices;
 }
 
-function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
+function drawBloomModel(layout, paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
   if (visibleContext && state.bloomAmount >= 0.95 && !interactionLiteFrame) {
     const rayStats = drawNeighborRays(visibleContext, paletteSet);
     drawStats.rays = rayStats.rays;
@@ -5297,27 +5372,40 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
   const sourceEdgeAlpha = Math.max(0, 1 - phaseMorph * 1.2) * 0.82;
   const trailAlpha = Math.sin(phaseTwin * Math.PI) * 0.32;
   let sourceEdges = 0;
+  let sourceEdgeStrokes = 0;
   let twinTrails = 0;
 
   if (sourceEdgeAlpha > 0.005) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = sourceEdgeAlpha;
-    ctx.strokeStyle = paletteSet.colors[0];
-    ctx.lineWidth = interactionLiteFrame ? 1.35 : 2.05;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (const edge of sourceShape?.edges || []) {
-      const a = points[edge[0]];
-      const b = points[edge[1]];
-      if (!a?.bloomVisible || !b?.bloomVisible) continue;
-      ctx.moveTo(a.sx, a.sy);
-      ctx.lineTo(b.sx, b.sy);
-      sourceEdges++;
+    const visibleSourceEdges = (sourceShape?.edges || []).filter(edge => points[edge[0]]?.bloomVisible && points[edge[1]]?.bloomVisible);
+    sourceEdges = visibleSourceEdges.length;
+    if (state.fxMode === 'ripple') {
+      const edgeStats = drawPaletteEdgeField(points, visibleSourceEdges, layout, paletteSet, {
+        baseAlpha: sourceEdgeAlpha,
+        baseWidth: interactionLiteFrame ? 1.35 : 2.05,
+        shadowBlur: interactionLiteFrame ? 0 : 2.2,
+        composite: 'lighter',
+      });
+      sourceEdgeStrokes = edgeStats.strokes;
+      recordRippleEdgeStats(drawStats, edgeStats);
+    } else {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = sourceEdgeAlpha;
+      ctx.strokeStyle = paletteSet.colors[0];
+      ctx.lineWidth = interactionLiteFrame ? 1.35 : 2.05;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const edge of visibleSourceEdges) {
+        const a = points[edge[0]];
+        const b = points[edge[1]];
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+      }
+      ctx.stroke();
+      ctx.restore();
+      sourceEdgeStrokes = visibleSourceEdges.length ? 1 : 0;
     }
-    ctx.stroke();
-    ctx.restore();
   }
 
   if (trailAlpha > 0.005 && !interactionLiteFrame) {
@@ -5382,7 +5470,7 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
   ctx.restore();
   drawStats.modelVertices = ordered.length;
   drawStats.modelEdges = sourceEdges + twinTrails;
-  drawStats.modelEdgeStrokes = (sourceEdges ? 1 : 0) + (twinTrails ? 1 : 0);
+  drawStats.modelEdgeStrokes = sourceEdgeStrokes + (twinTrails ? 1 : 0);
   drawStats.bloomSourceEdges = sourceEdges;
   drawStats.bloomTwinTrails = twinTrails;
 }
@@ -5421,8 +5509,12 @@ uniform float uAniso;
 uniform float uFxStrength;
 uniform float uFxMode;
 uniform float uMotionPulse;
-uniform vec3 uColorInner;
-uniform vec3 uColorOuter;
+uniform float uRippleTime;
+uniform vec3 uPalette0;
+uniform vec3 uPalette1;
+uniform vec3 uPalette2;
+uniform vec3 uPalette3;
+uniform vec3 uPalette4;
 
 float gNearestRing = 0.0;
 
@@ -5448,7 +5540,11 @@ float sdf(vec3 p) {
     for (int offset = -ROOT_NEIGHBOR_SPAN; offset <= ROOT_NEIGHBOR_SPAN; offset++) {
       float rootAngle = nearestAngle + float(offset) * ring.z;
       vec3 root = vec3(ring.x * cos(rootAngle), ring.x * sin(rootAngle), ring.w);
-      float rootDistance = length(p - root) - sphereRadius;
+      float currentSphereRadius = sphereRadius;
+      if (uFxMode > 5.5 && uFxMode < 6.5) {
+        currentSphereRadius *= 1.0 + uFxStrength * 0.09 * sin(ring.x * 8.0 - uRippleTime);
+      }
+      float rootDistance = length(p - root) - currentSphereRadius;
       if (rootDistance < nearestDistance) {
         nearestDistance = rootDistance;
         nearestRing = float(ringIndex) / 7.0;
@@ -5499,6 +5595,14 @@ float ambientOcclusion(vec3 p, vec3 n) {
 
 vec3 fxSpectrum(float value) {
   return 0.55 + 0.45 * cos(6.2831853 * (value + vec3(0.0, 0.33, 0.67)));
+}
+
+vec3 paletteGradient(float value) {
+  float scaled = clamp(value, 0.0, 1.0) * 4.0;
+  if (scaled < 1.0) return mix(uPalette0, uPalette1, scaled);
+  if (scaled < 2.0) return mix(uPalette1, uPalette2, scaled - 1.0);
+  if (scaled < 3.0) return mix(uPalette2, uPalette3, scaled - 2.0);
+  return mix(uPalette3, uPalette4, scaled - 3.0);
 }
 
 void main() {
@@ -5556,7 +5660,7 @@ void main() {
   float fresnel = pow(1.0 - viewFacing, 2.4);
   float shadow = softShadow(p + n * 0.006, keyDirection);
   float ao = ambientOcclusion(p, n);
-  vec3 baseColor = mix(uColorInner, uColorOuter, ringMix);
+  vec3 baseColor = paletteGradient(ringMix);
   float hemisphere = 0.5 + 0.5 * n.y;
   // Start from a bright, continuous material response instead of a dark
   // Lambert base. The old low ambient at grazing angles drew a black ring
@@ -5587,8 +5691,9 @@ void main() {
     float band = 0.55 + 0.45 * abs(cos(angle * 6.0));
     color = mix(color, fxSpectrum(angle / 6.2831853) * band, fxMix * 0.46);
   } else if (uFxMode < 6.5 && uFxMode > 5.5) {
-    float band = 0.5 + 0.5 * sin(radius * 18.0 - uTime * 1.6);
-    color += vec3(0.2, 0.82, 1.0) * band * fxMix * 0.34;
+    float wave = sin(radius * 8.0 - uRippleTime);
+    color *= clamp(1.0 + uFxStrength * 0.7 * wave, 0.24, 1.7);
+    color += baseColor * max(wave, 0.0) * fxMix * 0.16;
   } else if (uFxMode < 7.5 && uFxMode > 6.5) {
     float band = 0.5 + 0.5 * sin(angle * 8.0 + radius * 15.0 - uTime);
     color = mix(color, vec3(1.0, 0.62, 0.18) * (0.6 + band * 0.6), fxMix * 0.36);
@@ -5696,7 +5801,8 @@ function createSdfProgram(profileKey) {
   }
   const uniformNames = [
     'uResolution', 'uScreenOffset', 'uTime', 'uCameraPos', 'uCameraBasis', 'uFov', 'uRings',
-    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uFxMode', 'uMotionPulse', 'uColorInner', 'uColorOuter',
+    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uFxMode', 'uMotionPulse', 'uRippleTime',
+    'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
   ];
   const uniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
   const position = gl.getAttribLocation(program, 'aPosition');
@@ -5885,8 +5991,13 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
       forward[0], forward[1], forward[2],
     ]);
     const rootScale = updateSdfRingUniforms();
-    const inner = colorChannels(paletteSet.colors[0]).map(channel => channel / 255);
-    const outer = colorChannels(paletteSet.colors[paletteSet.colors.length - 1]).map(channel => channel / 255);
+    for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
+      const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
+      const offset = paletteIndex * 3;
+      sdfPaletteUniformData[offset] = channels[0] / 255;
+      sdfPaletteUniformData[offset + 1] = channels[1] / 255;
+      sdfPaletteUniformData[offset + 2] = channels[2] / 255;
+    }
     const targetX = window.innerWidth * 0.5 + state.panX;
     const targetY = layout.cy + state.panY;
     const screenOffset = [
@@ -5908,8 +6019,12 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     gl.uniform1f(uniforms.uFxStrength, state.fxStrength);
     gl.uniform1f(uniforms.uFxMode, MOBILE_FX_MODE_INDEX[state.fxMode] || 0);
     gl.uniform1f(uniforms.uMotionPulse, state.softFx ? state.fxStrength : 0);
-    gl.uniform3f(uniforms.uColorInner, inner[0], inner[1], inner[2]);
-    gl.uniform3f(uniforms.uColorOuter, outer[0], outer[1], outer[2]);
+    gl.uniform1f(uniforms.uRippleTime, ripplePhaseAngle());
+    gl.uniform3f(uniforms.uPalette0, sdfPaletteUniformData[0], sdfPaletteUniformData[1], sdfPaletteUniformData[2]);
+    gl.uniform3f(uniforms.uPalette1, sdfPaletteUniformData[3], sdfPaletteUniformData[4], sdfPaletteUniformData[5]);
+    gl.uniform3f(uniforms.uPalette2, sdfPaletteUniformData[6], sdfPaletteUniformData[7], sdfPaletteUniformData[8]);
+    gl.uniform3f(uniforms.uPalette3, sdfPaletteUniformData[9], sdfPaletteUniformData[10], sdfPaletteUniformData[11]);
+    gl.uniform3f(uniforms.uPalette4, sdfPaletteUniformData[12], sdfPaletteUniformData[13], sdfPaletteUniformData[14]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     drawStats.modelVertices = points.length;
@@ -6193,6 +6308,145 @@ function projectedPolygonArea(face, projected) {
   return area * 0.5;
 }
 
+function paletteChannelsAt(paletteSet, value) {
+  const colors = paletteSet?.colors?.length ? paletteSet.colors : RENDER_PALETTES.gold.colors;
+  if (colors.length === 1) return colorChannels(colors[0]);
+  const scaled = clamp(value, 0, 1) * (colors.length - 1);
+  const lowerIndex = Math.min(colors.length - 1, Math.floor(scaled));
+  const upperIndex = Math.min(colors.length - 1, lowerIndex + 1);
+  const amount = scaled - lowerIndex;
+  const lower = colorChannels(colors[lowerIndex]);
+  const upper = colorChannels(colors[upperIndex]);
+  return lower.map((channel, index) => Math.round(channel + (upper[index] - channel) * amount));
+}
+
+function paletteColorAt(paletteSet, value) {
+  const channels = paletteChannelsAt(paletteSet, value);
+  return `rgb(${channels[0]},${channels[1]},${channels[2]})`;
+}
+
+function ripplePhaseAngle() {
+  // stylePhase advances at a battery-friendly mobile rate. This multiplier
+  // restores the roughly four-radians-per-second wave travel used on desktop.
+  return stylePhase * TAU * 2.4;
+}
+
+function rippleWaveForRadius(radius) {
+  return Math.sin(Math.max(0, radius) * 8 - ripplePhaseAngle());
+}
+
+function ripplePointScale(radius) {
+  if (state.fxMode !== 'ripple') return 1;
+  return clamp(1 + state.fxStrength * 0.4 * rippleWaveForRadius(radius), 0.42, 1.62);
+}
+
+function projectedRadius(point, layout) {
+  const x = Number.isFinite(point?.sx) ? point.sx : point?.x;
+  const y = Number.isFinite(point?.sy) ? point.sy : point?.y;
+  const originX = layout.cx + state.panX;
+  const originY = layout.cy + state.panY;
+  return Math.hypot((x || 0) - originX, (y || 0) - originY) / Math.max(1, layout.scale);
+}
+
+function drawPaletteEdgeField(projected, edges, layout, paletteSet, options = {}) {
+  if (!Array.isArray(edges) || !edges.length) {
+    return { segments: 0, strokes: 0, colorBands: 0, brightnessBands: 0, ripple: false };
+  }
+  const ripple = state.fxMode === 'ripple';
+  const colorBandCount = Math.max(1, Number(options.colorBands) || RIPPLE_COLOR_BANDS);
+  const brightnessBandCount = ripple ? RIPPLE_BRIGHTNESS_BANDS : 1;
+  const buckets = Array.from({ length: colorBandCount * brightnessBandCount }, () => []);
+  const usedColors = new Set();
+  const usedBrightness = new Set();
+  const colorOffset = Number(options.colorOffset) || 0;
+  let segments = 0;
+
+  for (const edge of edges) {
+    const a = projected[edge[0]];
+    const b = projected[edge[1]];
+    if (!a || !b) continue;
+    const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+    const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+    const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+    const by = Number.isFinite(b.sy) ? b.sy : b.y;
+    if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+    const midpointX = (ax + bx) * 0.5;
+    const midpointY = (ay + by) * 0.5;
+    const radius = Math.hypot(
+      midpointX - layout.cx - state.panX,
+      midpointY - layout.cy - state.panY,
+    ) / Math.max(1, layout.scale);
+    const wave = rippleWaveForRadius(radius);
+    const wave01 = ripple ? clamp(0.5 + wave * 0.5, 0, 1) : 0.5;
+    const brightnessBand = ripple
+      ? Math.min(brightnessBandCount - 1, Math.floor(wave01 * brightnessBandCount))
+      : 0;
+    const angleT = (Math.atan2(midpointY - layout.cy - state.panY, midpointX - layout.cx - state.panX) + Math.PI) / TAU;
+    const topologyT = ((edge[0] * 37 + edge[1] * 17) % 97) / 96;
+    const colorT = ((angleT * 0.46 + topologyT * 0.54 + colorOffset) % 1 + 1) % 1;
+    const colorBand = Math.min(colorBandCount - 1, Math.floor(colorT * colorBandCount));
+    buckets[brightnessBand * colorBandCount + colorBand].push(edge);
+    usedColors.add(colorBand);
+    usedBrightness.add(brightnessBand);
+    segments++;
+  }
+
+  const baseAlpha = clamp(Number(options.baseAlpha) || 0.72, 0.02, 1);
+  const baseWidth = Math.max(0.35, Number(options.baseWidth) || 1.2);
+  let strokes = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = options.composite || 'source-over';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let brightnessBand = 0; brightnessBand < brightnessBandCount; brightnessBand++) {
+    const wave01 = brightnessBandCount === 1 ? 0.5 : brightnessBand / (brightnessBandCount - 1);
+    const brightness = ripple ? 0.28 + wave01 * 1.22 : 1;
+    for (let colorBand = 0; colorBand < colorBandCount; colorBand++) {
+      const bucket = buckets[brightnessBand * colorBandCount + colorBand];
+      if (!bucket.length) continue;
+      const color = paletteColorAt(paletteSet, colorBandCount === 1 ? 0 : colorBand / (colorBandCount - 1));
+      ctx.globalAlpha = clamp(baseAlpha * brightness, 0.03, 1);
+      ctx.lineWidth = baseWidth * (ripple ? 0.8 + wave01 * 0.38 : 1);
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = options.shadowBlur ? Number(options.shadowBlur) * (ripple ? 0.45 + wave01 * 0.8 : 1) : 0;
+      ctx.beginPath();
+      for (const edge of bucket) {
+        const a = projected[edge[0]];
+        const b = projected[edge[1]];
+        const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+        const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+        const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+        const by = Number.isFinite(b.sy) ? b.sy : b.y;
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      }
+      ctx.stroke();
+      strokes++;
+    }
+  }
+  ctx.restore();
+  return {
+    segments,
+    strokes,
+    colorBands: usedColors.size,
+    brightnessBands: usedBrightness.size,
+    ripple,
+  };
+}
+
+function recordRippleEdgeStats(drawStats, edgeStats) {
+  if (state.fxMode !== 'ripple' || !edgeStats?.segments) return false;
+  drawStats.rippleEdgeSegments += edgeStats.segments;
+  drawStats.rippleEdgeStrokes += edgeStats.strokes;
+  drawStats.rippleColorBands = Math.max(drawStats.rippleColorBands, edgeStats.colorBands);
+  drawStats.rippleBrightnessBands = Math.max(drawStats.rippleBrightnessBands, edgeStats.brightnessBands);
+  drawStats.nativeFxApplied = true;
+  drawStats.nativeFxPrimitives += edgeStats.segments;
+  drawStats.nativeFxRenderer = 'geometry-ripple';
+  return true;
+}
+
 function modelEdgeKey(a, b) {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
@@ -6282,32 +6536,42 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     drawStats.modelHiddenEdgeAlpha = isStar ? 0.26 : 0.12;
   }
 
-  ctx.save();
   const edgeWidth = interactionLiteFrame ? 1.5 : 2.2;
   const edgeAlpha = interactionLiteFrame ? 0.82 : 0.96;
-  ctx.lineWidth = edgeWidth;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.globalAlpha = edgeAlpha;
-  ctx.strokeStyle = paletteSet.colors[0];
-  ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
-  ctx.shadowBlur = interactionLiteFrame ? 0 : 3;
-  ctx.beginPath();
-  for (const edge of visibleEdges) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, visibleEdges, layout, paletteSet, {
+      baseAlpha: edgeAlpha,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : 3,
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes + (interactionLiteFrame ? 0 : 1);
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = edgeAlpha;
+    ctx.strokeStyle = paletteSet.colors[0];
+    ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+    ctx.shadowBlur = interactionLiteFrame ? 0 : 3;
+    ctx.beginPath();
+    for (const edge of visibleEdges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = edges.length ? (interactionLiteFrame ? 1 : 2) : 0;
   }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = edges.length ? (interactionLiteFrame ? 1 : 2) : 0;
   drawStats.modelVisibleEdges = visibleEdges.length;
   drawStats.modelHiddenEdges = Math.max(0, edges.length - visibleEdges.length);
   drawStats.modelEdgeWidth = edgeWidth;
   drawStats.modelEdgeAlpha = edgeAlpha;
   drawStats.modelEdgeColor = paletteSet.colors[0];
-  ctx.restore();
 
   if (state.showVertices) {
     const ordered = projected
@@ -6317,7 +6581,14 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     ctx.globalAlpha = state.pointOpacity;
     for (const entry of ordered) {
       const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
-      const radius = Math.max(2.4, 4.2 * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
+      const rippleScale = ripplePointScale(projectedRadius(entry.point, layout));
+      const radius = Math.max(2.4, 4.2 * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse * rippleScale);
+      if (state.fxMode === 'ripple') {
+        drawStats.ripplePointCount++;
+        drawStats.nativeFxApplied = true;
+        drawStats.nativeFxPrimitives++;
+        drawStats.nativeFxRenderer = 'geometry-ripple';
+      }
       ctx.beginPath();
       ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
       ctx.fillStyle = paletteSet.colors[entry.idx % paletteSet.colors.length];
@@ -6383,31 +6654,42 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   drawStats.polytope4dLabel = POLYTOPE4D_LABELS[polyName] || polyName;
   const frame = projectedModelFrameMetrics(projected);
 
-  ctx.save();
   const dense = polyName === '600cell' || polyName === '120cell';
   const edgeWidth = dense ? (interactionLiteFrame ? 0.72 : 1.05) : (interactionLiteFrame ? 1.25 : 1.9);
   const edgeAlpha = dense ? (interactionLiteFrame ? 0.58 : 0.74) : (interactionLiteFrame ? 0.82 : 0.96);
-  ctx.lineWidth = edgeWidth;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.globalAlpha = edgeAlpha;
-  ctx.strokeStyle = paletteSet.colors[0];
-  ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
-  ctx.shadowBlur = interactionLiteFrame ? 0 : (dense ? 1.5 : 3);
-  ctx.beginPath();
-  for (const edge of poly.edges || []) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, poly.edges || [], layout, paletteSet, {
+      baseAlpha: dense ? edgeAlpha * 0.62 : edgeAlpha * 0.84,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : (dense ? 0.8 : 2.2),
+      composite: 'source-over',
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes;
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = edgeAlpha;
+    ctx.strokeStyle = paletteSet.colors[0];
+    ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+    ctx.shadowBlur = interactionLiteFrame ? 0 : (dense ? 1.5 : 3);
+    ctx.beginPath();
+    for (const edge of poly.edges || []) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
   }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
   drawStats.modelEdgeWidth = edgeWidth;
   drawStats.modelEdgeAlpha = edgeAlpha;
   drawStats.modelEdgeColor = paletteSet.colors[0];
-  ctx.restore();
 
   if (state.showVertices) {
     const classes = Array.isArray(poly.conjugacy_classes) ? poly.conjugacy_classes : null;
@@ -6420,7 +6702,14 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
       const cls = classes ? classes[entry.idx] || 0 : entry.idx;
       const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
       const baseRadius = dense ? 2.7 : 4.2;
-      const radius = Math.max(2, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
+      const rippleScale = ripplePointScale(projectedRadius(entry.point, layout));
+      const radius = Math.max(2, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse * rippleScale);
+      if (state.fxMode === 'ripple') {
+        drawStats.ripplePointCount++;
+        drawStats.nativeFxApplied = true;
+        drawStats.nativeFxPrimitives++;
+        drawStats.nativeFxRenderer = 'geometry-ripple';
+      }
       ctx.beginPath();
       ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
       ctx.fillStyle = paletteSet.colors[cls % paletteSet.colors.length];
@@ -6490,22 +6779,33 @@ function drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   drawStats.dynkinSelectedNode = dynkinSelectedNodeIndex();
   const frame = projectedModelFrameMetrics(projected);
 
-  ctx.save();
-  ctx.lineWidth = interactionLiteFrame ? 2 : 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = paletteSet.petrieStroke;
-  ctx.beginPath();
-  for (const edge of diagram.edges || []) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+  const edgeWidth = interactionLiteFrame ? 2 : 2.5;
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, diagram.edges || [], layout, paletteSet, {
+      baseAlpha: 0.88,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : 2,
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes;
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = paletteSet.petrieStroke;
+    ctx.beginPath();
+    for (const edge of diagram.edges || []) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = diagram.edges?.length ? 1 : 0;
   }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = diagram.edges?.length ? 1 : 0;
-  ctx.restore();
 
   const selectedNode = drawStats.dynkinSelectedNode;
   ctx.save();
@@ -6515,7 +6815,14 @@ function drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   for (const point of projected) {
     const isSelected = point.index === selectedNode;
     const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.5) * 0.06 * state.fxStrength : 1;
-    const radius = (isSelected ? 17 : 14) * state.pointScale * pulse;
+    const rippleScale = ripplePointScale(projectedRadius(point, layout));
+    const radius = (isSelected ? 17 : 14) * state.pointScale * pulse * rippleScale;
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
     if (isSelected && !interactionLiteFrame) {
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius + 10, 0, TAU);
