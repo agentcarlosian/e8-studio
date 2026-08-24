@@ -100,9 +100,10 @@ const MOBILE_FX_MODES = [
 ];
 const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
 const MOBILE_FX_MODE_INDEX = Object.freeze(Object.fromEntries(MOBILE_FX_MODES.map((mode, index) => [mode.id, index])));
-const ANIMATED_CANVAS_FX = new Set([
-  'kaleidoscope', 'ripple', 'spiral', 'aura', 'caustic', 'iridescent',
-  'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
+const ANIMATED_MOBILE_FX = new Set([
+  'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripple', 'spiral',
+  'aura', 'caustic', 'iridescent', 'flowfield', 'plasma', 'kaleido6',
+  'nebula', 'hologram', 'crystal',
 ]);
 const PATTERNED_CANVAS_FX = new Set([
   'kaleidoscope', 'spiral', 'voronoi', 'caustic', 'iridescent',
@@ -861,6 +862,10 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let fxSourceCanvas;
+let fxSourceContext;
+let fxTintCanvas;
+let fxTintContext;
 let backgroundCanvas;
 let backgroundCtx;
 let sdfCanvas;
@@ -4859,6 +4864,9 @@ function render() {
       nativeFxApplied: false,
       nativeFxPrimitives: 0,
       nativeFxRenderer: null,
+      canvasFxPassApplied: false,
+      canvasFxPassPrimitives: 0,
+      canvasFxPassRenderer: null,
       modelFaces: 0,
       modelFaceFills: 0,
       modelVertexFills: 0,
@@ -5006,6 +5014,325 @@ function render() {
   }
 }
 
+function ensureCanvasFxBuffers() {
+  if (!fxSourceCanvas) {
+    fxSourceCanvas = document.createElement('canvas');
+    fxSourceContext = fxSourceCanvas.getContext('2d', { alpha: true });
+    fxTintCanvas = document.createElement('canvas');
+    fxTintContext = fxTintCanvas.getContext('2d', { alpha: true });
+  }
+  if (!fxSourceContext || !fxTintContext) return false;
+  if (fxSourceCanvas.width !== canvas.width || fxSourceCanvas.height !== canvas.height) {
+    fxSourceCanvas.width = canvas.width;
+    fxSourceCanvas.height = canvas.height;
+    fxTintCanvas.width = canvas.width;
+    fxTintCanvas.height = canvas.height;
+  }
+  return true;
+}
+
+function captureCanvasFxSource() {
+  if (!ensureCanvasFxBuffers()) return false;
+  fxSourceContext.setTransform(1, 0, 0, 1, 0, 0);
+  fxSourceContext.globalAlpha = 1;
+  fxSourceContext.globalCompositeOperation = 'source-over';
+  fxSourceContext.filter = 'none';
+  fxSourceContext.clearRect(0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
+  fxSourceContext.drawImage(canvas, 0, 0);
+  return true;
+}
+
+function tintCanvasFxSource(color) {
+  fxTintContext.setTransform(1, 0, 0, 1, 0, 0);
+  fxTintContext.globalAlpha = 1;
+  fxTintContext.globalCompositeOperation = 'source-over';
+  fxTintContext.filter = 'none';
+  fxTintContext.clearRect(0, 0, fxTintCanvas.width, fxTintCanvas.height);
+  fxTintContext.drawImage(fxSourceCanvas, 0, 0);
+  fxTintContext.globalCompositeOperation = 'source-in';
+  fxTintContext.fillStyle = color;
+  fxTintContext.fillRect(0, 0, fxTintCanvas.width, fxTintCanvas.height);
+  fxTintContext.globalCompositeOperation = 'source-over';
+  return fxTintCanvas;
+}
+
+function drawCanvasFxImage(source, width, height, options = {}) {
+  const cx = options.cx ?? width * 0.5;
+  const cy = options.cy ?? height * 0.5;
+  ctx.save();
+  ctx.globalAlpha = options.alpha ?? 1;
+  ctx.globalCompositeOperation = options.composite || 'source-over';
+  ctx.filter = options.filter || 'none';
+  ctx.translate(cx + (options.dx || 0), cy + (options.dy || 0));
+  if (options.rotation) ctx.rotate(options.rotation);
+  const scaleX = options.scaleX ?? options.scale ?? 1;
+  const scaleY = options.scaleY ?? options.scale ?? 1;
+  ctx.scale(scaleX, scaleY);
+  ctx.translate(-cx, -cy);
+  ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, width, height);
+  ctx.restore();
+}
+
+function clipCanvasFxWedge(cx, cy, radius, start, end) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(start) * radius, cy + Math.sin(start) * radius);
+  ctx.arc(cx, cy, radius, start, end);
+  ctx.closePath();
+  ctx.clip();
+}
+
+function drawCanvasKaleidoscope(width, height, cx, cy, segments, phase, strength) {
+  const wedge = TAU / segments;
+  const radius = Math.hypot(width, height) * 1.15;
+  for (let index = 0; index < segments; index++) {
+    const start = index * wedge - Math.PI * 0.5;
+    ctx.save();
+    clipCanvasFxWedge(cx, cy, radius, start, start + wedge + 0.002);
+    ctx.translate(cx, cy);
+    ctx.rotate(index * wedge + phase * 0.035);
+    if (index % 2) ctx.scale(-1, 1);
+    ctx.rotate(-index * wedge);
+    ctx.translate(-cx, -cy);
+    ctx.globalAlpha = 0.72 + strength * 0.16;
+    ctx.globalCompositeOperation = index % 3 === 0 ? 'lighter' : 'source-over';
+    ctx.drawImage(fxSourceCanvas, 0, 0, fxSourceCanvas.width, fxSourceCanvas.height, 0, 0, width, height);
+    ctx.restore();
+  }
+  return segments;
+}
+
+function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
+  const mode = state.fxMode;
+  if (mode === 'none' || mode === 'ripple' || state.modelMode === 'sdf' || interactionLiteFrame) {
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped' };
+  }
+  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable' };
+
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  const layout = layoutForCanvas();
+  const cx = layout.cx + state.panX;
+  const cy = layout.cy + state.panY;
+  const phase = stylePhase * TAU;
+  const pulse = 0.5 + 0.5 * Math.sin(phase * 0.72);
+  const clear = () => ctx.clearRect(0, 0, width, height);
+  const drawOriginal = (options = {}) => drawCanvasFxImage(fxSourceCanvas, width, height, { cx, cy, ...options });
+  let primitives = 0;
+
+  clear();
+  if (mode === 'glow') {
+    drawOriginal({ alpha: 0.5 + strength * 0.14, composite: 'lighter', filter: `blur(${3 + strength * 3}px) brightness(1.8)` });
+    drawOriginal({ alpha: 0.34, composite: 'lighter', scale: 1.008 + strength * 0.006 });
+    drawOriginal();
+    primitives = 3;
+  } else if (mode === 'pulse') {
+    const scale = 0.94 + pulse * (0.07 + strength * 0.035);
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${2 + pulse * 3}px)`, scale: scale * 1.012 });
+    drawOriginal({ scale });
+    primitives = 2;
+  } else if (mode === 'trail') {
+    const drift = 4 + strength * 5;
+    const angle = phase * 0.16;
+    const colors = ['#ff4da6', '#7b5cff', '#4dffff'];
+    for (let index = colors.length - 1; index >= 0; index--) {
+      const distance = drift * (index + 1);
+      const source = tintCanvasFxSource(colors[index]);
+      drawCanvasFxImage(source, width, height, {
+        cx, cy,
+        dx: Math.cos(angle) * distance,
+        dy: Math.sin(angle) * distance,
+        rotation: (index + 1) * 0.004,
+        alpha: 0.18 + (colors.length - index) * 0.035,
+        composite: 'lighter',
+      });
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.88 });
+    primitives++;
+  } else if (mode === 'chromatic') {
+    const fringe = 2.5 + strength * 3.5 + pulse * 1.5;
+    const red = tintCanvasFxSource('#ff2c7d');
+    drawCanvasFxImage(red, width, height, { cx, cy, dx: fringe, alpha: 0.58, composite: 'lighter' });
+    const cyan = tintCanvasFxSource('#28e6ff');
+    drawCanvasFxImage(cyan, width, height, { cx, cy, dx: -fringe, alpha: 0.58, composite: 'lighter' });
+    drawOriginal({ alpha: 0.7 });
+    primitives = 3;
+  } else if (mode === 'kaleidoscope') {
+    primitives = drawCanvasKaleidoscope(width, height, cx, cy, 10, phase, strength);
+  } else if (mode === 'spiral') {
+    const maxRadius = Math.hypot(width, height) * 0.72;
+    const rings = 9;
+    for (let index = rings - 1; index >= 0; index--) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxRadius * (index + 1) / rings, 0, TAU);
+      ctx.clip();
+      drawOriginal({ rotation: (index - rings * 0.5) * (0.025 + strength * 0.012) + phase * 0.012, alpha: 0.78 + index / rings * 0.2 });
+      ctx.restore();
+      primitives++;
+    }
+  } else if (mode === 'fog') {
+    drawOriginal({ alpha: 0.42 + strength * 0.08, filter: `blur(${1.2 + strength}px)` });
+    drawOriginal({ alpha: 0.55 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const fog = ctx.createRadialGradient(cx, cy, layout.size * 0.08, cx, cy, layout.size * 0.68);
+    fog.addColorStop(0, 'rgba(230,242,255,0.02)');
+    fog.addColorStop(0.58, `rgba(180,210,235,${0.12 + strength * 0.08})`);
+    fog.addColorStop(1, `rgba(75,92,118,${0.42 + strength * 0.14})`);
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    primitives = 3;
+  } else if (mode === 'heat') {
+    drawOriginal({ alpha: 0.38 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const heat = ctx.createRadialGradient(cx, cy, 0, cx, cy, layout.size * 0.72);
+    heat.addColorStop(0, '#fff26b');
+    heat.addColorStop(0.38, '#ff8a24');
+    heat.addColorStop(0.72, '#ff214d');
+    heat.addColorStop(1, '#4b1dff');
+    ctx.globalAlpha = 0.62 + strength * 0.18;
+    ctx.fillStyle = heat;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.24, composite: 'lighter', filter: `blur(${1.5 + strength}px)` });
+    primitives = 3;
+  } else if (mode === 'edge-glow') {
+    const white = tintCanvasFxSource('#f6ffff');
+    drawCanvasFxImage(white, width, height, { cx, cy, alpha: 0.7, composite: 'lighter', filter: `blur(${1 + strength}px)` });
+    drawOriginal({ alpha: 0.66, filter: 'contrast(1.75) brightness(1.12)' });
+    drawOriginal({ alpha: 0.34, composite: 'lighter', scale: 1.006 });
+    primitives = 3;
+  } else if (mode === 'aura') {
+    const auraA = tintCanvasFxSource('#63f6ff');
+    drawCanvasFxImage(auraA, width, height, { cx, cy, alpha: 0.4, composite: 'lighter', filter: `blur(${5 + strength * 4}px)`, scale: 1.018 + pulse * 0.015 });
+    const auraB = tintCanvasFxSource('#a75cff');
+    drawCanvasFxImage(auraB, width, height, { cx, cy, alpha: 0.28, composite: 'lighter', filter: `blur(${10 + strength * 5}px)`, scale: 1.035 + pulse * 0.02 });
+    drawOriginal({ alpha: 0.88 });
+    primitives = 3;
+  } else if (mode === 'voronoi') {
+    drawOriginal({ alpha: 0.72, filter: 'contrast(1.35) saturate(1.2)' });
+    const cool = tintCanvasFxSource('#72ffe3');
+    drawCanvasFxImage(cool, width, height, { cx, cy, dx: 1.5, dy: -1.5, alpha: 0.24, composite: 'lighter' });
+    primitives = 2;
+  } else if (mode === 'caustic') {
+    drawOriginal({ alpha: 0.72, filter: 'contrast(1.2) saturate(1.18)' });
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${1.4 + pulse * 1.4}px)`, scale: 1.004 + pulse * 0.01 });
+    primitives = 2;
+  } else if (mode === 'iridescent') {
+    drawOriginal({ alpha: 0.42 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = 0.75;
+    const iridescence = typeof ctx.createConicGradient === 'function'
+      ? ctx.createConicGradient(phase * 0.035, cx, cy)
+      : ctx.createLinearGradient(cx - layout.size * 0.5, cy - layout.size * 0.5, cx + layout.size * 0.5, cy + layout.size * 0.5);
+    iridescence.addColorStop(0, '#ff52a8');
+    iridescence.addColorStop(0.25, '#64ffff');
+    iridescence.addColorStop(0.5, '#ffe36e');
+    iridescence.addColorStop(0.75, '#8f5cff');
+    iridescence.addColorStop(1, '#ff52a8');
+    ctx.fillStyle = iridescence;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.22, composite: 'lighter', scale: 1.006 });
+    primitives = 3;
+  } else if (mode === 'flowfield') {
+    const slices = 24;
+    for (let index = 0; index < slices; index++) {
+      const sourceY = Math.round(index * fxSourceCanvas.height / slices);
+      const sourceY2 = Math.round((index + 1) * fxSourceCanvas.height / slices);
+      const destY = index * height / slices;
+      const destH = height / slices + 0.5;
+      const offset = Math.sin(index * 0.86 + phase * 0.2) * (3 + strength * 6);
+      ctx.drawImage(fxSourceCanvas, 0, sourceY, fxSourceCanvas.width, Math.max(1, sourceY2 - sourceY), offset, destY, width, destH);
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.22, composite: 'lighter' });
+    primitives++;
+  } else if (mode === 'plasma') {
+    drawOriginal({ alpha: 0.34, filter: 'contrast(1.24) saturate(1.5)' });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = 0.72;
+    const plasma = ctx.createLinearGradient(0, cy - layout.size * 0.6, width, cy + layout.size * 0.6);
+    const shift = (stylePhase * 0.08) % 1;
+    plasma.addColorStop(0, shift > 0.5 ? '#00f6ff' : '#ff2bd6');
+    plasma.addColorStop(0.33, '#754dff');
+    plasma.addColorStop(0.66, '#ff6a24');
+    plasma.addColorStop(1, shift > 0.5 ? '#ff2bd6' : '#00f6ff');
+    ctx.fillStyle = plasma;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${1 + pulse}px)` });
+    primitives = 3;
+  } else if (mode === 'kaleido6') {
+    primitives = drawCanvasKaleidoscope(width, height, cx, cy, 6, phase * 1.25, strength);
+  } else if (mode === 'dof') {
+    drawOriginal({ alpha: 0.76, filter: `blur(${2.4 + strength * 2.2}px) brightness(0.82)` });
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, layout.size * 0.28, 0, TAU);
+    ctx.clip();
+    drawOriginal({ alpha: 1, filter: 'contrast(1.08)' });
+    ctx.restore();
+    drawOriginal({ alpha: 0.18, composite: 'lighter', filter: 'blur(7px)' });
+    primitives = 3;
+  } else if (mode === 'nebula') {
+    const violet = tintCanvasFxSource('#9b63ff');
+    drawCanvasFxImage(violet, width, height, { cx, cy, alpha: 0.32, composite: 'lighter', filter: `blur(${5 + pulse * 4}px)`, scale: 1.02 });
+    drawOriginal({ alpha: 0.76, filter: 'saturate(1.22)' });
+    primitives = 2;
+  } else if (mode === 'wireframe') {
+    const wire = tintCanvasFxSource('#8fffee');
+    drawCanvasFxImage(wire, width, height, { cx, cy, alpha: 0.88, composite: 'lighter', filter: 'contrast(1.8)' });
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    drawOriginal({ alpha: 0.58, scale: 0.982 });
+    ctx.restore();
+    drawOriginal({ alpha: 0.28, filter: 'grayscale(1) contrast(1.55)' });
+    primitives = 3;
+  } else if (mode === 'hologram') {
+    const hologram = tintCanvasFxSource('#55eaff');
+    drawCanvasFxImage(hologram, width, height, { cx, cy, alpha: 0.82, composite: 'lighter', filter: `blur(${0.6 + pulse}px)` });
+    drawOriginal({ alpha: 0.34 });
+    primitives = 2;
+  } else if (mode === 'xray') {
+    const xray = tintCanvasFxSource('#78fff0');
+    drawCanvasFxImage(xray, width, height, { cx, cy, alpha: 0.44, composite: 'lighter', filter: `blur(${2 + strength * 2}px)` });
+    drawCanvasFxImage(xray, width, height, { cx, cy, alpha: 0.9, filter: 'contrast(1.7) brightness(0.82)' });
+    drawOriginal({ alpha: 0.16, composite: 'lighter' });
+    primitives = 3;
+  } else if (mode === 'crystal') {
+    const segments = 12;
+    const radius = Math.hypot(width, height);
+    const colors = ['#77edff', '#a978ff', '#ff73ba', '#ffe47d'];
+    for (let index = 0; index < segments; index++) {
+      const angle = index * TAU / segments - Math.PI * 0.5;
+      const crystal = tintCanvasFxSource(colors[index % colors.length]);
+      ctx.save();
+      clipCanvasFxWedge(cx, cy, radius, angle, angle + TAU / segments + 0.002);
+      drawCanvasFxImage(crystal, width, height, {
+        cx, cy,
+        rotation: Math.sin(phase * 0.09 + index) * 0.008,
+        alpha: 0.64,
+        composite: 'lighter',
+      });
+      ctx.restore();
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.5, filter: 'contrast(1.28)' });
+    primitives++;
+  } else {
+    drawOriginal();
+    return { applied: false, primitives: 1, renderer: 'fallback' };
+  }
+
+  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}` };
+}
+
 function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
   const mode = state.fxMode;
   if (mode === 'none' || state.modelMode === 'sdf' || interactionLiteFrame) {
@@ -5108,6 +5435,15 @@ function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
 }
 
 function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) {
+  const canvasFxPass = applyNativeCanvasFx(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
+  drawStats.canvasFxPassApplied = canvasFxPass.applied;
+  drawStats.canvasFxPassPrimitives = canvasFxPass.primitives;
+  drawStats.canvasFxPassRenderer = canvasFxPass.renderer;
+  if (canvasFxPass.applied) {
+    drawStats.nativeFxApplied = true;
+    drawStats.nativeFxPrimitives += canvasFxPass.primitives;
+    drawStats.nativeFxRenderer = canvasFxPass.renderer;
+  }
   const fxOverlay = drawForegroundFxOverlay(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
   drawStats.fxOverlayApplied = fxOverlay.applied;
   drawStats.fxOverlayPrimitives = fxOverlay.primitives;
@@ -7531,8 +7867,8 @@ function autoMotionValue(min, max, phaseOffset) {
 }
 
 function hasRuntimeAnimation() {
-  const canvasFxAnimation = state.modelMode !== 'sdf' && ANIMATED_CANVAS_FX.has(state.fxMode);
-  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || canvasFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
+  const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -7580,8 +7916,8 @@ function startMotion() {
         advanceAutoModel();
       }
     }
-    const canvasFxAnimation = state.modelMode !== 'sdf' && ANIMATED_CANVAS_FX.has(state.fxMode);
-    if (state.autoColor || state.softFx || canvasFxAnimation) {
+    const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
+    if (state.autoColor || state.softFx || nativeFxAnimation) {
       const styleRate = state.autoColor ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
       stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
