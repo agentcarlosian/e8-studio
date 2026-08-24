@@ -1268,14 +1268,38 @@ def main() -> int:
                         backgroundFilter: getComputedStyle(background).filter,
                         fxRenderer: stats.fxRenderer,
                         fxOverlayApplied: stats.fxOverlayApplied,
-                        fxOverlayPrimitives: stats.fxOverlayPrimitives
+                        fxOverlayPrimitives: stats.fxOverlayPrimitives,
+                        nativeFxApplied: stats.nativeFxApplied,
+                        nativeFxPrimitives: stats.nativeFxPrimitives,
+                        ripplePointCount: stats.ripplePointCount
                     };
                 });
             }""", desktop_fx_ids)
             check("Every mobile effect has a Canvas and SDF-safe visual treatment", all(item["state"] == item["id"] and (item["id"] == "none" or item["canvasFilter"] != "none" or item["fxOverlayApplied"]) and (item["id"] == "none" or item["sdfFilter"] != "none") for item in fx_rendering), str(fx_rendering))
             check("FX never filters or overlays the background layer", all(item["backgroundFilter"] == "none" for item in fx_rendering), str(fx_rendering))
-            patterned_ids = {"kaleidoscope", "ripple", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
+            patterned_ids = {"kaleidoscope", "spiral", "voronoi", "caustic", "iridescent", "flowfield", "plasma", "kaleido6", "nebula", "hologram"}
             check("Procedural Canvas FX are clipped into the foreground model", all(item["fxRenderer"] == "foreground-mask" and item["fxOverlayApplied"] and item["fxOverlayPrimitives"] > 0 for item in fx_rendering if item["id"] in patterned_ids), str(fx_rendering))
+            ripple_native = next(item for item in fx_rendering if item["id"] == "ripple")
+            check("Ripple uses native radial geometry instead of painted cyan rings", ripple_native["fxRenderer"] == "geometry-ripple" and ripple_native["nativeFxApplied"] and ripple_native["nativeFxPrimitives"] >= 240 and ripple_native["ripplePointCount"] == 240 and not ripple_native["fxOverlayApplied"] and ripple_native["fxOverlayPrimitives"] == 0, str(ripple_native))
+            ripple_reference = page.evaluate("""() => {
+                const app = window.__mobileApp;
+                const edgeToggle = document.getElementById('edges-toggle');
+                edgeToggle.checked = true;
+                edgeToggle.dispatchEvent(new Event('change', { bubbles: true }));
+                app.setState({ modelMode: 'e8_2d', palette: 'rainbow', fxMode: 'ripple', showRings: false, autoRotate: false, autoColor: false, softFx: false });
+                app.forceRender();
+                return {
+                    state: app.getState(),
+                    metrics: app.getMetrics(),
+                    stats: app.getMetrics().lastDrawStats,
+                    edgeToggleExists: !!edgeToggle,
+                    edgeToggleChecked: edgeToggle.checked,
+                    backgroundFilter: getComputedStyle(document.getElementById('mobile-background-canvas')).filter
+                };
+            }""")
+            ripple_stats = ripple_reference["stats"]
+            check("Rainbow Ripple reproduces the desktop E8 chord treatment", ripple_reference["edgeToggleExists"] and ripple_reference["edgeToggleChecked"] and ripple_reference["state"]["showEdges"] and ripple_reference["state"]["palette"] == "rainbow" and ripple_stats["fxRenderer"] == "geometry-ripple" and ripple_stats["e8ChordEdges"] == ripple_reference["metrics"]["e8ChordEdgeCount"] and ripple_stats["e8ChordEdges"] >= 900 and ripple_stats["rippleEdgeSegments"] == ripple_stats["e8ChordEdges"] and ripple_stats["rippleColorBands"] >= 10 and ripple_stats["rippleBrightnessBands"] == 5 and ripple_stats["ripplePointCount"] == 240 and not ripple_stats["fxOverlayApplied"] and ripple_reference["backgroundFilter"] == "none", str(ripple_reference))
+            page.evaluate("() => window.__mobileApp.setState({ showEdges: false, showRings: true, palette: 'gold' })")
             page.evaluate("() => window.__mobileApp.selectFxMode('none')")
             fx_mode_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#fx-mode-grid [data-fx-treatment="hologram"]').click()
