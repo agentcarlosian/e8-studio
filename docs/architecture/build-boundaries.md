@@ -11,8 +11,8 @@ Electron, and Android artifacts through separate verified build paths.
 | Legacy inline | `npm run build:legacy` | Python module rewriter | Compatibility baseline |
 | Offline/PWA | `npm run build:offline` | Legacy inline + vendored dependencies | Existing Electron/PWA input |
 | Desktop share | `npm run build:single` | Fully inlined HTML | File-sharing artifact |
-| Mobile native | `npm run build:mobile` | Canvas 2D HTML inliner | Capacitor input |
-| Mobile share | `npm run build:mobile:single` | Canvas 2D standalone HTML | Phone-sharing artifact |
+| Mobile native | `npm run build:mobile` | Hybrid Canvas/WebGL HTML inliner | Capacitor input |
+| Mobile share | `npm run build:mobile:single` | Hybrid Canvas/WebGL standalone HTML | Phone-sharing artifact |
 
 The Vite build is emitted to `dist/web/`, uses relative asset URLs, bundles the
 runtime JavaScript dependencies from `package-lock.json`, and copies canonical
@@ -43,7 +43,8 @@ browser storage directly.
 
 ### Mobile shell
 
-- Canvas 2D renderer
+- Canvas 2D renderer for points, meshes, Bloom, and backgrounds
+- Raw WebGL raymarcher for the E8 SDF view
 - Touch gestures, safe areas, bottom-sheet navigation
 - Mobile performance policy and scene shortcuts
 - Capacitor delivery/share adapter

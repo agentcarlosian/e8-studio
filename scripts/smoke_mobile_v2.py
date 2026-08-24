@@ -865,7 +865,24 @@ def main() -> int:
             check("OBJ export follows Bloom's underlying root cloud", bloom_obj["ok"] and bloom_obj["obj"]["kind"] == "e8-root-point-cloud-3d-obj" and bloom_obj["obj"]["name"] == "e8-designed-bloom" and bloom_obj["obj"]["vertices"] == 240 and bloom_obj["obj"]["points"] == 240 and "# kind: e8-root-point-cloud-3d-obj" in bloom_obj["obj"]["text"], str(bloom_obj["obj"]))
             page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'sdf', selectedRoot: 7, autoRotate: false }); window.__mobileApp.forceRender(); }")
             sdf_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("SDF renders a high-resolution 240-root implicit surface", sdf_metrics["lastModelMode"] == "sdf" and sdf_metrics["selectedRoot"] is None and sdf_metrics["renderScale"] >= 1 and sdf_metrics["lastDrawStats"]["sdfSpheres"] == 240 and sdf_metrics["lastDrawStats"]["sdfRasterSize"] >= 320 and sdf_metrics["lastDrawStats"]["sdfPixels"] > 6000 and sdf_metrics["lastDrawStats"]["modelFaceFills"] == 1 and sdf_metrics["sdfDrawCount"] >= 1 and sdf_metrics["lastProjectionSource"] == "sdf-raster", str(sdf_metrics["lastDrawStats"]))
+            check("SDF renders a high-resolution 240-root ray-marched surface", sdf_metrics["lastModelMode"] == "sdf" and sdf_metrics["selectedRoot"] is None and sdf_metrics["renderScale"] >= 1 and sdf_metrics["lastDrawStats"]["sdfSpheres"] == 240 and sdf_metrics["lastDrawStats"]["sdfRasterSize"] >= 300 and sdf_metrics["lastDrawStats"]["sdfPixels"] > 200000 and sdf_metrics["lastDrawStats"]["sdfRenderer"] == "webgl-raymarch" and sdf_metrics["lastDrawStats"]["sdfMarchSteps"] >= 40 and sdf_metrics["lastDrawStats"]["modelFaceFills"] == 1 and sdf_metrics["sdfDrawCount"] >= 1 and sdf_metrics["lastProjectionSource"] == "sdf-webgl-raymarch", str(sdf_metrics["lastDrawStats"]))
+            sdf_controls = page.evaluate("""() => ({
+                visible: !document.getElementById('sdf-field').classList.contains('hidden'),
+                radius: document.getElementById('sdf-radius-output').textContent,
+                blend: document.getElementById('sdf-blend-output').textContent,
+                bloom: document.getElementById('sdf-bloom-output').textContent,
+                aniso: document.getElementById('sdf-aniso-output').textContent,
+                overlayActive: document.getElementById('mobile-sdf-canvas').classList.contains('active')
+            })""")
+            check("SDF exposes desktop-style surface tuning", sdf_controls["visible"] and sdf_controls["radius"] == "0.080" and sdf_controls["blend"] == "0.030" and sdf_controls["bloom"] == "50%" and sdf_controls["aniso"] == "60%" and sdf_controls["overlayActive"], str(sdf_controls))
+            sdf_quality_profiles = []
+            for sdf_quality in ["balanced", "sharp"]:
+                page.evaluate("quality => { window.__mobileApp.setState({ quality }); window.__mobileApp.forceRender(); }", sdf_quality)
+                sdf_quality_profiles.append(page.evaluate("() => window.__mobileApp.getMetrics().lastDrawStats"))
+            check("SDF quality tiers compile distinct raymarch budgets", sdf_quality_profiles[0]["sdfRenderer"] == "webgl-raymarch" and sdf_quality_profiles[0]["sdfQuality"] == "balanced" and sdf_quality_profiles[0]["sdfMarchSteps"] == 48 and sdf_quality_profiles[0]["sdfShadowSteps"] == 2 and sdf_quality_profiles[1]["sdfRenderer"] == "webgl-raymarch" and sdf_quality_profiles[1]["sdfQuality"] == "sharp" and sdf_quality_profiles[1]["sdfMarchSteps"] == 60 and sdf_quality_profiles[1]["sdfShadowSteps"] == 4 and sdf_quality_profiles[1]["sdfRasterSize"] > sdf_quality_profiles[0]["sdfRasterSize"], str(sdf_quality_profiles))
+            page.evaluate("() => { window.__mobileApp.setState({ quality: 'smooth' }); window.__mobileApp.forceRender(); }")
+            sdf_snapshot = page.evaluate("() => window.__mobileApp.shareSnapshot({ share: false, download: false })")
+            check("SDF snapshot composites WebGL over the mobile background", sdf_snapshot["ok"] and sdf_snapshot["bytes"] > 10000 and sdf_snapshot["width"] == 390 and sdf_snapshot["height"] == 844, str(sdf_snapshot))
             sdf_labels = page.evaluate("""() => ({
                 topbar: document.querySelector('.topbar').getAttribute('aria-label'),
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label'),
@@ -1198,6 +1215,26 @@ def main() -> int:
             })""")
             check("Motion section exposes compact auto model controls", bool(show_button) and show_button["height"] >= 40 and bool(orbit_button) and orbit_button["height"] >= 40 and bool(still_button) and still_button["height"] >= 40 and bool(auto_model_toggle) and auto_model_toggle["height"] >= 20 and motion_preset_grid["metrics"]["motionPresetButtonCount"] == 3, str({"show": show_button, "orbit": orbit_button, "still": still_button, "toggle": auto_model_toggle, "grid": motion_preset_grid}))
             check("Motion presets mark active Still state", motion_preset_grid["output"] == "Still" and any(button["id"] == "still" and button["active"] and button["pressed"] == "true" for button in motion_preset_grid["buttons"]), str(motion_preset_grid))
+            camera_controls = page.evaluate("""() => ({
+                buttons: [...document.querySelectorAll('.camera-path-grid [data-motion-action]')].map(button => ({ id: button.dataset.motionAction, height: button.getBoundingClientRect().height })),
+                rotation: document.getElementById('camera-rotation-output').textContent,
+                tilt: document.getElementById('camera-tilt-output').textContent,
+                zoom: document.getElementById('camera-zoom-output').textContent,
+                extrude: document.getElementById('camera-extrude-output').textContent,
+                path: document.getElementById('camera-path-output').textContent
+            })""")
+            check("Motion exposes full camera paths and transforms", len(camera_controls["buttons"]) == 4 and all(button["height"] >= 40 for button in camera_controls["buttons"]) and camera_controls["rotation"] == "0°" and camera_controls["tilt"] == "16°" and camera_controls["zoom"] == "100%" and camera_controls["extrude"] == "0.00" and camera_controls["path"] == "Manual", str(camera_controls))
+            page.locator('[data-motion-action="camera-dive"]').click()
+            dive_camera = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                path: document.getElementById('camera-path-output').textContent,
+                pressed: document.querySelector('[data-motion-action="camera-dive"]').getAttribute('aria-pressed'),
+                motion: document.getElementById('motion-toggle').checked
+            })""")
+            check("Dive path starts camera motion without changing models", dive_camera["state"]["cameraPath"] == "dive" and dive_camera["state"]["autoRotate"] and not dive_camera["state"]["autoModel"] and dive_camera["path"] == "Dive" and dive_camera["pressed"] == "true" and dive_camera["motion"], str(dive_camera))
+            page.locator('[data-motion-action="camera-reset"]').click()
+            camera_reset = page.evaluate("() => window.__mobileApp.getState()")
+            check("Camera Reset restores the desktop-like baseline", camera_reset["cameraPath"] == "manual" and not camera_reset["autoRotate"] and abs(camera_reset["rotation"]) < 0.001 and abs(camera_reset["cameraTilt"] - 0.28) < 0.001 and abs(camera_reset["zoom"] - 1) < 0.001 and camera_reset["e8MorphT"] == 0, str(camera_reset))
             orbit_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('[data-motion-action="orbit"]').click()
             orbit_after = page.evaluate("""() => ({

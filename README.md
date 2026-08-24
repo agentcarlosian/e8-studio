@@ -164,7 +164,7 @@ src/
   ui/                   Controls, palettes, essays, and themes
   state/                Camera, gallery, persistence, and progress
   services/             Export and recording orchestration
-  mobile/               Mobile Canvas 2D application
+  mobile/               Hybrid Canvas 2D + WebGL mobile application
 data/                   Canonical and precomputed geometry
 scripts/                Build, verification, and release tooling
 electron/               Electron shell
@@ -177,7 +177,7 @@ The hosted application is bundled with Vite. Standalone, Electron, and mobile ta
 
 - Modern desktop browsers with WebGL2
 - Responsive touch-oriented desktop shell
-- Dedicated mobile Canvas 2D interface
+- Dedicated hybrid mobile interface with Canvas 2D scenes and ray-marched WebGL SDF
 - Electron on desktop platforms
 - Android through Capacitor
 

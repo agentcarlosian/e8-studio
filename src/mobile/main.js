@@ -33,6 +33,13 @@ const DEFAULT_STATE = {
   fxStrength: 1,
   rotationSpeed: 0.7,
   rotation: 0,
+  cameraTilt: 0.28,
+  cameraPath: 'manual',
+  e8MorphT: 0,
+  sdfSphereR: 0.08,
+  sdfBlend: 0.03,
+  sdfBloom: 0.5,
+  sdfAniso: 0.6,
   panX: 0,
   panY: 0,
   zoom: 1,
@@ -818,6 +825,11 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let sdfCanvas;
+let sdfGl;
+let sdfWebglUnavailable = false;
+let sdfRingUniformData = new Float32Array(8 * 4);
+const sdfPrograms = new Map();
 let sdfRasterCanvas;
 let sdfRasterContext;
 let sdfRasterImageData;
@@ -839,6 +851,7 @@ let statusTimer = null;
 let savePending = false;
 let saveRequestedAt = 0;
 let stylePhase = 0;
+let motionPhase = 0;
 let autoModelElapsed = 0;
 let autoModelIndex = 0;
 let drag = null;
@@ -971,6 +984,18 @@ function normalizeState(next) {
   next.bloomSpeed = clamp(Number(next.bloomSpeed) || DEFAULT_STATE.bloomSpeed, 0.02, 0.25);
   next.rotationSpeed = clamp(Number(next.rotationSpeed) || 0.7, 0.2, 2);
   next.rotation = Number(next.rotation) || 0;
+  const cameraTilt = Number(next.cameraTilt);
+  next.cameraTilt = clamp(Number.isFinite(cameraTilt) ? cameraTilt : DEFAULT_STATE.cameraTilt, -Math.PI / 3, Math.PI / 3);
+  if (!['manual', 'orbit', 'dive', 'spiral'].includes(next.cameraPath)) next.cameraPath = DEFAULT_STATE.cameraPath;
+  next.e8MorphT = clamp(Number(next.e8MorphT) || 0, 0, 1);
+  const sdfSphereR = Number(next.sdfSphereR);
+  const sdfBlend = Number(next.sdfBlend);
+  const sdfBloom = Number(next.sdfBloom);
+  const sdfAniso = Number(next.sdfAniso);
+  next.sdfSphereR = clamp(Number.isFinite(sdfSphereR) ? sdfSphereR : DEFAULT_STATE.sdfSphereR, 0.04, 0.13);
+  next.sdfBlend = clamp(Number.isFinite(sdfBlend) ? sdfBlend : DEFAULT_STATE.sdfBlend, 0, 0.1);
+  next.sdfBloom = clamp(Number.isFinite(sdfBloom) ? sdfBloom : DEFAULT_STATE.sdfBloom, 0, 1);
+  next.sdfAniso = clamp(Number.isFinite(sdfAniso) ? sdfAniso : DEFAULT_STATE.sdfAniso, 0, 1);
   next.panX = Number(next.panX) || 0;
   next.panY = Number(next.panY) || 0;
   next.zoom = clamp(Number(next.zoom) || 1, 0.55, 3.2);
@@ -1027,6 +1052,7 @@ function cacheElements() {
   els.shell = document.querySelector('.mobile-shell');
   canvas = document.getElementById('mobile-canvas');
   ctx = canvas.getContext('2d', { alpha: false });
+  sdfCanvas = document.getElementById('mobile-sdf-canvas');
   els.settingsButton = document.getElementById('settings-button');
   els.qualityChip = document.getElementById('quality-chip');
   els.sceneChip = document.getElementById('scene-chip');
@@ -1075,6 +1101,15 @@ function cacheElements() {
   els.polytope4DSelect = document.getElementById('polytope4d-select');
   els.dynkinField = document.getElementById('dynkin-field');
   els.dynkinSelect = document.getElementById('dynkin-select');
+  els.sdfField = document.getElementById('sdf-field');
+  els.sdfRadius = document.getElementById('sdf-radius');
+  els.sdfRadiusOutput = document.getElementById('sdf-radius-output');
+  els.sdfBlend = document.getElementById('sdf-blend');
+  els.sdfBlendOutput = document.getElementById('sdf-blend-output');
+  els.sdfBloom = document.getElementById('sdf-bloom');
+  els.sdfBloomOutput = document.getElementById('sdf-bloom-output');
+  els.sdfAniso = document.getElementById('sdf-aniso');
+  els.sdfAnisoOutput = document.getElementById('sdf-aniso-output');
   els.scenePresetGrid = document.getElementById('scene-preset-grid');
   els.scenePresetOutput = document.getElementById('scene-preset-output');
   els.modelShortcutGroups = document.getElementById('model-shortcut-groups');
@@ -1113,6 +1148,15 @@ function cacheElements() {
   els.motionSpeedOutput = document.getElementById('motion-speed-output');
   els.motionPresetGrid = document.getElementById('motion-preset-grid');
   els.motionPresetOutput = document.getElementById('motion-preset-output');
+  els.cameraPathOutput = document.getElementById('camera-path-output');
+  els.cameraRotation = document.getElementById('camera-rotation');
+  els.cameraRotationOutput = document.getElementById('camera-rotation-output');
+  els.cameraTilt = document.getElementById('camera-tilt');
+  els.cameraTiltOutput = document.getElementById('camera-tilt-output');
+  els.cameraZoom = document.getElementById('camera-zoom');
+  els.cameraZoomOutput = document.getElementById('camera-zoom-output');
+  els.cameraExtrude = document.getElementById('camera-extrude');
+  els.cameraExtrudeOutput = document.getElementById('camera-extrude-output');
   els.sectionTabs = [...els.sheet.querySelectorAll('[data-section-tab]')];
   els.sectionPanels = [...els.sheet.querySelectorAll('[data-section]')];
   els.qualityButtons = [...els.sheet.querySelectorAll('[data-quality]')];
@@ -1295,6 +1339,26 @@ function bindEvents() {
     autoModel: false,
     selectedRoot: els.dynkinSelect.value === 'E8' && simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null,
   }, 'dynkin-select'));
+  els.sdfRadius.addEventListener('input', () => {
+    previewState({ sdfSphereR: Number(els.sdfRadius.value) }, 'sdf-radius');
+    syncSdfControls();
+  });
+  els.sdfRadius.addEventListener('change', () => commitLiveControl('sdf-radius'));
+  els.sdfBlend.addEventListener('input', () => {
+    previewState({ sdfBlend: Number(els.sdfBlend.value) }, 'sdf-blend');
+    syncSdfControls();
+  });
+  els.sdfBlend.addEventListener('change', () => commitLiveControl('sdf-blend'));
+  els.sdfBloom.addEventListener('input', () => {
+    previewState({ sdfBloom: Number(els.sdfBloom.value) }, 'sdf-bloom');
+    syncSdfControls();
+  });
+  els.sdfBloom.addEventListener('change', () => commitLiveControl('sdf-bloom'));
+  els.sdfAniso.addEventListener('input', () => {
+    previewState({ sdfAniso: Number(els.sdfAniso.value) }, 'sdf-aniso');
+    syncSdfControls();
+  });
+  els.sdfAniso.addEventListener('change', () => commitLiveControl('sdf-aniso'));
   els.bloomTime.addEventListener('input', () => {
     previewState({ bloomAmount: Number(els.bloomTime.value), bloomAuto: false }, 'bloom-time');
     syncBloomControls();
@@ -1334,13 +1398,36 @@ function bindEvents() {
     syncVisualRangeOutputs();
   });
   els.fxStrength.addEventListener('change', () => commitLiveControl('fx-strength'));
-  els.motionToggle.addEventListener('change', () => setManualRuntimeState({ autoRotate: els.motionToggle.checked }, 'motion-toggle', { syncMotionPreset: true }));
+  els.motionToggle.addEventListener('change', () => setManualRuntimeState({
+    autoRotate: els.motionToggle.checked,
+    cameraPath: els.motionToggle.checked ? (state.cameraPath === 'manual' ? 'orbit' : state.cameraPath) : 'manual',
+  }, 'motion-toggle', { syncMotionPreset: true, syncMotionCamera: true }));
   els.autoModelToggle.addEventListener('change', () => setManualRuntimeState({ autoModel: els.autoModelToggle.checked }, 'auto-model-toggle', { syncMotionPreset: true }));
   els.motionSpeed.addEventListener('input', () => {
     previewState({ rotationSpeed: Number(els.motionSpeed.value) }, 'motion-speed', { render: false });
     syncMotionSpeedControls();
   });
   els.motionSpeed.addEventListener('change', () => commitLiveControl('motion-speed', { render: false }));
+  els.cameraRotation.addEventListener('input', () => {
+    previewState({ rotation: Number(els.cameraRotation.value) * Math.PI / 180, cameraPath: 'manual', autoRotate: false }, 'camera-rotation');
+    syncMotionPresetControls();
+  });
+  els.cameraRotation.addEventListener('change', () => commitLiveControl('camera-rotation'));
+  els.cameraTilt.addEventListener('input', () => {
+    previewState({ cameraTilt: Number(els.cameraTilt.value) * Math.PI / 180, cameraPath: 'manual', autoRotate: false }, 'camera-tilt');
+    syncMotionPresetControls();
+  });
+  els.cameraTilt.addEventListener('change', () => commitLiveControl('camera-tilt'));
+  els.cameraZoom.addEventListener('input', () => {
+    previewState({ zoom: Number(els.cameraZoom.value) }, 'camera-zoom');
+    syncCameraControls();
+  });
+  els.cameraZoom.addEventListener('change', () => commitLiveControl('camera-zoom'));
+  els.cameraExtrude.addEventListener('input', () => {
+    previewState({ e8MorphT: Number(els.cameraExtrude.value) }, 'camera-extrude');
+    syncCameraControls();
+  });
+  els.cameraExtrude.addEventListener('change', () => commitLiveControl('camera-extrude'));
 
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
@@ -1411,6 +1498,10 @@ function selectedRootForModelMode(modelMode) {
 function handleMotionAction(action) {
   if (!action) return false;
   if (action === 'still' || action === 'orbit' || action === 'showcase') return selectMotionPreset(action);
+  if (action === 'camera-orbit') return selectCameraPath('orbit');
+  if (action === 'camera-dive') return selectCameraPath('dive');
+  if (action === 'camera-spiral') return selectCameraPath('spiral');
+  if (action === 'camera-reset') return resetCameraMotion();
   return false;
 }
 
@@ -1776,8 +1867,19 @@ function canvasElementToPngBlob(sourceCanvas, errorMessage = 'Could not create P
   });
 }
 
+function compositeRenderCanvas() {
+  if (state.modelMode !== 'sdf' || !sdfCanvas?.classList.contains('active') || !sdfGl) return canvas;
+  const composite = document.createElement('canvas');
+  composite.width = Math.max(1, canvas.width);
+  composite.height = Math.max(1, canvas.height);
+  const target = composite.getContext('2d', { alpha: false });
+  target.drawImage(canvas, 0, 0, composite.width, composite.height);
+  target.drawImage(sdfCanvas, 0, 0, sdfCanvas.width, sdfCanvas.height, 0, 0, composite.width, composite.height);
+  return composite;
+}
+
 function canvasToPngBlob() {
-  return canvasElementToPngBlob(canvas, 'Could not create PNG snapshot');
+  return canvasElementToPngBlob(compositeRenderCanvas(), 'Could not create PNG snapshot');
 }
 
 function downloadBlob(blob, name) {
@@ -1986,8 +2088,9 @@ function buildPostcardCanvas(options = {}) {
   }
   target.globalAlpha = 1;
 
-  const srcW = Math.max(1, canvas?.width || 1);
-  const srcH = Math.max(1, canvas?.height || 1);
+  const renderCanvas = compositeRenderCanvas();
+  const srcW = Math.max(1, renderCanvas?.width || 1);
+  const srcH = Math.max(1, renderCanvas?.height || 1);
   const srcAspect = srcW / srcH;
   const maxImageW = width - pad * 2;
   const maxImageH = Math.round(height * 0.6);
@@ -2009,7 +2112,7 @@ function buildPostcardCanvas(options = {}) {
   target.save();
   drawRoundedRect(target, imageX, imageY, imageW, imageH, Math.round(width * 0.028));
   target.clip();
-  target.drawImage(canvas, 0, 0, srcW, srcH, imageX, imageY, imageW, imageH);
+  target.drawImage(renderCanvas, 0, 0, srcW, srcH, imageX, imageY, imageW, imageH);
   target.restore();
 
   const textX = pad;
@@ -2027,7 +2130,7 @@ function buildPostcardCanvas(options = {}) {
   target.fillRect(textX, Math.min(height - pad * 1.65, nextY + Math.round(width * 0.034)), Math.round(width * 0.18), Math.max(3, Math.round(width * 0.006)));
   target.font = `800 ${Math.round(width * 0.024)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   target.fillStyle = 'rgba(248,244,232,0.56)';
-  target.fillText('MOBILE V2 / CANVAS 2D', textX, height - pad);
+  target.fillText('MOBILE V2 / WEBGL + CANVAS', textX, height - pad);
   target.textAlign = 'right';
   target.fillStyle = colorWithAlpha(accent, 0.82);
   target.fillText(QUALITY[state.quality].label.toUpperCase(), width - pad, height - pad);
@@ -2410,6 +2513,9 @@ function mobileSurprise() {
     softFx: false,
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
     rotation: Math.random() * TAU,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    e8MorphT: 0,
     panX: 0,
     panY: 0,
     zoom: 1,
@@ -2446,11 +2552,13 @@ function setAutoPreset(mode) {
       autoModel: true,
       autoColor: true,
       softFx: true,
+      cameraPath: 'spiral',
     };
   } else if (mode === 'orbit') {
     patch = {
       autoRotate: true,
       autoModel: false,
+      cameraPath: 'orbit',
     };
   } else {
     patch = {
@@ -2458,6 +2566,7 @@ function setAutoPreset(mode) {
       autoModel: false,
       autoColor: false,
       softFx: false,
+      cameraPath: 'manual',
     };
   }
   const interactionType = mode === 'showcase' ? 'auto-preset-showcase' : mode === 'orbit' ? 'auto-preset-orbit' : 'auto-preset-still';
@@ -2577,6 +2686,8 @@ function setSettingState(patch, interactionType, options = {}) {
   if (options.syncSubset) syncSubsetControls();
   if (options.syncMotionSpeed) syncMotionSpeedControls();
   if (options.syncMotionPreset) syncMotionPresetControls();
+  if (options.syncMotionCamera) syncCameraControls();
+  if (options.syncSdf) syncSdfControls();
   if (options.syncBloom) syncBloomControls();
   if (options.syncModel) {
     syncModelControls();
@@ -3049,13 +3160,64 @@ function activeMotionPreset() {
   if (state.autoRotate && state.autoModel && state.autoColor && state.softFx) {
     return MOTION_PRESETS.find(preset => preset.id === 'showcase') || null;
   }
-  if (state.autoRotate && !state.autoModel) {
+  if (state.autoRotate && !state.autoModel && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
     return MOTION_PRESETS.find(preset => preset.id === 'orbit') || null;
   }
   if (!state.autoRotate && !state.autoModel && !state.autoColor && !state.softFx) {
     return MOTION_PRESETS.find(preset => preset.id === 'still') || null;
   }
   return null;
+}
+
+function cameraPathLabel(path = state.cameraPath) {
+  return ({ manual: 'Manual', orbit: 'Orbit', dive: 'Dive', spiral: 'Spiral' })[path] || 'Manual';
+}
+
+function syncCameraControls() {
+  const rotationDegrees = ((state.rotation * 180 / Math.PI + 180) % 360 + 360) % 360 - 180;
+  if (els.cameraPathOutput) els.cameraPathOutput.textContent = cameraPathLabel();
+  if (els.cameraRotation) els.cameraRotation.value = String(Math.round(rotationDegrees));
+  if (els.cameraRotationOutput) els.cameraRotationOutput.textContent = `${Math.round(rotationDegrees)}°`;
+  if (els.cameraTilt) els.cameraTilt.value = String(Math.round(state.cameraTilt * 180 / Math.PI));
+  if (els.cameraTiltOutput) els.cameraTiltOutput.textContent = `${Math.round(state.cameraTilt * 180 / Math.PI)}°`;
+  if (els.cameraZoom) els.cameraZoom.value = String(state.zoom);
+  if (els.cameraZoomOutput) els.cameraZoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
+  if (els.cameraExtrude) els.cameraExtrude.value = String(state.e8MorphT);
+  if (els.cameraExtrudeOutput) els.cameraExtrudeOutput.textContent = state.e8MorphT.toFixed(2);
+  document.querySelectorAll('.camera-path-grid [data-motion-action]').forEach(button => {
+    const path = button.dataset.motionAction?.replace('camera-', '');
+    const active = path !== 'reset' && path === state.cameraPath && state.autoRotate;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  return true;
+}
+
+function selectCameraPath(path) {
+  if (!['orbit', 'dive', 'spiral'].includes(path)) return false;
+  motionPhase = 0;
+  const result = setManualRuntimeState({ cameraPath: path, autoRotate: true }, `camera-path-${path}`, {
+    syncMotionPreset: true,
+    syncMotionCamera: true,
+  });
+  showStatus(`${cameraPathLabel(path)} camera`);
+  return result;
+}
+
+function resetCameraMotion() {
+  motionPhase = 0;
+  const result = setManualRuntimeState({
+    rotation: 0,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    autoRotate: false,
+    zoom: 1,
+    e8MorphT: 0,
+    panX: 0,
+    panY: 0,
+  }, 'camera-reset', { syncMotionPreset: true, syncMotionCamera: true });
+  showStatus('Camera reset');
+  return result;
 }
 
 function renderMotionPresets() {
@@ -3080,6 +3242,7 @@ function syncMotionPresetControls() {
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
+  syncCameraControls();
   return true;
 }
 
@@ -3349,6 +3512,7 @@ function syncControlValues() {
   syncFxPresetControls();
   syncMotionPresetControls();
   syncMotionSpeedControls();
+  syncCameraControls();
   syncMobileTourCard();
   updateSelectionUI();
 }
@@ -3361,6 +3525,8 @@ function syncModelControls() {
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
+  if (els.sdfField) els.sdfField.classList.toggle('hidden', state.modelMode !== 'sdf');
+  syncSdfControls();
   syncBloomControls();
   if (els.autoModelToggle) els.autoModelToggle.checked = state.autoModel;
   syncScenePresetControls();
@@ -3375,6 +3541,18 @@ function syncModelControls() {
   syncSceneAccessibility(scene);
   syncMckayCard();
   syncCuriosityCard();
+}
+
+function syncSdfControls() {
+  if (els.sdfRadius) els.sdfRadius.value = String(state.sdfSphereR);
+  if (els.sdfRadiusOutput) els.sdfRadiusOutput.textContent = state.sdfSphereR.toFixed(3);
+  if (els.sdfBlend) els.sdfBlend.value = String(state.sdfBlend);
+  if (els.sdfBlendOutput) els.sdfBlendOutput.textContent = state.sdfBlend.toFixed(3);
+  if (els.sdfBloom) els.sdfBloom.value = String(state.sdfBloom);
+  if (els.sdfBloomOutput) els.sdfBloomOutput.textContent = `${Math.round(state.sdfBloom * 100)}%`;
+  if (els.sdfAniso) els.sdfAniso.value = String(state.sdfAniso);
+  if (els.sdfAnisoOutput) els.sdfAnisoOutput.textContent = `${Math.round(state.sdfAniso * 100)}%`;
+  return true;
 }
 
 function bloomPhaseLabel(amount = state.bloomAmount) {
@@ -4409,6 +4587,7 @@ function render() {
   try {
     const t0 = performance.now();
     resizeCanvas();
+    setSdfCanvasActive(state.modelMode === 'sdf');
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
@@ -4621,7 +4800,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
     : state.modelMode === 'bloom'
       ? 'bloom-depth-points'
       : state.modelMode === 'sdf'
-        ? 'sdf-raster'
+        ? (drawStats.sdfRenderer === 'webgl-raymarch' ? 'sdf-webgl-raymarch' : 'sdf-raster-fallback')
         : 'model-projection';
   metrics.lastProjectionCount = drawStats.projectedPoints || drawStats.modelProjectedVertices || 0;
   metrics.lastAllFrameWithinView = !!projectedAllFrame?.withinView;
@@ -4687,7 +4866,12 @@ function projectPointsIntoCache(layout, drawStats) {
 
 function projectModelPoint(x, y, z, layout, modelScale = 1) {
   const yaw = state.rotation;
-  const pitch = 0.68;
+  const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+  const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+  const pathZoom = state.cameraPath === 'dive' && state.autoRotate
+    ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+    : 1;
+  z *= 1 + state.e8MorphT * 0.75;
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   const cp = Math.cos(pitch);
@@ -4698,7 +4882,7 @@ function projectModelPoint(x, y, z, layout, modelScale = 1) {
   const rz2 = y * sp + rz * cp;
   const depth = rz2;
   const perspective = 4.2 / Math.max(1.8, 4.2 + depth);
-  const scale = layout.scale * modelScale * perspective;
+  const scale = layout.scale * modelScale * perspective * pathZoom;
   return {
     x: layout.cx + state.panX + rx * scale,
     y: layout.cy + state.panY + ry * scale,
@@ -4918,6 +5102,401 @@ function drawBloomModel(paletteSet, subset, visibleContext, drawStats, interacti
   drawStats.bloomTwinTrails = twinTrails;
 }
 
+const SDF_VERTEX_SHADER = `
+attribute vec2 aPosition;
+void main() {
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}`;
+
+const SDF_FRAGMENT_TEMPLATE = `
+precision highp float;
+
+#define MARCH_STEPS __MARCH_STEPS__
+#define ROOT_NEIGHBOR_SPAN __ROOT_NEIGHBOR_SPAN__
+#define SHADOW_STEPS __SHADOW_STEPS__
+#define AO_STEPS __AO_STEPS__
+#define MAX_DIST 22.0
+#define SURF_DIST 0.0012
+
+uniform vec2 uResolution;
+uniform vec2 uScreenOffset;
+uniform float uTime;
+uniform vec3 uCameraPos;
+uniform mat3 uCameraBasis;
+uniform float uFov;
+uniform vec4 uRings[8];
+uniform float uSphereR;
+uniform float uBlend;
+uniform float uBloom;
+uniform float uAniso;
+uniform float uFxStrength;
+uniform vec3 uColorInner;
+uniform vec3 uColorOuter;
+
+float gNearestRing = 0.0;
+
+float smin(float a, float b, float k) {
+  if (k < 0.00001) return min(a, b);
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+float sdf(vec3 p) {
+  float d = 1000.0;
+  float nearestDistance = 1000.0;
+  float nearestRing = 0.0;
+  float sphereRadius = uSphereR * (1.0 + uFxStrength * 0.025 * sin(uTime * 2.1));
+  float pointAngle = atan(p.y, p.x);
+  for (int ringIndex = 0; ringIndex < 8; ringIndex++) {
+    vec4 ring = uRings[ringIndex];
+    float nearestSlot = floor((pointAngle - ring.y) / ring.z + 0.5);
+    for (int offset = -ROOT_NEIGHBOR_SPAN; offset <= ROOT_NEIGHBOR_SPAN; offset++) {
+      float rootAngle = ring.y + (nearestSlot + float(offset)) * ring.z;
+      vec3 root = vec3(ring.x * cos(rootAngle), ring.x * sin(rootAngle), ring.w);
+      float rootDistance = length(p - root) - sphereRadius;
+      if (rootDistance < nearestDistance) {
+        nearestDistance = rootDistance;
+        nearestRing = float(ringIndex) / 7.0;
+      }
+      d = smin(d, rootDistance, uBlend);
+    }
+  }
+  gNearestRing = nearestRing;
+  return d;
+}
+
+vec3 surfaceNormal(vec3 p) {
+  const float e = 0.0015;
+  const vec2 h = vec2(1.0, -1.0) * 0.5773;
+  return normalize(
+    h.xyy * sdf(p + h.xyy * e) +
+    h.yyx * sdf(p + h.yyx * e) +
+    h.yxy * sdf(p + h.yxy * e) +
+    h.xxx * sdf(p + h.xxx * e)
+  );
+}
+
+float softShadow(vec3 ro, vec3 rd) {
+  float result = 1.0;
+  float t = 0.025;
+  for (int i = 0; i < SHADOW_STEPS; i++) {
+    float h = sdf(ro + rd * t);
+    if (h < 0.001) return 0.0;
+    result = min(result, 15.0 * h / t);
+    t += clamp(h, 0.025, 0.32);
+  }
+  return clamp(result, 0.0, 1.0);
+}
+
+float ambientOcclusion(vec3 p, vec3 n) {
+  float occ = 0.0;
+  float weight = 1.0;
+  for (int i = 0; i < AO_STEPS; i++) {
+    float distance = 0.035 + 0.13 * float(i);
+    occ += (distance - sdf(p + n * distance)) * weight;
+    weight *= 0.7;
+  }
+  return clamp(1.0 - 2.4 * occ, 0.0, 1.0);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution * 2.0 - 1.0;
+  uv.x *= uResolution.x / uResolution.y;
+  uv -= uScreenOffset;
+  float focalLength = 1.0 / tan(uFov * 0.5);
+  vec3 rayOrigin = uCameraPos;
+  vec3 rayDirection = normalize(
+    uCameraBasis[0] * uv.x +
+    uCameraBasis[1] * uv.y +
+    uCameraBasis[2] * focalLength
+  );
+
+  float t = 0.0;
+  float rayEnd = 0.0;
+  bool hit = false;
+  const float boundRadius = 2.55;
+  float boundB = dot(rayOrigin, rayDirection);
+  float boundC = dot(rayOrigin, rayOrigin) - boundRadius * boundRadius;
+  float discriminant = boundB * boundB - boundC;
+  if (discriminant >= 0.0) {
+    float boundRoot = sqrt(discriminant);
+    t = max(0.0, -boundB - boundRoot);
+    rayEnd = min(MAX_DIST, -boundB + boundRoot);
+    for (int stepIndex = 0; stepIndex < MARCH_STEPS; stepIndex++) {
+      float distance = sdf(rayOrigin + rayDirection * t);
+      if (distance < SURF_DIST) {
+        hit = true;
+        break;
+      }
+      t += distance * 0.9;
+      if (t > rayEnd) break;
+    }
+  }
+
+  if (!hit) {
+    gl_FragColor = vec4(0.0);
+    return;
+  }
+
+  vec3 p = rayOrigin + rayDirection * t;
+  sdf(p);
+  float ringMix = gNearestRing;
+  vec3 n = surfaceNormal(p);
+  vec3 keyDirection = normalize(vec3(0.58, 0.72, 0.46));
+  vec3 fillDirection = normalize(vec3(-0.45, 0.18, -0.28));
+  float diffuse = max(dot(n, keyDirection), 0.0);
+  float fill = max(dot(n, fillDirection), 0.0) * 0.32;
+  float fresnel = pow(1.0 - max(dot(n, -rayDirection), 0.0), 3.0);
+  float shadow = softShadow(p + n * 0.004, keyDirection);
+  float ao = ambientOcclusion(p, n);
+  vec3 baseColor = mix(uColorInner, uColorOuter, ringMix);
+  float wrap = max(0.0, (dot(n, keyDirection) + 0.32) / 1.32);
+  vec3 color = baseColor * (0.17 + diffuse * shadow * 0.86 + fill) * ao;
+  color += baseColor * wrap * 0.24;
+  color += mix(vec3(0.42, 0.68, 1.0), baseColor, 0.35) * fresnel * (0.42 + uBloom * 0.34);
+
+  vec3 halfVector = normalize(keyDirection - rayDirection);
+  float standardSpec = pow(max(dot(n, halfVector), 0.0), 34.0);
+  vec3 tangent = normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(0.001));
+  vec3 bitangent = normalize(cross(n, tangent));
+  float anisoSpec = pow(abs(dot(tangent, halfVector)), 28.0) * 0.58
+    + pow(abs(dot(bitangent, halfVector)), 74.0) * 0.42;
+  color += vec3(1.0) * standardSpec * shadow * 0.52;
+  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.62;
+  vec3 bright = max(color - vec3(0.64), vec3(0.0));
+  color += bright * uBloom * 0.92;
+  color = color / (color + vec3(0.30));
+  color = pow(clamp(color, 0.0, 1.0), vec3(0.92));
+  gl_FragColor = vec4(color, 1.0);
+}`;
+
+const MOBILE_SDF_QUALITY = {
+  interactive: { scale: 0.48, marchSteps: 28, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
+  motion: { scale: 0.66, marchSteps: 34, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
+  smooth: { scale: 0.80, marchSteps: 40, neighborSpan: 0, shadowSteps: 0, aoSteps: 0 },
+  balanced: { scale: 1.0, marchSteps: 48, neighborSpan: 1, shadowSteps: 2, aoSteps: 1 },
+  sharp: { scale: 1.2, marchSteps: 60, neighborSpan: 1, shadowSteps: 4, aoSteps: 2 },
+};
+
+function sdfShaderSource(profile) {
+  return SDF_FRAGMENT_TEMPLATE
+    .replaceAll('__MARCH_STEPS__', String(profile.marchSteps))
+    .replaceAll('__ROOT_NEIGHBOR_SPAN__', String(profile.neighborSpan))
+    .replaceAll('__SHADOW_STEPS__', String(profile.shadowSteps))
+    .replaceAll('__AO_STEPS__', String(profile.aoSteps));
+}
+
+function compileSdfShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'SDF shader compilation failed';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function createSdfProgram(profileKey) {
+  const gl = sdfGl;
+  const profile = MOBILE_SDF_QUALITY[profileKey] || MOBILE_SDF_QUALITY.smooth;
+  const vertex = compileSdfShader(gl, gl.VERTEX_SHADER, SDF_VERTEX_SHADER);
+  const fragment = compileSdfShader(gl, gl.FRAGMENT_SHADER, sdfShaderSource(profile));
+  const program = gl.createProgram();
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program) || 'SDF shader linking failed';
+    gl.deleteProgram(program);
+    throw new Error(message);
+  }
+  const uniformNames = [
+    'uResolution', 'uScreenOffset', 'uTime', 'uCameraPos', 'uCameraBasis', 'uFov', 'uRings',
+    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uColorInner', 'uColorOuter',
+  ];
+  const uniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
+  const position = gl.getAttribLocation(program, 'aPosition');
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  return { program, profile, uniforms, position, buffer };
+}
+
+function ensureSdfWebgl() {
+  if (!sdfCanvas || sdfWebglUnavailable) return false;
+  if (sdfGl) return true;
+  try {
+    sdfGl = sdfCanvas.getContext('webgl', {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    if (!sdfGl) {
+      sdfWebglUnavailable = true;
+      return false;
+    }
+    sdfCanvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      sdfGl = null;
+      sdfPrograms.clear();
+    });
+    sdfCanvas.addEventListener('webglcontextrestored', () => {
+      sdfGl = null;
+      sdfWebglUnavailable = false;
+      sdfPrograms.clear();
+      requestRender('sdf-context-restored');
+    });
+    return true;
+  } catch (error) {
+    sdfWebglUnavailable = true;
+    recordError(error);
+    return false;
+  }
+}
+
+function sdfProgramFor(profileKey) {
+  if (sdfPrograms.has(profileKey)) return sdfPrograms.get(profileKey);
+  const record = createSdfProgram(profileKey);
+  sdfPrograms.set(profileKey, record);
+  return record;
+}
+
+function normalizeVector3(x, y, z) {
+  const length = Math.hypot(x, y, z) || 1;
+  return [x / length, y / length, z / length];
+}
+
+function setSdfCanvasActive(active) {
+  if (!sdfCanvas) return false;
+  sdfCanvas.classList.toggle('active', !!active);
+  sdfCanvas.setAttribute('aria-hidden', active ? 'false' : 'true');
+  return !!active;
+}
+
+function updateSdfRingUniforms() {
+  const scale = 1.55;
+  const byRing = Array.from({ length: 8 }, () => []);
+  for (const point of points) byRing[clamp(Number(point.ring) || 0, 0, 7)].push(point);
+  for (let ringIndex = 0; ringIndex < 8; ringIndex++) {
+    const ringPoints = byRing[ringIndex];
+    const count = Math.max(1, ringPoints.length);
+    const radius = ringPoints.reduce((sum, point) => sum + Math.hypot(point.x, point.y), 0) / count;
+    const first = ringPoints[0] || { x: 1, y: 0 };
+    const offset = ringIndex * 4;
+    sdfRingUniformData[offset] = radius * scale;
+    sdfRingUniformData[offset + 1] = Math.atan2(first.y, first.x);
+    sdfRingUniformData[offset + 2] = TAU / count;
+    sdfRingUniformData[offset + 3] = (ringIndex / 7 - 0.5) * 0.8 * scale * state.e8MorphT;
+  }
+  return scale;
+}
+
+function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  if (!ensureSdfWebgl()) return null;
+  try {
+    const profileKey = interactionLiteFrame ? 'interactive' : hasRuntimeAnimation() ? 'motion' : state.quality;
+    const record = sdfProgramFor(profileKey);
+    const { program, profile, uniforms, position, buffer } = record;
+    const gl = sdfGl;
+    const width = Math.max(1, Math.round(window.innerWidth * profile.scale));
+    const height = Math.max(1, Math.round(window.innerHeight * profile.scale));
+    if (sdfCanvas.width !== width || sdfCanvas.height !== height) {
+      sdfCanvas.width = width;
+      sdfCanvas.height = height;
+    }
+    sdfCanvas.style.width = `${window.innerWidth}px`;
+    sdfCanvas.style.height = `${window.innerHeight}px`;
+    gl.viewport(0, 0, width, height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+    const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+    const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+    const diveScale = state.cameraPath === 'dive' && state.autoRotate ? 0.82 + 0.22 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86)) : 1;
+    const distance = (9.45 / Math.sqrt(state.zoom)) * diveScale;
+    const cosPitch = Math.cos(pitch);
+    const camera = [
+      Math.sin(state.rotation) * cosPitch * distance,
+      Math.sin(pitch) * distance,
+      Math.cos(state.rotation) * cosPitch * distance,
+    ];
+    const forward = normalizeVector3(-camera[0], -camera[1], -camera[2]);
+    const right = normalizeVector3(-forward[2], 0, forward[0]);
+    const up = normalizeVector3(
+      right[1] * forward[2] - right[2] * forward[1],
+      right[2] * forward[0] - right[0] * forward[2],
+      right[0] * forward[1] - right[1] * forward[0]
+    );
+    const cameraBasis = new Float32Array([
+      right[0], right[1], right[2],
+      up[0], up[1], up[2],
+      forward[0], forward[1], forward[2],
+    ]);
+    const rootScale = updateSdfRingUniforms();
+    const inner = colorChannels(paletteSet.colors[0]).map(channel => channel / 255);
+    const outer = colorChannels(paletteSet.colors[paletteSet.colors.length - 1]).map(channel => channel / 255);
+    const targetX = window.innerWidth * 0.5 + state.panX;
+    const targetY = layout.cy + state.panY;
+    const screenOffset = [
+      2 * (targetX - window.innerWidth * 0.5) / Math.max(1, window.innerHeight),
+      (window.innerHeight - 2 * targetY) / Math.max(1, window.innerHeight),
+    ];
+
+    gl.uniform2f(uniforms.uResolution, width, height);
+    gl.uniform2f(uniforms.uScreenOffset, screenOffset[0], screenOffset[1]);
+    gl.uniform1f(uniforms.uTime, stylePhase + motionPhase);
+    gl.uniform3f(uniforms.uCameraPos, camera[0], camera[1], camera[2]);
+    gl.uniformMatrix3fv(uniforms.uCameraBasis, false, cameraBasis);
+    gl.uniform1f(uniforms.uFov, 50 * Math.PI / 180);
+    gl.uniform4fv(uniforms.uRings, sdfRingUniformData);
+    gl.uniform1f(uniforms.uSphereR, state.sdfSphereR * rootScale);
+    gl.uniform1f(uniforms.uBlend, state.sdfBlend * rootScale);
+    gl.uniform1f(uniforms.uBloom, state.sdfBloom);
+    gl.uniform1f(uniforms.uAniso, state.sdfAniso);
+    gl.uniform1f(uniforms.uFxStrength, state.softFx ? state.fxStrength : 0);
+    gl.uniform3f(uniforms.uColorInner, inner[0], inner[1], inner[2]);
+    gl.uniform3f(uniforms.uColorOuter, outer[0], outer[1], outer[2]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    drawStats.modelVertices = points.length;
+    drawStats.modelFaces = 1;
+    drawStats.modelFaceFills = 1;
+    drawStats.sdfRenderer = 'webgl-raymarch';
+    drawStats.sdfQuality = profileKey;
+    drawStats.sdfRasterSize = Math.min(width, height);
+    drawStats.sdfPixels = width * height;
+    drawStats.sdfSpheres = points.length;
+    drawStats.sdfMarchSteps = profile.marchSteps;
+    drawStats.sdfNeighborSpan = profile.neighborSpan;
+    drawStats.sdfShadowSteps = profile.shadowSteps;
+    drawStats.sdfAoSteps = profile.aoSteps;
+    const diameter = Math.min(window.innerWidth - 24, layout.availableH * 0.92);
+    return projectedModelFrameMetrics([
+      { x: window.innerWidth * 0.5 - diameter * 0.5, y: layout.cy - diameter * 0.5 },
+      { x: window.innerWidth * 0.5 + diameter * 0.5, y: layout.cy + diameter * 0.5 },
+    ]);
+  } catch (error) {
+    recordError(error);
+    sdfWebglUnavailable = true;
+    setSdfCanvasActive(false);
+    return null;
+  }
+}
+
 function ensureSdfRaster(size) {
   if (!sdfRasterCanvas) {
     sdfRasterCanvas = document.createElement('canvas');
@@ -4939,7 +5518,7 @@ function colorChannels(hex) {
   return [0, 2, 4].map(offset => parseInt(value.slice(offset, offset + 2), 16));
 }
 
-function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+function drawSdfFallbackModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   const qualitySize = state.quality === 'sharp' ? 512 : state.quality === 'balanced' ? 400 : 320;
   const rasterSize = interactionLiteFrame ? Math.min(192, qualitySize) : qualitySize;
   if (!ensureSdfRaster(rasterSize)) return null;
@@ -5048,10 +5627,19 @@ function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   drawStats.sdfRasterSize = rasterSize;
   drawStats.sdfPixels = filledPixels;
   drawStats.sdfSpheres = points.length;
+  drawStats.sdfRenderer = 'canvas-fallback';
   return projectedModelFrameMetrics([
     { x: left, y: top },
     { x: left + diameter, y: top + diameter },
   ]);
+}
+
+function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  setSdfCanvasActive(true);
+  const webglFrame = drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame);
+  if (webglFrame) return webglFrame;
+  setSdfCanvasActive(false);
+  return drawSdfFallbackModel(layout, paletteSet, drawStats, interactionLiteFrame);
 }
 
 function normalizedPlatonicVerts(shape) {
@@ -6053,7 +6641,11 @@ function startMotion() {
     }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (state.autoRotate) state.rotation += dt * state.rotationSpeed * 0.55;
+    if (state.autoRotate) {
+      motionPhase = (motionPhase + dt * state.rotationSpeed) % 4096;
+      const pathRate = state.cameraPath === 'dive' ? 0.30 : state.cameraPath === 'spiral' ? 0.62 : 0.48;
+      state.rotation += dt * state.rotationSpeed * pathRate;
+    }
     if (state.modelMode === 'bloom' && state.bloomAuto) {
       state.bloomAmount = (state.bloomAmount + dt * state.bloomSpeed) % 1;
       metrics.bloomAutoFrameCount++;
@@ -6131,6 +6723,8 @@ function onPointerDown(event) {
     y: event.clientY,
     panX: state.panX,
     panY: state.panY,
+    rotation: state.rotation,
+    cameraTilt: state.cameraTilt,
     moved: false,
   };
 }
@@ -6155,9 +6749,17 @@ function onPointerMove(event) {
     return;
   }
   drag.moved = true;
-  markInteraction('pan');
-  state.panX = drag.panX + dx;
-  state.panY = drag.panY + dy;
+  if (state.modelMode === 'sdf') {
+    markInteraction('camera-drag');
+    state.rotation = drag.rotation + dx * 0.008;
+    state.cameraTilt = clamp(drag.cameraTilt - dy * 0.006, -Math.PI / 3, Math.PI / 3);
+    state.cameraPath = 'manual';
+    state.autoRotate = false;
+  } else {
+    markInteraction('pan');
+    state.panX = drag.panX + dx;
+    state.panY = drag.panY + dy;
+  }
   requestRender();
 }
 
