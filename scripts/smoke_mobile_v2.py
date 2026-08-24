@@ -2205,14 +2205,74 @@ def main() -> int:
             )
             after_pan = page.evaluate("() => window.__mobileApp.getState()")
             pan_moved = abs(after_pan["panX"] - before_pan["panX"]) > 20 or abs(after_pan["panY"] - before_pan["panY"]) > 20
-            check("one-finger drag pans canvas", pan_moved, f"{before_pan} -> {after_pan}")
+            check("one-finger drag keeps panning the flat E8 canvas", pan_moved, f"{before_pan} -> {after_pan}")
             drag_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("drag releases input state", not drag_metrics["interactionActive"] and drag_metrics["pointerCount"] == 0, str(drag_metrics))
+
+            platonic_orbit = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({
+                        modelMode: 'platonic',
+                        shape: 'dodecahedron',
+                        rotation: 0,
+                        cameraTilt: 0.28,
+                        cameraPath: 'orbit',
+                        autoRotate: true,
+                        panX: 11,
+                        panY: -9,
+                        selectedRoot: null
+                    });
+                    app.forceRender();
+                    const canvas = document.getElementById('mobile-canvas');
+                    const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+                        bubbles: true,
+                        pointerId: 71,
+                        pointerType: 'touch',
+                        clientX: x,
+                        clientY: y,
+                        isPrimary: true,
+                    }));
+                    const before = app.getState();
+                    fire('pointerdown', 160, 440);
+                    fire('pointermove', 202, 470);
+                    const during = app.getState();
+                    fire('pointerup', 202, 470);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return { before, during, after: app.getState(), metrics: app.getMetrics() };
+                }"""
+            )
+            check("one-finger drag orbits Platonic solids instead of panning", abs(platonic_orbit["during"]["rotation"] - platonic_orbit["before"]["rotation"]) > 0.2 and abs(platonic_orbit["during"]["cameraTilt"] - platonic_orbit["before"]["cameraTilt"]) > 0.1 and platonic_orbit["during"]["panX"] == platonic_orbit["before"]["panX"] and platonic_orbit["during"]["panY"] == platonic_orbit["before"]["panY"] and not platonic_orbit["during"]["autoRotate"] and platonic_orbit["during"]["cameraPath"] == "manual", str(platonic_orbit))
+            check("Platonic orbit drag settles to the solid renderer", platonic_orbit["metrics"]["lastInteractionType"] == "orbit-end" and platonic_orbit["metrics"]["lastSettledRenderRequestReason"] == "orbit-end" and not platonic_orbit["metrics"]["interactionActive"] and platonic_orbit["metrics"]["pointerCount"] == 0 and platonic_orbit["metrics"]["lastDrawStats"]["modelFaces"] == 12 and platonic_orbit["metrics"]["lastDrawStats"]["modelFaceFills"] == 12, str(platonic_orbit["metrics"]))
+
+            polytope_orbit = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({ modelMode: 'poly4d', polytope4d: '24cell', rotation: 0, cameraTilt: 0.28, cameraPath: 'manual', autoRotate: false, panX: 0, panY: 0 });
+                    app.forceRender();
+                    const canvas = document.getElementById('mobile-canvas');
+                    const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+                        bubbles: true,
+                        pointerId: 72,
+                        pointerType: 'touch',
+                        clientX: x,
+                        clientY: y,
+                        isPrimary: true,
+                    }));
+                    const before = app.getState();
+                    fire('pointerdown', 210, 470);
+                    fire('pointermove', 178, 444);
+                    fire('pointerup', 178, 444);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return { before, after: app.getState(), metrics: app.getMetrics() };
+                }"""
+            )
+            check("one-finger drag also orbits 4D model projections", abs(polytope_orbit["after"]["rotation"] - polytope_orbit["before"]["rotation"]) > 0.2 and abs(polytope_orbit["after"]["cameraTilt"] - polytope_orbit["before"]["cameraTilt"]) > 0.1 and polytope_orbit["after"]["panX"] == polytope_orbit["before"]["panX"] and polytope_orbit["after"]["panY"] == polytope_orbit["before"]["panY"] and polytope_orbit["metrics"]["lastInteractionType"] == "orbit-end" and polytope_orbit["metrics"]["lastDrawStats"]["modelMode"] == "poly4d", str(polytope_orbit))
 
             pinch_jitter_probe = page.evaluate(
                 """async () => {
                     const app = window.__mobileApp;
-                    app.setState({ showRings: true, showContext: true, autoRotate: false, selectedRoot: null, zoom: 1, panX: 8, panY: -6, rotation: 0 });
+                    app.setState({ modelMode: 'e8_2d', e8MorphT: 0, showRings: true, showContext: true, autoRotate: false, selectedRoot: null, zoom: 1, panX: 8, panY: -6, rotation: 0 });
                     app.forceRender();
                     const canvas = document.getElementById('mobile-canvas');
                     const fire = (type, id, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
