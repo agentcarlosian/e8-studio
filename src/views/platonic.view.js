@@ -214,16 +214,34 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
       group.add(new THREE.LineSegments(lineGeo, lineMaterial));
     }
 
+    // Optional clean vertex markers. They are deliberately off by default so
+    // the solids keep the sphere-free silhouette requested for both desktop
+    // and mobile; the View toggle makes them available when useful.
+    const pointGeo = new THREE.BufferGeometry();
+    pointGeo.setAttribute('position', new THREE.BufferAttribute(positions.slice(), 3));
+    const pointMaterial = new THREE.PointsMaterial({
+      color: new THREE.Color(colorAt(palette, Math.min(1, colorT + 0.25), blendMode)),
+      size: 0.075 * worldScale,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    });
+    const pointObject = new THREE.Points(pointGeo, pointMaterial);
+    pointObject.name = 'platonic-vertex-nodes';
+    pointObject.visible = !!runtimeParams().showVertices;
+    group.add(pointObject);
+
     // Record everything the morph deformer needs to rewrite the buffers in place
     // (no object churn → no fxRuntime leak, smooth live morphing + auto-animate).
-    group.userData.solids.push({ verts, worldScale, faces, edges, faceGeo, lineGeo });
+    group.userData.solids.push({ verts, worldScale, faces, edges, faceGeo, lineGeo, pointGeo, pointMaterial, pointObject });
     return lineMaterial;
   }
 
   // Rewrite one solid's face and edge buffers from its base verts + morph.
   // The deformation lives in math/morph.js so the SVG/OBJ export deforms identically.
   function refillSolid(rec, m) {
-    const { verts, worldScale, faces, edges, faceGeo, lineGeo } = rec;
+    const { verts, worldScale, faces, edges, faceGeo, lineGeo, pointGeo } = rec;
     const n = verts.length;
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -249,6 +267,10 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
         la[k++]=pos[b*3]; la[k++]=pos[b*3+1]; la[k++]=pos[b*3+2];
       }
       lineGeo.attributes.position.needsUpdate = true;
+    }
+    if (pointGeo) {
+      pointGeo.attributes.position.array.set(pos);
+      pointGeo.attributes.position.needsUpdate = true;
     }
   }
 
@@ -344,6 +366,10 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
             if (m.uniforms.uTime) m.uniforms.uTime.value = time;
           }
         }
+      }
+      for (const solid of group.userData.solids || []) {
+        solid.pointObject.visible = !!params.showVertices;
+        solid.pointMaterial.size = 0.075 * solid.worldScale * (params.pointScale || 1);
       }
       // Trail: decay color intensities each frame
       if (params.fxMode === 'trail' && group.userData.trailGeo) {

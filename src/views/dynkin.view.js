@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { colorAt } from '../ui/palettes.js';
 import { VERTEX_FX_BRANCHES, FRAGMENT_FX_BRANCHES } from '../fx/fx-branches.js';
 import { FX_MODE_MAP } from '../fx/fx-shader.js';
+import { LineFXMaterial } from '../fx/fx-line-shader.js';
 
 // Convert integer 1-8 to subscript string (₁₂₃₄₅₆₇₈)
 const SUB_DIGITS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
@@ -48,6 +49,8 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
   const projectedNode = new THREE.Vector3();
 
   const build = (diagramName) => {
+    if (group.userData.lambdaContainer?.parentNode) group.userData.lambdaContainer.remove();
+    if (group.userData.trailContainer?.parentNode) group.userData.trailContainer.remove();
     while (group.children.length) {
       const c = group.children.pop();
       if (c.geometry) c.geometry.dispose();
@@ -79,11 +82,10 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
     }
     const edgeGeo = new THREE.BufferGeometry();
     edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
-    const edgeMat = new THREE.LineBasicMaterial({
+    const edgeMat = new LineFXMaterial({
       color: new THREE.Color(colorAt(palette, 0.5)),
       transparent: true,
       opacity: 1.0,
-      linewidth: 2,
     });
     group.add(new THREE.LineSegments(edgeGeo, edgeMat));
 
@@ -191,7 +193,7 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
     });
     group.add(new THREE.Points(nodeGeo, nodeMat));
     // Expose material so update() can set FX uniforms
-    group.userData.materials = [nodeMat];
+    group.userData.materials = [nodeMat, edgeMat];
     group.userData.trailGeo = nodeGeo;
 
     // Node labels: α₁, α₂, ... αₙ — drawn as canvas sprites
@@ -376,6 +378,9 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
             if (m.uniforms.uTime) m.uniforms.uTime.value = time;
           }
         }
+      }
+      if (group.userData.materials?.[0]?.uniforms?.uBaseSize) {
+        group.userData.materials[0].uniforms.uBaseSize.value = 0.18 * baseScale * (params.pointScale || 1);
       }
       // Trail: decay color intensities each frame
       if (params.fxMode === 'trail' && group.userData.trailGeo) {

@@ -335,6 +335,7 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
 
       // Update shader time + FX uniforms
       vMat.uniforms.uTime.value = time;
+      vMat.uniforms.uBaseSize.value = 0.05 * baseScale * (params.pointScale || 1);
       // Use canonical 11-mode FX map (was hardcoded 6-mode map)
       vMat.uniforms.uFXMode.value = FX_MODE_MAP[params.fxMode] ?? 0;
       vMat.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
