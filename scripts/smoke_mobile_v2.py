@@ -1587,7 +1587,14 @@ def main() -> int:
                 app.closeSettings('sdf-fx-animation-test');
                 return { renderCount: metrics.renderCount, stylePhase: metrics.lastStylePhase };
             }""")
-            page.wait_for_timeout(220)
+            # A software-rendered SDF frame can take longer than 220 ms after the
+            # full effect sweep. Require the motion loop to advance, independent
+            # of runner speed, while retaining a firm upper bound.
+            page.wait_for_function("""before => {
+                const metrics = window.__mobileApp.getMetrics();
+                return metrics.renderCount > before.renderCount
+                    && metrics.lastStylePhase !== before.stylePhase;
+            }""", arg=sdf_fx_animation_before, timeout=2500, polling=50)
             sdf_fx_animation_after = page.evaluate("""() => {
                 const app = window.__mobileApp;
                 const metrics = app.getMetrics();
