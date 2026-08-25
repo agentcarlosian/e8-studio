@@ -109,10 +109,10 @@
 
 /* Subsection labels */
 .ps-subtitle {
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--ink-3);
+  color: var(--ink-2);
   margin: 12px 0 6px;
   font-weight: 600;
 }
@@ -252,6 +252,53 @@
   height: 20px;
   border-radius: 3px;
 }
+.palette-expand {
+  width: 100%;
+  min-height: 29px;
+  margin: 0 0 6px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-1);
+  cursor: pointer;
+  font: 9px 'JetBrains Mono', monospace;
+}
+.palette-expand:hover,
+.palette-expand:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+/* Reusable disclosures keep secondary controls close without letting them
+   dominate every model. Their open state is preserved across panel renders. */
+.control-disclosure {
+  margin: 10px 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-1);
+  overflow: clip;
+}
+.control-disclosure > summary {
+  position: relative;
+  padding: 8px 27px 8px 9px;
+  cursor: pointer;
+  list-style: none;
+}
+.control-disclosure > summary::-webkit-details-marker { display: none; }
+.control-disclosure > summary::after {
+  content: '+';
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  color: var(--ink-2);
+  font: 14px 'JetBrains Mono', monospace;
+}
+.control-disclosure[open] > summary::after { content: '−'; color: var(--accent); }
+.control-disclosure > summary span,
+.control-disclosure > summary small { display: block; }
+.control-disclosure > summary span { color: var(--ink-0); font-size: 10px; font-weight: 650; }
+.control-disclosure > summary small { margin-top: 2px; color: var(--ink-2); font-size: 8px; }
+.control-disclosure[open] > summary { border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.control-disclosure-body { padding: 0 8px 7px; }
+.control-disclosure-body > .ps-subtitle:first-child { margin-top: 8px; }
 .learn-orientation p { margin: 6px 0; }
 .learn-orientation p:last-child { margin-bottom: 0; }
 .learn-equation {

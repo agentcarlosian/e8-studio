@@ -1590,6 +1590,44 @@ function setActiveCommand(host, nextIdx) {
   buttons[idx].scrollIntoView({ block: 'nearest' });
 }
 
+let commandPaletteReturnFocus = null;
+
+function setStudioChromeInert(inert) {
+  document.querySelectorAll('header, #panel, main, footer').forEach(node => {
+    node.inert = inert;
+  });
+}
+
+function resolveReturnFocus(target) {
+  if (!target) return null;
+  if (target.isConnected) return target;
+  if (target.id) {
+    const byId = document.getElementById(target.id);
+    if (byId) return byId;
+  }
+  if (target.dataset?.panelAct) {
+    return [...document.querySelectorAll('[data-panel-act]')]
+      .find(node => node.dataset.panelAct === target.dataset.panelAct) || null;
+  }
+  if (target.dataset?.act) {
+    return [...document.querySelectorAll('[data-act]')]
+      .find(node => node.dataset.act === target.dataset.act
+        && (node.dataset.arg ?? null) === (target.dataset.arg ?? null)) || null;
+  }
+  return null;
+}
+
+function closeCommandPalette({ restoreFocus = true } = {}) {
+  const host = document.getElementById('command-palette');
+  if (!host || host.classList.contains('hidden')) return false;
+  host.classList.add('hidden');
+  setStudioChromeInert(false);
+  const target = commandPaletteReturnFocus;
+  commandPaletteReturnFocus = null;
+  if (restoreFocus) requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
+  return true;
+}
+
 function ensureCommandPalette() {
   let host = document.getElementById('command-palette');
   if (host) return host;
@@ -1607,10 +1645,12 @@ function ensureCommandPalette() {
   host.addEventListener('click', (e) => {
     const close = e.target.closest('[data-cmd-close]');
     const button = e.target.closest('[data-cmd]');
-    if (close || e.target === host) host.classList.add('hidden');
+    if (close || e.target === host) closeCommandPalette();
     if (button) {
+      const returnTarget = commandPaletteReturnFocus;
+      closeCommandPalette({ restoreFocus: false });
+      resolveReturnFocus(returnTarget)?.focus?.({ preventScroll: true });
       runCommand(button.dataset.cmd);
-      host.classList.add('hidden');
     }
   });
   host.addEventListener('input', (e) => {
@@ -1619,8 +1659,19 @@ function ensureCommandPalette() {
   });
   host.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      host.classList.add('hidden');
+      e.preventDefault();
+      e.stopPropagation();
+      closeCommandPalette();
       return;
+    }
+    if (e.key === 'Tab') {
+      const focusable = [...host.querySelectorAll('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
     const buttons = Array.from(host.querySelectorAll('[data-cmd-list] [data-cmd]'));
     const activeIdx = Math.max(0, buttons.findIndex(button => button.classList.contains('cmd-active')));
@@ -1634,8 +1685,10 @@ function ensureCommandPalette() {
       const active = buttons[activeIdx] || buttons[0];
       if (active) {
         e.preventDefault();
+        const returnTarget = commandPaletteReturnFocus;
+        closeCommandPalette({ restoreFocus: false });
+        resolveReturnFocus(returnTarget)?.focus?.({ preventScroll: true });
         runCommand(active.dataset.cmd);
-        host.classList.add('hidden');
       }
     }
   });
@@ -1912,6 +1965,19 @@ function learningState() {
   return learningProgress.state(params?.view || 'e8coxeter', CURIOUS_CARDS);
 }
 
+let learningModalReturnFocus = null;
+
+function closeLearningModal() {
+  const host = document.getElementById('learning-modal');
+  if (!host || host.classList.contains('hidden')) return false;
+  host.classList.add('hidden');
+  setStudioChromeInert(false);
+  const target = learningModalReturnFocus;
+  learningModalReturnFocus = null;
+  requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
+  return true;
+}
+
 function ensureLearningModal() {
   let host = document.getElementById('learning-modal');
   if (host) return host;
@@ -1920,8 +1986,23 @@ function ensureLearningModal() {
   host.className = 'learning-modal hidden';
   host.addEventListener('click', (e) => {
     if (e.target === host || e.target.closest('[data-modal-close]')) {
-      host.classList.add('hidden');
+      closeLearningModal();
     }
+  });
+  host.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeLearningModal();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = [...host.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+    if (!focusable.length) { e.preventDefault(); host.querySelector('.learning-dialog')?.focus(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === host.querySelector('.learning-dialog'))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
   document.body.appendChild(host);
   return host;
@@ -1929,8 +2010,19 @@ function ensureLearningModal() {
 
 function showLearningModal(html) {
   const host = ensureLearningModal();
-  host.innerHTML = `<div class="learning-dialog" role="dialog" aria-modal="true">${html}</div>`;
+  if (host.classList.contains('hidden')) learningModalReturnFocus = document.activeElement;
+  host.innerHTML = `<div class="learning-dialog" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
+  const dialog = host.querySelector('.learning-dialog');
+  const heading = dialog?.querySelector('h1, h2, h3');
+  if (heading) {
+    if (!heading.id) heading.id = 'learning-dialog-title';
+    dialog.setAttribute('aria-labelledby', heading.id);
+  } else {
+    dialog?.setAttribute('aria-label', 'E8 Studio dialog');
+  }
   host.classList.remove('hidden');
+  setStudioChromeInert(true);
+  requestAnimationFrame(() => dialog?.focus({ preventScroll: true }));
   return host;
 }
 
@@ -2015,7 +2107,7 @@ function openLearningCenter(lessonId = null) {
     button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
   });
   host.querySelector('[data-learning-open-view]')?.addEventListener('click', event => {
-    host.classList.add('hidden');
+    closeLearningModal();
     switchView(event.currentTarget.dataset.learningOpenView);
   });
   host.querySelector('[data-learning-complete]')?.addEventListener('click', event => {
@@ -2026,7 +2118,7 @@ function openLearningCenter(lessonId = null) {
   host.querySelector('[data-learning-quiz]')?.addEventListener('click', event => startQuizModule(event.currentTarget.dataset.learningQuiz));
   host.querySelectorAll('[data-learning-essay]').forEach(button => {
     button.addEventListener('click', () => {
-      host.classList.add('hidden');
+      closeLearningModal();
       switchView(lesson.view);
       window.essayPanel?.setEssayById(button.dataset.learningEssay);
     });
@@ -2449,7 +2541,7 @@ function openPresetBrowserModal() {
       if (!preset) return;
       applyGallerySettings(preset);
       showSavedToast(`Preset: ${preset.name}`);
-      host.classList.add('hidden');
+      closeLearningModal();
     }));
   }
 }
@@ -2546,7 +2638,7 @@ function openVideoExportModal() {
     params.clipMotionScale = motionScale;
     saveConfig(params);
     // Close the modal so the canvas is fully visible during recording.
-    host.classList.add('hidden');
+    closeLearningModal();
     await window.__app.exportClip(seconds, { width: resDef.w, height: resDef.h, fps: chosenFps, motionScale });
   });
 }
@@ -3309,8 +3401,12 @@ window.__app = {
   },
   toggleCommandPalette() {
     const host = ensureCommandPalette();
-    host.classList.toggle('hidden');
     if (!host.classList.contains('hidden')) {
+      closeCommandPalette();
+    } else {
+      commandPaletteReturnFocus = document.activeElement;
+      host.classList.remove('hidden');
+      setStudioChromeInert(true);
       // Award the "Power User" exploration badge on first open. (Idempotent.)
       awardExplorationBadge('explore:command-palette', 'Power User');
       const input = host.querySelector('[data-cmd-search]');
@@ -4235,21 +4331,13 @@ function installDelegatedHandlers() {
 }
 
 function closeTopAppLayer() {
-  const modal = document.getElementById('learning-modal');
-  if (modal && !modal.classList.contains('hidden')) {
-    modal.classList.add('hidden');
-    return true;
-  }
+  if (closeLearningModal()) return true;
   const fallback = document.getElementById('render-fallback');
   if (fallback && !fallback.classList.contains('hidden')) {
     fallback.classList.add('hidden');
     return true;
   }
-  const palette = document.getElementById('command-palette');
-  if (palette && !palette.classList.contains('hidden')) {
-    palette.classList.add('hidden');
-    return true;
-  }
+  if (closeCommandPalette()) return true;
   if (isTourActive()) {
     stopTour();
     return true;
@@ -4361,14 +4449,10 @@ async function main() {
 
   // Keyboard
   window.addEventListener('keydown', (e) => {
-    // Escape exits presentation / full-screen mode first (Part B, 2026-06-27).
-    // Previously entering presentation hid the panel — including the only button
-    // that could toggle it off — with no key bound to leave, trapping the user.
-    // Esc now returns to the default (wide-canvas) layout. Placed before the
-    // editable-target guard so it works even if a field had focus.
-    if (e.key === 'Escape' && (params.layout === 'presentation' || params.presentationMode)) {
-      window.__app.setLayout('wide-canvas');
-      setStatus('exited full screen');
+    // Escape always closes the top-most application layer and restores focus
+    // to its trigger. This matches the keyboard help and works from fields too.
+    if (e.key === 'Escape' && closeTopAppLayer()) {
+      e.preventDefault();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -4383,8 +4467,14 @@ async function main() {
     const t = e.target;
     const isEditable = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
     if (isEditable) return;
+    // Modifier-free shortcuts belong to the artwork surface. Buttons, tabs,
+    // links and disclosure summaries retain their normal Space/letter behavior.
+    const canvas = document.getElementById('canvas');
+    const shortcutSurface = t === document.body || t === document.documentElement || t === canvas;
+    if (!shortcutSurface) return;
     if (params.intro) params.intro = false;  // any keypress dismisses intro
     if (e.key === ' ') {
+      e.preventDefault();
       // When the tour is running, Space pauses/resumes the TOUR (not the
       // animation) — so you can linger on a stop. Otherwise it toggles the
       // render-animation pause as usual.

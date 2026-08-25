@@ -376,13 +376,16 @@
   font-style: italic;
   text-align: center;
 }
-/* 4-button panel footer (2x2 grid) */
+/* Compact desktop action dock: five primary actions plus a Tools menu fit in
+   two rows, leaving the model controls substantially more vertical space. */
 .panel-footer {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
+  position: relative;
 }
-.panel-footer button {
+.panel-footer button,
+.panel-tools-menu > summary {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -396,12 +399,40 @@
   font-size: 11px;
   font-family: inherit;
   transition: all 140ms;
+  list-style: none;
+  min-width: 0;
 }
-.panel-footer button:hover {
+.panel-tools-menu > summary::-webkit-details-marker { display: none; }
+.panel-footer button:hover,
+.panel-tools-menu > summary:hover,
+.panel-tools-menu[open] > summary {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--bg-3);
 }
+.panel-tools-menu {
+  min-width: 0;
+}
+.panel-tools-menu > summary {
+  height: 100%;
+}
+.panel-tools-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(260px, calc(100vw - 20px));
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
+}
+.panel-tools-popover button:last-child { grid-column: 1 / -1; }
 .panel-footer button.is-confirmed {
   color: #0b0910;
   background: var(--accent);

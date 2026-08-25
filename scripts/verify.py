@@ -626,6 +626,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         subtitles: styleSubtitles,
         paletteSwatches: document.querySelectorAll('[data-section="style"] .swatch[data-act="setPalette"]').length,
         palettePresetCount: Object.keys(window.PALETTE_PRESETS || {}).length,
+        paletteExpandCount: document.querySelectorAll('[data-panel-act="togglePaletteExpanded"]').length,
+        paletteExpanded: document.querySelector('[data-panel-act="togglePaletteExpanded"]')?.getAttribute('aria-expanded'),
         paletteGroupLabels: document.querySelectorAll('[data-section="style"] .palette-group-label').length,
         advancedToggles: document.querySelectorAll('[data-act="toggleAdvancedStyle"]').length,
         environmentHeadings: styleSubtitles.filter(title => title === 'Environment').length,
@@ -743,8 +745,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or scene_workspace["searchFields"] != 0
             or scene_workspace["welcomeCards"] != 0
             or scene_workspace["footerActions"] != [
-                "resetConfig", "surprise", "sharePage", "shareSnapshot",
-                "openVideoExport", "togglePresentationMode", "togglePerf",
+                "resetConfig", "surprise", "shareSnapshot", "sharePage",
+                "togglePresentationMode", "openVideoExport", "togglePerf",
                 "toggleCommandPalette", "copyDiagnostics", "openCheatsheet"
             ]
             or scene_workspace["sdfSurfaceControls"] != 3
@@ -752,7 +754,10 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or style_workspace["styleSections"] != 1
             or style_workspace["learnSections"] != 0
             or style_workspace["title"] != "Visuals"
-            or style_workspace["paletteSwatches"] != style_workspace["palettePresetCount"]
+            or style_workspace["paletteSwatches"] != 18
+            or style_workspace["palettePresetCount"] != 45
+            or style_workspace["paletteExpandCount"] != 1
+            or style_workspace["paletteExpanded"] != "false"
             or style_workspace["paletteGroupLabels"] != 0
             or style_workspace["advancedToggles"] != 0
             or style_workspace["environmentHeadings"] != 0
@@ -780,6 +785,12 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     workspace_navigation_contract = page.evaluate("""() => {
       window.__app.switchView('e8coxeter');
       window.__app.setPanelMode('scene');
+      // Open the secondary groups so the View workspace is intentionally
+      // scrollable even after the compact desktop hierarchy redesign.
+      for (const details of document.querySelectorAll('[data-panel-disclosure="camera-motion"], [data-panel-disclosure="e8-explore"]')) {
+        details.open = true;
+        details.dispatchEvent(new Event('toggle', { bubbles: true }));
+      }
       let body = document.getElementById('ps-body');
       body.scrollTop = 40;
       const sceneTop = body.scrollTop;

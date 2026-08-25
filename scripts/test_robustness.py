@@ -180,9 +180,10 @@ def main() -> int:
                 hasZoomSlider: !!document.querySelector('input[data-param="cameraDistance"]'),
               };
             }""")
-            check("camera controls are compact and above 4D controls",
+            check("model controls precede compact camera utilities",
                   camera_ui["cameraIndex"] >= 0
-                  and camera_ui["cameraIndex"] < camera_ui["polyIndex"]
+                  and camera_ui["polyIndex"] >= 0
+                  and camera_ui["polyIndex"] < camera_ui["cameraIndex"]
                   and camera_ui["hasPathPresets"] is False
                   and camera_ui["hasModePresets"] is False
                   and camera_ui["hasBookmarks"] is False,
@@ -190,6 +191,111 @@ def main() -> int:
             check("camera keeps three useful presets and a real zoom slider",
                   camera_ui["presets"] == ["Orbit", "Dive", "Spiral"]
                   and camera_ui["hasZoomSlider"] is True, str(camera_ui))
+
+            # ---- Desktop shell, hierarchy, and accessibility regressions ----
+            shell = pg.evaluate("""() => {
+              window.__app.setPanelMode('style');
+              const palettes = document.querySelectorAll('#desktop-palette-grid .swatch').length;
+              const sliders = [...document.querySelectorAll('#panel input[type="range"]')];
+              const unnamedSliders = sliders.filter(el => !el.labels?.length && !el.getAttribute('aria-label'));
+              const footer = document.querySelector('.panel-footer');
+              const footerChildren = [...footer.children];
+              return {
+                palettes,
+                paletteToggle: document.querySelector('[data-panel-act="togglePaletteExpanded"]')?.textContent.trim(),
+                unnamedSliders: unnamedSliders.map(el => el.dataset.param),
+                footerChildren: footerChildren.length,
+                directActions: footer.querySelectorAll(':scope > button').length,
+                hasTools: !!footer.querySelector(':scope > details.panel-tools-menu'),
+                footerHeight: Math.round(footer.getBoundingClientRect().height),
+                canvasName: document.getElementById('canvas')?.getAttribute('aria-label'),
+                liveStatus: document.getElementById('ps-status')?.getAttribute('aria-live'),
+              };
+            }""")
+            check("desktop shell is compact and semantically named",
+                  shell["palettes"] == 18
+                  and shell["paletteToggle"] == "Expand all 45 palettes"
+                  and shell["unnamedSliders"] == []
+                  and shell["footerChildren"] == 6
+                  and shell["directActions"] == 5
+                  and shell["hasTools"] is True
+                  and shell["footerHeight"] <= 90
+                  and bool(shell["canvasName"])
+                  and shell["liveStatus"] == "polite",
+                  str(shell))
+
+            palette_focus = pg.evaluate("""() => {
+              const button = document.querySelector('[data-panel-act="togglePaletteExpanded"]');
+              button.focus();
+              button.click();
+              return {
+                count: document.querySelectorAll('#desktop-palette-grid .swatch').length,
+                focus: document.activeElement?.dataset?.panelAct,
+                expanded: document.activeElement?.getAttribute('aria-expanded'),
+              };
+            }""")
+            check("palette expansion retains keyboard focus",
+                  palette_focus == {"count": 45, "focus": "togglePaletteExpanded", "expanded": "true"},
+                  str(palette_focus))
+
+            focus_state = pg.evaluate("""() => {
+              const space = document.querySelector('[data-act="setBgMode"][data-arg="starfield"]');
+              space.focus();
+              space.click();
+              return {
+                tag: document.activeElement?.tagName,
+                act: document.activeElement?.dataset?.act,
+                arg: document.activeElement?.dataset?.arg,
+              };
+            }""")
+            check("panel focus survives state-driven rerenders",
+                  focus_state == {"tag": "BUTTON", "act": "setBgMode", "arg": "starfield"},
+                  str(focus_state))
+
+            shortcut_state = pg.evaluate("""() => {
+              const before = window.__app.params.paused;
+              const tab = document.getElementById('panel-tab-style');
+              tab.focus();
+              tab.dispatchEvent(new KeyboardEvent('keydown', {key: ' ', bubbles: true}));
+              return {before, after: window.__app.params.paused};
+            }""")
+            check("Space on panel controls does not trigger the global pause shortcut",
+                  shortcut_state["before"] == shortcut_state["after"], str(shortcut_state))
+
+            modal_state = pg.evaluate("""() => {
+              window.__app.setPanelMode('learn');
+              const trigger = document.querySelector('[data-act="openLearningCenter"]');
+              trigger.focus();
+              trigger.click();
+              const dialog = document.querySelector('#learning-modal .learning-dialog');
+              const opened = !document.getElementById('learning-modal').classList.contains('hidden');
+              dialog.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+              return new Promise(resolve => requestAnimationFrame(() => resolve({
+                opened,
+                closed: document.getElementById('learning-modal').classList.contains('hidden'),
+                focusAct: document.activeElement?.dataset?.act,
+              })));
+            }""")
+            check("learning dialogs close with Escape and restore focus",
+                  modal_state == {"opened": True, "closed": True, "focusAct": "openLearningCenter"},
+                  str(modal_state))
+
+            command_focus = pg.evaluate("""() => {
+              window.__app.setPanelMode('style');
+              const trigger = document.getElementById('panel-tab-style');
+              trigger.focus();
+              window.__app.toggleCommandPalette();
+              document.getElementById('command-palette').dispatchEvent(
+                new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})
+              );
+              return new Promise(resolve => requestAnimationFrame(() => resolve({
+                closed: document.getElementById('command-palette').classList.contains('hidden'),
+                focusId: document.activeElement?.id,
+              })));
+            }""")
+            check("command palette restores focus after a panel rerender",
+                  command_focus == {"closed": True, "focusId": "panel-tab-style"},
+                  str(command_focus))
 
             camera_runtime = pg.evaluate("""() => {
               window.__app.setParam('cameraDistance', 4);

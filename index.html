@@ -66,10 +66,10 @@
     </div>
   </header>
 
-  <aside id="panel"></aside>
+  <aside id="panel" aria-label="Studio controls"></aside>
 
-  <main>
-    <canvas id="canvas"></canvas>
+  <main aria-label="Visualization workspace">
+    <canvas id="canvas" tabindex="0" aria-label="Interactive E8 visualization. Drag to rotate and scroll to zoom."></canvas>
     <div id="essays" class="essay-host"></div>
     <div class="ov ov-tl" id="ov-tl"></div>
     <div class="ov ov-tr" id="ov-tr"></div>
@@ -82,7 +82,7 @@
   </main>
 
   <footer>
-    <div><span class="status-dot"></span><span id="status">loading…</span></div>
+    <div><span class="status-dot"></span><span id="status" role="status" aria-live="polite">loading…</span></div>
     <div id="footer-right">240 roots · 8 dimensions · 1 symmetry group</div>
   </footer>
 
