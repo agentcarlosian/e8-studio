@@ -104,7 +104,7 @@ function renderGalleryControls(params) {
 }
 
 // ── Section 1: VIEW ──
-function renderViewSection(params, data) {
+function renderViewSection(params, data, uiState = {}) {
   const caps = VIEW_CAPABILITIES[params.view] || {};
   let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
 
@@ -119,10 +119,6 @@ function renderViewSection(params, data) {
   // Gallery changes the whole scene, so keep it directly beneath the primary
   // view selector instead of burying it below camera and per-view controls.
   html += renderGalleryControls(params);
-
-  // Keep the essential camera/motion controls near the top. The panel exposes
-  // three useful paths; custom mode and bookmark grids stay out of the way.
-  if (caps.rotate) html += renderCameraControls(params, caps);
 
   // Shape selector — only if this view uses shapes
   if (caps.shape) {
@@ -189,7 +185,7 @@ function renderViewSection(params, data) {
 
   // E8-specific controls
   if (caps.e8) {
-    html += renderE8Controls(params, data);
+    html += renderE8Controls(params, data, uiState);
   }
 
   // SDF-specific controls (raymarched E₈ view)
@@ -210,6 +206,22 @@ function renderViewSection(params, data) {
       <div class="seg" style="margin-top:6px"><button data-act="clearViewModifiers">Clear modifiers</button></div>
     </div>`;
   }
+
+  // The selected model's controls are the primary task. Camera and motion are
+  // shared utilities, so keep them directly after the model controls in a
+  // disclosure instead of forcing every view-specific choice below them.
+  if (caps.rotate) {
+    const cameraOpen = uiState.openDisclosures?.has('camera-motion')
+      || params.cameraPath !== 'manual'
+      || params.autoZoom
+      || params.autoModel;
+    const zoom = Math.round(100 * 6 / Math.max(0.24, params.cameraDistance ?? 6));
+    html += `<details class="control-disclosure" data-panel-disclosure="camera-motion" ${cameraOpen ? 'open' : ''}>
+      <summary id="panel-disclosure-camera-motion"><span>Camera &amp; motion</span><small>${zoom}% zoom · ${params.cameraPath === 'manual' ? 'manual' : params.cameraPath}</small></summary>
+      <div class="control-disclosure-body">${renderCameraControls(params, caps)}</div>
+    </details>`;
+  }
+  if (caps.e8) html += renderE8ExploreControls(params, data, uiState);
 
   html += '</div>';
   return html;
@@ -241,7 +253,7 @@ function renderBloomControls(params) {
   `;
 }
 
-function renderE8Controls(params, data) {
+function renderE8Controls(params, data, uiState = {}) {
   const mode = params.e8ViewMode || 'coxeter';
   let html = '<div class="ps-subtitle">E₈ projection</div>';
   html += '<div class="seg seg-wrap">';
@@ -276,6 +288,26 @@ function renderE8Controls(params, data) {
     html += slider('Wave speed', 'rootDiffusionSpeed', params.rootDiffusionSpeed || 1.25, 0.2, 4, 0.05, v => v.toFixed(2));
   }
 
+  if (mode === 'custom') {
+    html += '<div style="font-size:10px;color:var(--ink-2);margin:6px 0 4px">Rotate in 8D (ℝ⁸) → reproject to 3D</div>';
+    html += slider('Spin', 'e8Spin', params.e8Spin || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
+    html += slider('Tilt', 'e8Tilt', params.e8Tilt || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
+    html += slider('Roll', 'e8Roll', params.e8Roll || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
+    html += '<div class="seg">';
+    html += `<button class="${params.e8AutoRotate ? 'on' : ''}" ${pressed(params.e8AutoRotate)} data-act="toggleE8AutoRotate">${params.e8AutoRotate ? 'Pause' : 'Anim 8D'}</button>`;
+    html += `<button data-act="resetE8Angles">Reset</button>`;
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function renderE8ExploreControls(params, data, uiState = {}) {
+  const exploreOpen = uiState.openDisclosures?.has('e8-explore')
+    || (params.compareMode || 'off') !== 'off';
+  let html = `<details class="control-disclosure" data-panel-disclosure="e8-explore" ${exploreOpen ? 'open' : ''}>
+    <summary id="panel-disclosure-e8-explore"><span>Compare &amp; inspect roots</span><small>subsets · inspector · root browser</small></summary>
+    <div class="control-disclosure-body">`;
   html += '<div class="ps-subtitle">Compare subset</div>';
   html += '<div class="seg seg-wrap">';
   for (const name of SHAPES) {
@@ -319,18 +351,7 @@ function renderE8Controls(params, data) {
   html += '<button data-act="jumpRoot" data-arg="opposite">Opposite</button>';
   html += '<button data-act="jumpRoot" data-arg="random">Random</button>';
   html += '</div>';
-
-  if (mode === 'custom') {
-    html += '<div style="font-size:10px;color:var(--ink-2);margin:6px 0 4px">Rotate in 8D (ℝ⁸) → reproject to 3D</div>';
-    html += slider('Spin', 'e8Spin', params.e8Spin || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
-    html += slider('Tilt', 'e8Tilt', params.e8Tilt || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
-    html += slider('Roll', 'e8Roll', params.e8Roll || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
-    html += '<div class="seg">';
-    html += `<button class="${params.e8AutoRotate ? 'on' : ''}" ${pressed(params.e8AutoRotate)} data-act="toggleE8AutoRotate">${params.e8AutoRotate ? 'Pause' : 'Anim 8D'}</button>`;
-    html += `<button data-act="resetE8Angles">Reset</button>`;
-    html += '</div>';
-  }
-
+  html += '</div></details>';
   return html;
 }
 
@@ -384,7 +405,7 @@ function renderPolytopeControls(params, data) {
 }
 
 // ── Section 2: VISUALS ──
-function renderStyleSection(params, data) {
+function renderStyleSection(params, data, uiState = {}) {
   const caps = VIEW_CAPABILITIES[params.view] || {};
   const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
   let html = '<div class="ps-section" data-section="style"><div class="ps-title">Visuals</div>';
@@ -406,14 +427,21 @@ function renderStyleSection(params, data) {
     <span>${params.palette.replaceAll('_', ' ')}</span>
     <small>${activePalette.description}</small>
   </div>`;
-  html += '<div class="swatch-grid all-swatches">';
-  for (const k of Object.keys(PALETTE_PRESETS)) {
+  const paletteKeys = Object.keys(PALETTE_PRESETS);
+  const paletteExpanded = !!uiState.paletteExpanded;
+  let visiblePalettes = paletteExpanded ? paletteKeys : paletteKeys.slice(0, 18);
+  if (!paletteExpanded && !visiblePalettes.includes(params.palette)) {
+    visiblePalettes = [...visiblePalettes.slice(0, -1), params.palette];
+  }
+  html += `<div class="swatch-grid all-swatches" id="desktop-palette-grid" aria-label="Color palettes">`;
+  for (const k of visiblePalettes) {
     html += `<button class="swatch ${params.palette === k ? 'active' : ''}"
       style="background:${palettePreviewCSS(k, 'spectrum')}"
       ${pressed(params.palette === k)} data-act="setPalette" data-arg="${k}" title="${k.replaceAll('_', ' ')} — ${PALETTE_PRESETS[k].description}"
       aria-label="Use ${k.replaceAll('_', ' ')} palette"></button>`;
   }
   html += '</div>';
+  html += `<button class="palette-expand" data-panel-act="togglePaletteExpanded" aria-expanded="${paletteExpanded}" aria-controls="desktop-palette-grid">${paletteExpanded ? 'Collapse palettes' : `Expand all ${paletteKeys.length} palettes`}</button>`;
 
   // Animated palette changes are a primary creative control, not an advanced
   // option, so they follow the static palette picker directly.
@@ -705,7 +733,7 @@ function slider(label, paramKey, value, min, max, step, formatFn, off, options =
   // min and max. Several can run at once for generative mix-and-match motion.
   const auto = _autoSliders.has(paramKey);
   return `<div class="control-row">
-    <label class="control-label">${label}</label>
+    <label class="control-label" for="slider-${paramKey}">${label}</label>
     <input type="range" id="slider-${paramKey}" data-param="${paramKey}"${offAttr}${invertAttr} min="${min}" max="${max}" step="${step}" value="${displayValue}" ${fillStyle}>
     <span class="control-value" id="slider-val-${paramKey}">${formatFn(value)}</span>
     <button class="slider-auto ${auto ? 'on' : ''}" ${pressed(auto)} data-act="toggleSliderAuto" data-arg="${paramKey}" title="Auto-animate this slider" aria-label="Auto-animate ${label}">⟳</button>
@@ -717,8 +745,8 @@ function slider(label, paramKey, value, min, max, step, formatFn, off, options =
 // handler (data-act) so no inline onclick is emitted (CSP: no 'unsafe-inline').
 function toggle(label, value, act) {
   return `<div class="control-row">
-    <label class="control-label">${label}</label>
-    <button class="${value ? 'on' : ''}" ${pressed(value)} data-act="${act}">${value ? 'on' : 'off'}</button>
+    <span class="control-label">${label}</span>
+    <button class="${value ? 'on' : ''}" ${pressed(value)} data-act="${act}" aria-label="${label}: ${value ? 'on' : 'off'}">${value ? 'on' : 'off'}</button>
   </div>`;
 }
 
@@ -874,6 +902,8 @@ export class ControlPanel {
     this.lastPalette = params.palette;
     this.lastFx = params.fxMode;
     this.workspaceScroll = { scene: 0, style: 0, learn: 0 };
+    this.paletteExpanded = false;
+    this.openDisclosures = new Set();
     this.renderedWorkspace = null;
     this.render();
   }
@@ -886,6 +916,7 @@ export class ControlPanel {
 
   render() {
     try {
+      const focusDescriptor = this.captureFocus();
       // Refresh the auto-animated set so slider() can render the ⟳ toggle state.
       _autoSliders = new Set(this.params.autoSliders || []);
       // Bug fix 2026-06-25: preserve scroll position across re-renders.
@@ -899,38 +930,72 @@ export class ControlPanel {
       const workspace = panelWorkspace(this.params);
       this.panelEl.classList.remove('collapsed');
       this.panelEl.innerHTML = `
-        <div class="ps-status" id="ps-status"></div>
+        <div class="ps-status" id="ps-status" role="status" aria-live="polite" aria-atomic="true"></div>
         <div class="ps-mode-tabs" role="tablist" aria-label="Control workspace">
           ${PANEL_WORKSPACES.map(mode => `<button id="panel-tab-${mode}" class="${workspace === mode ? 'on' : ''}" data-act="setPanelMode" data-arg="${mode}" role="tab" aria-controls="ps-body" aria-selected="${workspace === mode ? 'true' : 'false'}" tabindex="${workspace === mode ? '0' : '-1'}">${PANEL_WORKSPACE_LABELS[mode]}</button>`).join('')}
         </div>
         <div class="ps-scroll" id="ps-body" role="tabpanel" aria-labelledby="panel-tab-${workspace}"></div>
-        <div class="panel-footer">
+        <div class="panel-footer" role="group" aria-label="Studio actions">
           <button data-act="resetConfig" title="Reset this model's visuals and motion"><span style="font-size:13px">↺</span> Reset</button>
           <button data-act="surprise" title="Surprise: randomize view, palette, FX, shape, and shift settings for discovery"><span style="font-size:13px">✦</span> Surprise</button>
-          <button data-act="sharePage" title="Copy the hosted E8 Studio link"><span style="font-size:13px">⎘</span> Share</button>
           <button data-act="shareSnapshot" title="Save a snapshot of the current render"><span style="font-size:13px">▣</span> Snapshot</button>
-          <button data-act="openVideoExport" title="Record a video clip (720p+)"><span style="font-size:13px">⏺</span> Video</button>
+          <button data-act="sharePage" title="Copy the hosted E8 Studio link"><span style="font-size:13px">⎘</span> Share</button>
           <button data-act="togglePresentationMode" title="Full screen: hide all chrome (press Esc to exit)"><span style="font-size:13px">⛶</span> Full</button>
-          <button data-act="togglePerf" title="Toggle the performance overlay">Perf</button>
-          <button data-act="toggleCommandPalette" title="Open the command palette">Cmd</button>
-          <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diag</button>
-          <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keys</button>
+          <details class="panel-tools-menu" data-panel-disclosure="footer-tools" ${this.openDisclosures.has('footer-tools') ? 'open' : ''}>
+            <summary id="panel-disclosure-footer-tools" title="Open more studio tools">Tools</summary>
+            <div class="panel-tools-popover">
+              <button data-act="openVideoExport" title="Record a video clip (720p+)"><span aria-hidden="true">⏺</span> Video</button>
+              <button data-act="togglePerf" title="Toggle the performance overlay">Performance</button>
+              <button data-act="toggleCommandPalette" title="Open the command palette">Commands</button>
+              <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diagnostics</button>
+              <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keyboard help</button>
+            </div>
+          </details>
         </div>
       `;
       const body = this.panelEl.querySelector('#ps-body');
       body.innerHTML = workspace === 'learn'
         ? renderLearnSection(this.params) + renderMathSection(this.params, this.data)
         : workspace === 'style'
-          ? renderStyleSection(this.params, this.data)
-          : renderViewSection(this.params, this.data);
+          ? renderStyleSection(this.params, this.data, this)
+          : renderViewSection(this.params, this.data, this);
       // Each workspace owns its own position. Switching tabs never lands the
       // user halfway through an unrelated group of controls.
       body.scrollTop = this.workspaceScroll[workspace] || 0;
       this.renderedWorkspace = workspace;
       this.renderStatus();
+      this.restoreFocus(focusDescriptor);
     } catch (e) {
       console.error('Panel render error:', e);
     }
+  }
+
+  captureFocus() {
+    const active = document.activeElement;
+    if (!active || !this.panelEl.contains(active)) return null;
+    if (active.id) return { id: active.id };
+    if (active.dataset?.panelAct) return { panelAct: active.dataset.panelAct };
+    if (active.dataset?.act) return { act: active.dataset.act, arg: active.dataset.arg ?? null };
+    if (active.dataset?.param) return { param: active.dataset.param };
+    return null;
+  }
+
+  restoreFocus(descriptor) {
+    if (!descriptor) return;
+    let target = descriptor.id ? document.getElementById(descriptor.id) : null;
+    if (!target && descriptor.panelAct) {
+      target = [...this.panelEl.querySelectorAll('[data-panel-act]')]
+        .find(node => node.dataset.panelAct === descriptor.panelAct);
+    }
+    if (!target && descriptor.act) {
+      target = [...this.panelEl.querySelectorAll('[data-act]')]
+        .find(node => node.dataset.act === descriptor.act && (node.dataset.arg ?? null) === descriptor.arg);
+    }
+    if (!target && descriptor.param) {
+      target = [...this.panelEl.querySelectorAll('[data-param]')]
+        .find(node => node.dataset.param === descriptor.param);
+    }
+    target?.focus?.({ preventScroll: true });
   }
 
   renderStatus() {
@@ -1008,6 +1073,18 @@ export function initPanelEvents(panel) {
   const root = panel?.panelEl || panel;
   if (!root || root.dataset.workspaceKeysBound === 'true') return;
   root.dataset.workspaceKeysBound = 'true';
+  root.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-panel-act]')?.dataset.panelAct;
+    if (action !== 'togglePaletteExpanded') return;
+    panel.paletteExpanded = !panel.paletteExpanded;
+    panel.render();
+  });
+  root.addEventListener('toggle', event => {
+    const details = event.target.closest?.('details[data-panel-disclosure]');
+    if (!details || !panel.openDisclosures) return;
+    if (details.open) panel.openDisclosures.add(details.dataset.panelDisclosure);
+    else panel.openDisclosures.delete(details.dataset.panelDisclosure);
+  }, true);
   root.addEventListener('keydown', event => {
     const tab = event.target.closest?.('.ps-mode-tabs [role="tab"]');
     if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;

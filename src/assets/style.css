@@ -50,6 +50,7 @@
   --duration-fast: 120ms;
   --duration-normal: 200ms;
   --focus-ring: 2px solid var(--accent);
+  --studio-panel-width: 280px;
 }
 
 * { box-sizing: border-box; }
@@ -69,7 +70,7 @@ html, body {
 body {
   display: grid;
   grid-template-rows: 36px 1fr 32px;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: var(--studio-panel-width) 1fr;
   grid-template-areas:
     "header header"
     "side   canvas"
@@ -80,8 +81,9 @@ body {
 
 /* Compact: narrower sidebar, tighter header/footer */
 body[data-layout="compact"] {
+  --studio-panel-width: 220px;
   grid-template-rows: 36px 1fr 24px;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--studio-panel-width) 1fr;
   font-size: 12px;
 }
 body[data-layout="compact"] header { padding: 0 14px; gap: 12px; }
@@ -91,8 +93,9 @@ body[data-layout="compact"] aside#panel { padding: 8px 10px; }
 
 /* Wide canvas: narrower sidebar, NO footer — more vertical canvas */
 body[data-layout="wide-canvas"] {
+  --studio-panel-width: clamp(250px, 20vw, 300px);
   grid-template-rows: 36px 1fr;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: var(--studio-panel-width) 1fr;
   grid-template-areas:
     "header header"
     "side   canvas";
@@ -508,6 +511,10 @@ main {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+#canvas:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -4px;
 }
 
 .ov {
@@ -950,7 +957,7 @@ body.desktop-touch-shell #panel input[type="range"]::-webkit-slider-thumb {
 }
 
 body.desktop-touch-shell #panel .panel-footer {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 10px;
 }
@@ -1064,38 +1071,38 @@ input[type="range"]::-moz-range-track {
   bottom: 38px;       /* above the footer */
   /* Default (essay closed): center within the canvas region (right of the
      280px sidebar). */
-  left: calc(280px + (100vw - 280px) / 2);
+  left: calc(var(--studio-panel-width) + (100vw - var(--studio-panel-width)) / 2);
   transform: translateX(-50%) translateY(60px);
   opacity: 0;
   pointer-events: none;
   transition: transform 0.25s var(--ease), opacity 0.25s var(--ease),
               left 0.25s var(--ease);
   z-index: 110;       /* above the essay panel (100) */
-  width: min(440px, calc(100vw - 320px));
+  width: min(440px, calc(100vw - var(--studio-panel-width) - 40px));
 }
 /* When the essay panel is open, shift the tour bar into the free zone to the
    left of the right-docked essay (~356px wide). */
 body.essay-open #tour-overlay {
-  left: calc(280px + (100vw - 280px - 356px) / 2);
-  width: min(360px, calc(100vw - 280px - 380px));
+  left: calc(var(--studio-panel-width) + (100vw - var(--studio-panel-width) - 356px) / 2);
+  width: min(360px, calc(100vw - var(--studio-panel-width) - 380px));
   min-width: 200px;
 }
 @media (max-width: 1100px) {
   #tour-overlay { width: min(300px, calc(100vw - 240px)); }
   body.essay-open #tour-overlay {
-    left: calc(220px + (100vw - 220px - 300px) / 2);
-    width: min(240px, calc(100vw - 220px - 320px));
+    left: calc(var(--studio-panel-width) + (100vw - var(--studio-panel-width) - 300px) / 2);
+    width: min(240px, calc(100vw - var(--studio-panel-width) - 320px));
   }
 }
 /* Compact layout uses a 220px sidebar — re-center the tour bar accordingly,
    and shift left when the essay is open. */
 body[data-layout="compact"] #tour-overlay {
-  left: calc(220px + (100vw - 220px) / 2);
-  width: min(380px, calc(100vw - 260px));
+  left: calc(var(--studio-panel-width) + (100vw - var(--studio-panel-width)) / 2);
+  width: min(380px, calc(100vw - var(--studio-panel-width) - 40px));
 }
 body[data-layout="compact"].essay-open #tour-overlay {
-  left: calc(220px + (100vw - 220px - 356px) / 2);
-  width: min(320px, calc(100vw - 220px - 380px));
+  left: calc(var(--studio-panel-width) + (100vw - var(--studio-panel-width) - 356px) / 2);
+  width: min(320px, calc(100vw - var(--studio-panel-width) - 380px));
 }
 #tour-overlay.tour-on {
   transform: translateX(-50%) translateY(0);
