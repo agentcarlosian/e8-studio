@@ -42,13 +42,17 @@ uniform vec3  uBgColor;
 uniform float uBloomStrength;   // 0 = off, 1 = full bloom
 uniform float uAnisoStrength;   // 0..1 anisotropic spec intensity
 uniform float uEdgeCylStrength; // 0..1 edge cylinder highlight
-uniform int   uFXMode;          // shared catalog ID; SDF implements a curated subset
+uniform int   uFXMode;          // shared 24-effect catalog ID
 uniform float uFXIntensity;     // 0..1 native SDF look strength
 uniform int   uEdgeCount;
 uniform vec4  uEdgesA[MAX_EDGES]; // xyz endpoint + radius-weight in w
 uniform vec4  uEdgesB[MAX_EDGES];
 
 float gNearestRing = 0.0;
+
+vec3 fxSpectrum(float v) {
+  return 0.5 + 0.5 * cos(6.28318 * (v + vec3(0.0, 0.33, 0.67)));
+}
 
 float smin(float a, float b, float k) {
   // Guard k: uSdfBlend (the blend slider) bottoms out at 0, and (b-a)/0 is NaN
@@ -70,6 +74,14 @@ float sdCappedCylinder(vec3 p, vec3 a, vec3 b, float r) {
 }
 
 float sdf(vec3 p) {
+  vec3 q = p;
+  if (uFXMode == 15) {
+    // Flow: displace the implicit field itself with a small curl-like warp.
+    q.xy += vec2(
+      sin(p.y * 2.2 + uTime * 0.9),
+      cos(p.x * 2.0 - uTime * 0.75)
+    ) * (0.055 * uFXIntensity);
+  }
   float d = 1e9;
   float bestRing = 0.0;
   float nearestDist = 1e9;
@@ -79,15 +91,21 @@ float sdf(vec3 p) {
     // keeps the effect visible even when the time wave crosses zero.
     sphereRadius *= 1.0 + uFXIntensity * (0.12 + 0.08 * sin(uTime * 2.1));
   }
-  float pointAngle = atan(p.y, p.x);
+  if (uFXMode == 4) {
+    sphereRadius *= 1.0 + 0.12 * uFXIntensity * sin(length(q.xy) * 8.0 - uTime * 3.2);
+  }
+  float pointAngle = atan(q.y, q.x);
   for (int i = 0; i < MAX_RINGS; i++) {
     if (i >= uRingCount) break;
     vec4 ring = uRings[i];
     float nearestSlot = floor((pointAngle - ring.y) / ring.z + 0.5);
     for (int offset = -ROOT_NEIGHBOR_SPAN; offset <= ROOT_NEIGHBOR_SPAN; offset++) {
       float rootAngle = ring.y + (nearestSlot + float(offset)) * ring.z;
+      if (uFXMode == 5) {
+        rootAngle += 0.10 * uFXIntensity * sin(ring.x * 4.0 + uTime * 1.3);
+      }
       vec3 rp = vec3(ring.x * cos(rootAngle), ring.x * sin(rootAngle), ring.w);
-      float di = length(p - rp) - sphereRadius;
+      float di = length(q - rp) - sphereRadius;
       if (di < nearestDist) {
         nearestDist = di;
         bestRing = float(i) / max(1.0, float(uRingCount - 1));
@@ -107,7 +125,7 @@ float sdf(vec3 p) {
       vec3 a = ea.xyz;
       vec3 b = eb.xyz;
       float r = 0.024 * uEdgeCylStrength;
-      float dc = sdCappedCylinder(p, a, b, r);
+      float dc = sdCappedCylinder(q, a, b, r);
       d = smin(d, dc, uBlend * 0.5);
     }
   }
@@ -244,17 +262,121 @@ void main() {
       vec3 emission = mix(baseCol, vec3(1.0), 0.35);
       col += emission * uFXIntensity * (0.16 + fresnel * 0.95);
     }
+    if (uFXMode == 2) {
+      // Trail: directional afterimage bands travel across the surface.
+      float band = 0.5 + 0.5 * sin(dot(p, vec3(3.6, 2.4, 1.2)) - uTime * 3.0);
+      vec3 echo = fxSpectrum(band * 0.22 + uTime * 0.035);
+      col = mix(col * (0.52 + band * 0.48), col + echo * (0.24 + fresnel * 0.55), uFXIntensity * 0.82);
+    }
+    if (uFXMode == 3) {
+      // Kaleidoscope: mirrored angular wedges wrap every ring.
+      float a6 = abs(fract((atan(p.y, p.x) / 6.28318) * 6.0 + 0.5) - 0.5) * 2.0;
+      vec3 kaleid = fxSpectrum(a6 + gNearestRing * 0.18 + uTime * 0.05);
+      col = mix(col, kaleid * (0.34 + diff * 0.66 + fresnel * 0.55), uFXIntensity * 0.84);
+    }
+    if (uFXMode == 4) {
+      // Ripple: geometry pulse plus bright radial surface wave.
+      float ripple = 0.5 + 0.5 * sin(length(p.xy) * 9.0 - uTime * 3.2);
+      vec3 rippleCol = mix(uColorInner, uColorOuter, ripple);
+      col = mix(col, col + rippleCol * ripple * (0.26 + fresnel * 0.5), uFXIntensity * 0.76);
+    }
+    if (uFXMode == 5) {
+      // Spiral: the ring slots twist in the SDF and receive an angular color wake.
+      float spiral = fract((atan(p.y, p.x) + length(p.xy) * 3.4 - uTime * 1.3) / 6.28318);
+      col = mix(col, fxSpectrum(spiral) * (0.30 + diff * 0.72 + fresnel * 0.42), uFXIntensity * 0.8);
+    }
+    if (uFXMode == 6) {
+      float pulse = 0.72 + 0.28 * sin(uTime * 2.1);
+      col += mix(baseCol, vec3(1.0), 0.38) * uFXIntensity * (0.18 + 0.28 * pulse + fresnel * 0.34);
+    }
+    if (uFXMode == 7) {
+      // Chromatic: a prism split across normal orientation.
+      vec3 prism = fxSpectrum(dot(n, normalize(vec3(0.7, 0.4, 0.55))) * 0.5 + uTime * 0.025);
+      col = mix(col, col * (0.42 + prism * 1.15) + prism * fresnel * 0.52, uFXIntensity * 0.76);
+    }
+    if (uFXMode == 8) {
+      // Fog: depth and creases recede into a cool translucent haze.
+      float haze = smoothstep(2.2, 9.5, t) * (0.55 + 0.45 * (1.0 - ao));
+      col = mix(col, mix(uBgColor, vec3(0.28, 0.52, 0.72), 0.42), haze * uFXIntensity * 0.82);
+      alpha *= 1.0 - haze * uFXIntensity * 0.58;
+    }
     if (uFXMode == 9) {
       // Heat: warm bands flow across ring depth and world-space height.
       float heatBand = 0.5 + 0.5 * sin(gNearestRing * 13.0 + p.y * 3.2 - uTime * 1.4);
       vec3 heatCol = mix(vec3(0.16, 0.005, 0.002), vec3(1.0, 0.82, 0.12), heatBand);
       col = mix(col, heatCol * (0.42 + diff * 0.75 + fresnel * 0.55), uFXIntensity * 0.86);
     }
+    if (uFXMode == 10) {
+      // Edge: strong cool silhouette and bright crease response.
+      float edge = pow(1.0 - max(dot(n, -rd), 0.0), 1.45);
+      vec3 edgeCol = vec3(0.48, 0.92, 1.0) * (edge * 1.55 + (1.0 - ao) * 0.48);
+      col = mix(col, col * 0.62 + edgeCol, uFXIntensity * 0.86);
+    }
+    if (uFXMode == 11) {
+      // Aura: warm/cool Fresnel emission around the implicit surface.
+      vec3 aura = mix(vec3(0.34, 0.38, 1.0), vec3(1.0, 0.34, 0.72), gNearestRing);
+      col += aura * uFXIntensity * (0.12 + fresnel * 1.15);
+    }
+    if (uFXMode == 12) {
+      // Voronoi: stable pseudo-cells across the surface.
+      vec3 cell = floor(p * 4.2);
+      float hash = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      vec3 voro = fxSpectrum(hash + gNearestRing * 0.16);
+      col = mix(col, col * (0.55 + voro * 1.05), uFXIntensity * 0.82);
+    }
+    if (uFXMode == 13) {
+      // Caustic: layered moving light bands.
+      float caustic = sin(p.x * 5.4 + sin(p.y * 4.1 + uTime * 1.2));
+      caustic += sin(p.y * 6.1 - sin(p.z * 4.6 - uTime));
+      caustic = pow(0.5 + 0.25 * caustic, 2.0);
+      col += mix(vec3(0.08, 0.55, 1.0), vec3(1.0, 0.82, 0.28), caustic) * caustic * uFXIntensity * 0.82;
+    }
     if (uFXMode == 14) {
       // Iridescent: inexpensive thin-film approximation from view angle.
       float film = dot(n, -rd) * 1.8 + gNearestRing * 0.72 + uTime * 0.08;
       vec3 prism = 0.52 + 0.48 * cos(6.28318 * (film + vec3(0.00, 0.33, 0.67)));
       col = mix(col, prism * (0.38 + diff * 0.62 + fresnel * 0.9), uFXIntensity * 0.82);
+    }
+    if (uFXMode == 15) {
+      // Flow: the SDF warp above is reinforced by a directional color field.
+      float flow = 0.5 + 0.5 * sin(p.x * 3.0 + p.y * 2.1 - uTime * 1.6);
+      col = mix(col, fxSpectrum(flow * 0.35 + gNearestRing * 0.2) * (0.35 + diff * 0.68 + fresnel * 0.45), uFXIntensity * 0.78);
+    }
+    if (uFXMode == 16) {
+      float plasma = sin(p.x * 4.2 + uTime) + sin(p.y * 3.7 - uTime * 1.25) + sin(p.z * 4.8 + uTime * 0.72);
+      plasma = plasma / 6.0 + 0.5;
+      col = mix(col, fxSpectrum(plasma) * (0.36 + diff * 0.66 + fresnel * 0.5), uFXIntensity * 0.86);
+    }
+    if (uFXMode == 17) {
+      float sector = abs(fract(atan(p.y, p.x) * 6.0 / 6.28318 + 0.5) - 0.5) * 2.0;
+      vec3 k6 = fxSpectrum(sector + uTime * 0.045);
+      col = mix(col, k6 * (0.32 + diff * 0.7 + fresnel * 0.55), uFXIntensity * 0.84);
+    }
+    if (uFXMode == 18) {
+      // DOF: a narrow animated focal shell stays crisp while depth and lens
+      // radius push the surrounding surface into a cool, translucent bokeh.
+      // The radial term keeps the effect legible even when a software renderer
+      // quantizes most ray hits into a very narrow depth band.
+      float focalDistance = 5.0 + sin(uTime * 0.32) * 0.55;
+      float depthBlur = smoothstep(0.12, 1.15, abs(t - focalDistance));
+      float lensBlur = smoothstep(0.3, 1.55, length(p.xy));
+      float blur = clamp(max(depthBlur, lensBlur * 0.74), 0.0, 1.0);
+      float gray = dot(col, vec3(0.299, 0.587, 0.114));
+      vec3 defocused = vec3(gray) * vec3(0.66, 0.82, 1.08) + vec3(0.025, 0.055, 0.11);
+      col = mix(col, defocused, (0.14 + blur * 0.86) * uFXIntensity * 0.82);
+      alpha *= 1.0 - (0.06 + blur * 0.28) * uFXIntensity;
+    }
+    if (uFXMode == 19) {
+      float cloud = 0.5 + 0.5 * sin(p.x * 1.7 + uTime * 0.38) * cos(p.y * 1.9 - uTime * 0.27);
+      vec3 nebula = mix(vec3(0.28, 0.18, 0.82), vec3(1.0, 0.38, 0.16), cloud);
+      col = mix(col, col + nebula * (0.28 + fresnel * 0.72), uFXIntensity * (0.45 + cloud * 0.35));
+    }
+    if (uFXMode == 20) {
+      // Wire: contour bands suggest a wire cage on the smooth surface.
+      vec3 grid = abs(fract((p + n * 0.03) * 5.4) - 0.5);
+      float wire = 1.0 - smoothstep(0.035, 0.12, min(grid.x, min(grid.y, grid.z)));
+      vec3 wireCol = mix(vec3(0.18, 0.5, 0.9), vec3(1.0, 0.92, 0.55), gNearestRing);
+      col = mix(col * (0.38 + 0.22 * diff), wireCol * (0.55 + wire * 1.25), uFXIntensity * 0.88);
     }
     if (uFXMode == 21) {
       // Hologram: scanlines and subtle digital flicker without a post pass.
@@ -268,6 +390,13 @@ void main() {
       float rim = smoothstep(0.04, 0.88, fresnel);
       vec3 xray = vec3(0.02, 0.16, 0.24) + vec3(0.18, 0.82, 1.0) * (rim * 1.45 + (1.0 - ao) * 0.35);
       col = mix(col, xray, uFXIntensity * 0.9);
+    }
+    if (uFXMode == 23) {
+      // Crystal: quantized normals produce facets with prismatic reflection.
+      vec3 facetN = normalize(floor(n * 7.0 + 0.5));
+      float facet = max(dot(facetN, sh), 0.0);
+      vec3 crystal = fxSpectrum(dot(facetN, -rd) * 0.62 + gNearestRing * 0.3 + uTime * 0.035);
+      col = mix(col, crystal * (0.32 + diff * 0.42 + pow(facet, 18.0) * 1.5 + fresnel * 0.7), uFXIntensity * 0.88);
     }
 
     float fog = smoothstep(MAX_DIST * 0.4, MAX_DIST * 0.9, t);
@@ -468,7 +597,7 @@ export function createRaymarchedView({ data, palette, scale: baseScale, context 
   };
   mat.userData.effectModes = effectsForView(
     'raymarched',
-    quality.tier === 'balanced' ? 'medium' : quality.tier
+    context.params?.reducedMode ? 'low' : (context.params?.mobileQuality || 'high')
   ).map(item => item.id);
   mesh.frustumCulled = false;
   // Draw first so nothing else covers it

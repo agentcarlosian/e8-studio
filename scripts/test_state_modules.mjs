@@ -143,12 +143,13 @@ assert.equal(sdfQualityProfile({ params: { mobileQuality: 'low' }, device: {} })
 assert.equal(FX_EFFECTS.length, 24);
 assert.deepEqual(
   effectsForView('raymarched').map(item => item.id),
-  ['none', 'glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']
+  FX_EFFECTS.map(item => item.id)
 );
 assert.equal(effectsForView('e8coxeter', 'high').length, 24);
-assert.equal(effectAvailableForView('raymarched', 'trail', 'high'), false);
+assert.equal(effectsForView('dynkin', 'high').length, 24);
+assert.equal(effectAvailableForView('raymarched', 'trail', 'high'), true);
 assert.equal(effectAvailableForView('e8coxeter', 'voronoi', 'low'), false);
-assert.equal(coerceEffectMode('raymarched', 'plasma', 'high'), 'none');
+assert.equal(coerceEffectMode('raymarched', 'plasma', 'high'), 'plasma');
 const fxState = {
   view: 'raymarched', fxMode: 'glow', fxByView: {}, mobileQuality: 'high', reducedMode: false,
 };

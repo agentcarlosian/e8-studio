@@ -402,6 +402,12 @@
   border-color: var(--accent);
   background: var(--bg-3);
 }
+.panel-footer button.is-confirmed {
+  color: #0b0910;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 
 /* Cartan matrix explorer */
 .cartan-grid-wrap { font-size: 10px; }

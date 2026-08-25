@@ -7,7 +7,7 @@
 import { FX_MODE_MAP } from './fx-shader.js';
 
 const SHARED_VIEWS = Object.freeze([
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope',
+  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'dynkin',
 ]);
 
 const SDF_VIEWS = Object.freeze(['raymarched']);
@@ -36,27 +36,27 @@ export const FX_EFFECTS = Object.freeze([
   effect('none', 'Off', 'Use the renderer’s clean, unmodified shading.', { sdf: true }),
   effect('glow', 'Glow', 'Adds a luminous rim and brighter highlights.', { sdf: true }),
   effect('pulse', 'Pulse', 'Breathes the form gently over time.', { target: 'geometry', sdf: true }),
-  effect('trail', 'Trail', 'Fades point color history behind moving geometry.', { cost: 'medium', target: 'motion' }),
-  effect('chromatic', 'Chrom', 'Separates color channels across the form.'),
-  effect('kaleidoscope', 'Kaleid', 'Mirrors point motion into a kaleidoscopic pattern.', { cost: 'medium', target: 'geometry' }),
-  effect('ripple', 'Ripple', 'Sends a radial wave through point positions.', { target: 'geometry' }),
-  effect('spiral', 'Spiral', 'Twists points around the view axis.', { target: 'geometry' }),
-  effect('fog', 'Fog', 'Fades the structure into depth.', { target: 'depth' }),
+  effect('trail', 'Trail', 'Adds animated afterimage bands behind moving geometry.', { cost: 'medium', target: 'motion', sdf: true }),
+  effect('chromatic', 'Chrom', 'Separates color channels across the form.', { sdf: true }),
+  effect('kaleidoscope', 'Kaleid', 'Mirrors the form into a kaleidoscopic pattern.', { cost: 'medium', target: 'geometry', sdf: true }),
+  effect('ripple', 'Ripple', 'Sends a radial wave through the form.', { target: 'geometry', sdf: true }),
+  effect('spiral', 'Spiral', 'Twists the form around the view axis.', { target: 'geometry', sdf: true }),
+  effect('fog', 'Fog', 'Fades the structure into depth.', { target: 'depth', sdf: true }),
   effect('heat', 'Heat', 'Maps warm energy bands across the surface.', { sdf: true }),
-  effect('edge-glow', 'Edge', 'Emphasizes silhouettes and structural edges.'),
-  effect('aura', 'Aura', 'Adds a soft animated field around points.'),
-  effect('voronoi', 'Voronoi', 'Cuts a procedural cellular pattern into points.', { cost: 'high', target: 'procedural' }),
-  effect('caustic', 'Caustic', 'Adds moving refractive light bands.', { cost: 'medium', target: 'procedural' }),
+  effect('edge-glow', 'Edge', 'Emphasizes silhouettes and structural edges.', { sdf: true }),
+  effect('aura', 'Aura', 'Adds a soft animated field around the structure.', { sdf: true }),
+  effect('voronoi', 'Voronoi', 'Cuts a procedural cellular pattern into the form.', { cost: 'high', target: 'procedural', sdf: true }),
+  effect('caustic', 'Caustic', 'Adds moving refractive light bands.', { cost: 'medium', target: 'procedural', sdf: true }),
   effect('iridescent', 'Irides', 'Shifts color with viewing angle like thin-film light.', { sdf: true }),
-  effect('flowfield', 'Flow', 'Displaces points through an animated vector field.', { cost: 'medium', target: 'geometry' }),
-  effect('plasma', 'Plasma', 'Adds animated plasma color bands.', { cost: 'medium', target: 'procedural' }),
-  effect('kaleido6', 'K6', 'Applies six-fold procedural symmetry.', { cost: 'medium', target: 'procedural' }),
-  effect('dof', 'DOF', 'Varies point scale and opacity with depth.', { cost: 'medium', target: 'depth' }),
-  effect('nebula', 'Nebula', 'Breaks points into a drifting cloudy field.', { cost: 'medium', target: 'procedural' }),
-  effect('wireframe', 'Wire', 'Reduces point shading to a technical wire look.'),
+  effect('flowfield', 'Flow', 'Displaces geometry through an animated vector field.', { cost: 'medium', target: 'geometry', sdf: true }),
+  effect('plasma', 'Plasma', 'Adds animated plasma color bands.', { cost: 'medium', target: 'procedural', sdf: true }),
+  effect('kaleido6', 'K6', 'Applies six-fold procedural symmetry.', { cost: 'medium', target: 'procedural', sdf: true }),
+  effect('dof', 'DOF', 'Varies focus, scale, and opacity with depth.', { cost: 'medium', target: 'depth', sdf: true }),
+  effect('nebula', 'Nebula', 'Turns the form into a drifting cloudy field.', { cost: 'medium', target: 'procedural', sdf: true }),
+  effect('wireframe', 'Wire', 'Reduces shading to a technical wire look.', { sdf: true }),
   effect('hologram', 'Holo', 'Adds cyan scanlines and digital flicker.', { sdf: true }),
   effect('xray', 'X-ray', 'Reveals the form with cool rims and dark interiors.', { sdf: true }),
-  effect('crystal', 'Crystal', 'Adds sharp faceted highlights to point geometry.'),
+  effect('crystal', 'Crystal', 'Adds sharp faceted prismatic highlights.', { sdf: true }),
 ]);
 
 export const FX_BY_ID = Object.freeze(Object.fromEntries(

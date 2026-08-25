@@ -10,9 +10,9 @@ const STORAGE_KEY = 'e8_studio_config_v1';
 // Params we DO want to save (user preferences)
 const PERSISTABLE = new Set([
   'view', 'shape', 'dynkin', 'poly4d', 'palette', 'colorBy', 'autoSliders',
-  'opacity', 'rotationSpeed',
-  'autoRotate', 'cameraOrbit', 'autoZoom', 'showEdges', 'showRings', 'showPetrie',
-  'showAmbient', 'fxMode', 'fxByView', 'fxIntensity',
+  'opacity', 'pointScale', 'showVertices', 'rotationSpeed',
+  'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'showEdges', 'showRings', 'showPetrie',
+  'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
   'lightAmbient', 'lightKey', 'lightFill', 'lightAccent',
   // Pickup round 2 additions — all of these should persist across reloads
   'bgMode', 'bgIntensity', 'theme', 'layout',
@@ -31,7 +31,7 @@ const PERSISTABLE = new Set([
   'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
   'seed',
   'cameraSpeed', 'cameraDistance', 'cameraRotation',
-  'cameraBookmarks', 'compareShape', 'presentationMode', 'teachingMode',
+  'cameraBookmarks', 'compareShape', 'rootSubset', 'presentationMode', 'teachingMode',
   'adaptivePixelRatio',
   'showStarfield', // legacy — kept for backward-compat reads
   'galleryPreset',

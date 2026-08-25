@@ -19,7 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUMMARY_DIR = ROOT / "dist" / "verify"
 WEB_DIST = ROOT / "dist" / "web"
-VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched"]
+VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "dynkin"]
+FX_MODES = ["none", "glow", "pulse", "trail", "chromatic", "kaleidoscope", "ripple",
+            "spiral", "fog", "heat", "edge-glow", "aura", "voronoi", "caustic",
+            "iridescent", "flowfield", "plasma", "kaleido6", "dof", "nebula",
+            "wireframe", "hologram", "xray", "crystal"]
 SHAPES = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"]
 
 
@@ -383,15 +387,18 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     page.wait_for_timeout(300)
     platonic_markers = page.evaluate(
         """() => {
-          const counts = { instancedMeshes: 0, points: 0 };
+          const counts = { instancedMeshes: 0, points: 0, visiblePoints: 0 };
           window.__app.currentView?.object3d?.traverse((object) => {
             if (object.isInstancedMesh) counts.instancedMeshes += 1;
-            if (object.isPoints) counts.points += 1;
+            if (object.isPoints) {
+              counts.points += 1;
+              if (object.visible) counts.visiblePoints += 1;
+            }
           });
           return counts;
         }"""
     )
-    if platonic_markers != {"instancedMeshes": 0, "points": 0}:
+    if platonic_markers != {"instancedMeshes": 0, "points": 1, "visiblePoints": 0}:
         fail(f"Platonic vertex markers returned: {platonic_markers}")
 
     # Repeated transitions catch resource/material accumulation and ensure the
@@ -664,7 +671,10 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       const pixelCount = baseline.length / 4;
       const visualDiffs = {};
       const uniformModes = {};
-      for (const mode of ['glow', 'pulse', 'heat', 'iridescent', 'hologram', 'xray']) {
+      for (const mode of ['glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripple',
+                          'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi',
+                          'caustic', 'iridescent', 'flowfield', 'plasma', 'kaleido6',
+                          'dof', 'nebula', 'wireframe', 'hologram', 'xray', 'crystal']) {
         window.__app.setFX(mode);
         await frame(); await frame();
         const pixels = sample();
@@ -712,7 +722,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         learnWorkspace,
       };
     }""")
-    expected_sdf_modes = ["none", "glow", "pulse", "heat", "iridescent", "hologram", "xray"]
+    expected_sdf_modes = FX_MODES
     expected_basic_modes = ["none", "glow", "iridescent", "pulse", "xray", "hologram"]
     if (not sdf_effect_contract["hasModeUniform"]
             or not sdf_effect_contract["hasIntensityUniform"]
@@ -760,7 +770,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or "eight concentric rings" not in learn_workspace["orientationText"]):
         fail(f"View/Visuals/Learn workspace contract failed: {sdf_effect_contract}")
     visual_order = style_workspace["subtitles"]
-    expected_order = ["Palette", "Color shift", "Background", "Effects", "Quick looks", "Interface theme", "Export"]
+    expected_order = ["Background", "Palette", "Color shift", "Effects", "Quick looks", "Interface theme", "Export"]
     try:
         positions = [visual_order.index(label) for label in expected_order]
     except ValueError:
