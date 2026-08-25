@@ -12,6 +12,8 @@ meets a specific view. This suite pins those down so they can't regress:
   4. data-act / data-param delegation works under the strict (no-unsafe-inline) CSP.
   5. Adaptive pixel-ratio restores native DPR when toggled off.
   6. Persisted actions write their final state to localStorage.
+  7. Desktop and touch-shell DPR budgets remain separate and shader sizes track
+     the renderer's real DPR.
 
 Run: python scripts/test_robustness.py
 Exit 0 = all pass.
@@ -651,6 +653,73 @@ def main() -> int:
             gj = pg.evaluate("() => window.__app.getGeometryJSON()")
             check("geometry JSON export is well-formed",
                   bool(gj and gj.get("kind") and gj.get("view")), str(gj.get("kind") if gj else None))
+
+            # ---- 7. Desktop fidelity and mobile safeguards use separate DPR budgets ----
+            hidpi_context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                device_scale_factor=2,
+            )
+            hidpi = hidpi_context.new_page()
+            hidpi.add_init_script("window.__forceSdfSafeMode = true")
+            hidpi.goto(f"{base}/dist/index.html", wait_until="commit", timeout=20000)
+            hidpi.wait_for_function("() => !!(window.__app && window.__app.renderer)", timeout=20000)
+            hidpi_metrics = hidpi.evaluate("""() => {
+              if (window.__app.params.adaptivePixelRatio) window.__app.toggleAdaptivePixelRatio();
+              window.__app.switchView('e8coxeter');
+              const pointDprs = [];
+              const lineDprs = [];
+              window.__app.currentView.object3d.traverse(object => {
+                const material = object.material;
+                const dpr = material?.uniforms?.uPixelRatio?.value;
+                if (!Number.isFinite(dpr)) return;
+                if (object.isPoints) pointDprs.push(dpr);
+                if (object.isLine || object.isLineSegments || object.isLineLoop) lineDprs.push(dpr);
+              });
+              const buttons = Array.from(document.querySelectorAll('.ps-view-switch button'));
+              const dynkin = buttons[buttons.length - 1];
+              return {
+                native: window.devicePixelRatio,
+                renderer: window.__app.renderer.getPixelRatio(),
+                pointDprs,
+                lineDprs,
+                dynkinColumn: dynkin ? getComputedStyle(dynkin).gridColumnStart : null,
+              };
+            }""")
+            check("desktop high quality uses native 2x DPR",
+                  abs(hidpi_metrics["native"] - 2) < 1e-6
+                  and abs(hidpi_metrics["renderer"] - 2) < 1e-6,
+                  str(hidpi_metrics))
+            check("point and line shaders track actual renderer DPR",
+                  bool(hidpi_metrics["pointDprs"] and hidpi_metrics["lineDprs"])
+                  and all(abs(value - hidpi_metrics["renderer"]) < 1e-6
+                          for value in hidpi_metrics["pointDprs"] + hidpi_metrics["lineDprs"]),
+                  str(hidpi_metrics))
+            check("Dynkin is centered in the final model row",
+                  hidpi_metrics["dynkinColumn"] == "2", str(hidpi_metrics))
+            hidpi_context.close()
+
+            touch_context = browser.new_context(
+                viewport={"width": 390, "height": 844},
+                device_scale_factor=3,
+                has_touch=True,
+            )
+            touch = touch_context.new_page()
+            touch.add_init_script("window.__forceSdfSafeMode = true")
+            touch.goto(f"{base}/dist/index.html", wait_until="commit", timeout=20000)
+            touch.wait_for_function("() => !!(window.__app && window.__app.renderer)", timeout=20000)
+            touch_metrics = touch.evaluate("""() => {
+              if (window.__app.params.adaptivePixelRatio) window.__app.toggleAdaptivePixelRatio();
+              return {
+                native: window.devicePixelRatio,
+                renderer: window.__app.renderer.getPixelRatio(),
+                touchShell: document.body.classList.contains('desktop-touch-shell'),
+              };
+            }""")
+            check("small touch shell keeps the mobile DPR ceiling",
+                  touch_metrics["native"] == 3 and touch_metrics["touchShell"] is True
+                  and touch_metrics["renderer"] <= 1.35 + 1e-6,
+                  str(touch_metrics))
+            touch_context.close()
 
             # No stray console errors during the whole clean-page run
             check("no console errors during run", len(console_errs) == 0,

@@ -229,6 +229,8 @@ const perfState = {
   sampleTotal: 0,
   lastOverlay: 0,
   lastAdjust: 0,
+  slowWindows: 0,
+  fastWindows: 0,
   targetPixelRatio: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1,
 };
 let startupStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -362,9 +364,27 @@ const MOBILE_QUALITY = {
   auto: { initialDpr: 0.85, maxDpr: 1.0 },
 };
 
+// The desktop canvas used to inherit the phone DPR ceiling above. On common
+// 1.5x/2x laptop displays that made the artwork visibly softer even though the
+// GPU had plenty of headroom. Keep the conservative phone caps, but let a real
+// desktop render at native density up to 2x. The quality names remain shared
+// because they also select the SDF shader budget.
+const DESKTOP_QUALITY = {
+  low: { initialDpr: 0.9, maxDpr: 1.0 },
+  medium: { initialDpr: 1.25, maxDpr: 1.5 },
+  high: { initialDpr: 2.0, maxDpr: 2.0 },
+  auto: { initialDpr: 1.5, maxDpr: 2.0 },
+};
+
+function usesMobileRenderBudget() {
+  return isCapacitorNative() || isSmallTouchScreen();
+}
+
 function currentQualityProfile() {
   const key = params?.reducedMode ? 'low' : (params?.mobileQuality || 'high');
-  return MOBILE_QUALITY[key] || MOBILE_QUALITY.auto;
+  if (params?.reducedMode) return MOBILE_QUALITY.low;
+  const profiles = usesMobileRenderBudget() ? MOBILE_QUALITY : DESKTOP_QUALITY;
+  return profiles[key] || profiles.auto;
 }
 
 function qualityDprCap() {
@@ -376,6 +396,32 @@ function initialPixelRatio() {
   const native = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
   const profile = currentQualityProfile();
   return Math.max(0.75, Math.min(native, profile.initialDpr, profile.maxDpr));
+}
+
+// Custom point and line shaders express sizes in CSS-pixel terms and multiply
+// by uPixelRatio. That uniform must match the renderer's ACTUAL drawing-buffer
+// ratio, not window.devicePixelRatio: adaptive scaling and mobile caps can make
+// those values different. Keeping them synchronized prevents oversized nodes
+// sitting on hairline edges after a DPR change.
+function syncRenderPixelRatioUniforms(pixelRatio = renderer?.getPixelRatio?.() || 1) {
+  if (!scene) return;
+  scene.traverse((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      const uniform = material?.uniforms?.uPixelRatio;
+      if (uniform) uniform.value = pixelRatio;
+    }
+  });
+}
+
+function setRenderPixelRatio(pixelRatio, { resize = true } = {}) {
+  if (!renderer) return;
+  const next = Math.max(0.75, Math.min(Number(pixelRatio) || 1, qualityDprCap()));
+  renderer.setPixelRatio(next);
+  if (resize) {
+    renderer.setSize(renderer.domElement.clientWidth, renderer.domElement.clientHeight, false);
+  }
+  syncRenderPixelRatioUniforms(next);
 }
 
 function applyQualityProfile({ launch = false } = {}) {
@@ -392,9 +438,10 @@ function applyQualityProfile({ launch = false } = {}) {
   }
   params.bgMode = coerceBackgroundForQuality(params.bgMode || 'void', params.mobileQuality);
   if (renderer) {
-    const next = Math.min(renderer.getPixelRatio(), qualityDprCap());
-    renderer.setPixelRatio(next);
-    renderer.setSize(renderer.domElement.clientWidth, renderer.domElement.clientHeight, false);
+    // A deliberate quality change should be able to restore resolution as well
+    // as lower it. The old min(current, cap) path left High permanently stuck
+    // at a previously selected Low/Medium ratio until a reload.
+    setRenderPixelRatio(initialPixelRatio());
   }
   if (fxRuntime) fxRuntime.setMode(params.fxMode || 'none');
   if (bgRuntime) bgRuntime.setMode(params.bgMode || 'void');
@@ -672,7 +719,7 @@ function initThree() {
   // white framebuffer in some pipelines.
   renderer.setClearColor(new THREE.Color(0x07070c), 1.0);
   renderer.setSize(w, h, false);  // buffer size only
-  renderer.setPixelRatio(initialPixelRatio());
+  setRenderPixelRatio(initialPixelRatio());
   installWebGLContextHandlers(canvas);
 
   // Lighting setup — three layers for richer depth
@@ -1022,6 +1069,7 @@ function switchView(id, options = {}) {
   // otherwise fxRuntime.fxMaterials leaks one view's worth of dead materials per
   // switch (and per palette shift, which rebuilds the view).
   if (fxRuntime) fxRuntime.rescan();
+  syncRenderPixelRatioUniforms();
 
   // Update tabs (both primary tab strip and secondary "More" menu items)
   for (const t of document.querySelectorAll('.tab, .more-item')) {
@@ -1866,18 +1914,35 @@ function updatePerfOverlay(now) {
 
 function updateAdaptivePixelRatio(now) {
   if (!renderer || !params?.adaptivePixelRatio) return;
-  if (now - perfState.lastAdjust < 1200 || perfState.samples.length < 30) return;
+  if (now - perfState.lastAdjust < 1600 || perfState.samples.length < 45) return;
   perfState.lastAdjust = now;
   const maxDpr = qualityDprCap();
+  const mobileBudget = usesMobileRenderBudget();
+  const slowThreshold = mobileBudget ? 28 : 32;
+  const fastThreshold = mobileBudget ? 17 : 18;
+  const floorDpr = mobileBudget ? 0.8 : 1.0;
   let next = renderer.getPixelRatio();
-  if (perfState.frameMs > 28 && next > 0.8) {
-    next = Math.max(0.8, next - 0.15);
-  } else if (perfState.frameMs < 17 && next < maxDpr) {
+  if (perfState.frameMs > slowThreshold) {
+    perfState.slowWindows += 1;
+    perfState.fastWindows = 0;
+  } else if (perfState.frameMs < fastThreshold) {
+    perfState.fastWindows += 1;
+    perfState.slowWindows = 0;
+  } else {
+    perfState.slowWindows = 0;
+    perfState.fastWindows = 0;
+  }
+  // Require several sustained samples before changing the drawing buffer. This
+  // avoids visible sharp/soft oscillation during a shader compile or view swap.
+  if (perfState.slowWindows >= 3 && next > floorDpr) {
+    next = Math.max(floorDpr, next - (mobileBudget ? 0.15 : 0.1));
+    perfState.slowWindows = 0;
+  } else if (perfState.fastWindows >= 3 && next < maxDpr) {
     next = Math.min(maxDpr, next + 0.1);
+    perfState.fastWindows = 0;
   }
   if (Math.abs(next - renderer.getPixelRatio()) > 0.01) {
-    renderer.setPixelRatio(next);
-    renderer.setSize(renderer.domElement.clientWidth, renderer.domElement.clientHeight, false);
+    setRenderPixelRatio(next);
   }
 }
 
@@ -3584,8 +3649,7 @@ window.__app = {
     // user gets a permanently blurry canvas after toggling the feature off.
     if (!params.adaptivePixelRatio && renderer) {
       const dpr = qualityDprCap();
-      renderer.setPixelRatio(dpr);
-      renderer.setSize(renderer.domElement.clientWidth, renderer.domElement.clientHeight, false);
+      setRenderPixelRatio(dpr);
     }
     showSavedToast(params.adaptivePixelRatio ? 'Adaptive DPR on' : 'Adaptive DPR off');
   },

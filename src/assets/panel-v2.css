@@ -197,6 +197,13 @@
   font-size: 10px;
 }
 
+/* Seven views leave a single item on the final three-column row. Dynkin is a
+   conceptual bridge rather than a leftover control, so center it until two
+   equally purposeful views earn the remaining spaces. */
+.ps-view-switch button:last-child:nth-child(3n + 1) {
+  grid-column: 2;
+}
+
 /* Shape pills — compact horizontal row */
 .shape-row {
   display: flex;

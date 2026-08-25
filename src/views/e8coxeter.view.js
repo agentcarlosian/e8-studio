@@ -345,9 +345,14 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    // Roots are the subject of this view. Keep them legible above the optional
+    // coplanar chord field instead of letting thousands of later-drawn line
+    // fragments visually bury them when Edges is enabled.
+    depthTest: false,
   });
 
   const points = new THREE.Points(pointsGeo, pointsMat);
+  points.renderOrder = 3;
   group.add(points);
 
   // Tooltip data
@@ -381,7 +386,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     const m = new LineFXMaterial({
       color: ringColors[i],
       transparent: true,
-      opacity: 0.12,
+      opacity: 0.14,
     });
     ringGroup.add(new THREE.LineLoop(g, m));
   }
@@ -399,7 +404,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
   const tm = new LineFXMaterial({
     color: ringColors[ringColors.length - 1],
     transparent: true,
-    opacity: 0.25,
+    opacity: 0.28,
   });
   const triMesh = new THREE.LineLoop(tg, tm);
   group.add(triMesh);
@@ -463,7 +468,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       // per-frame rebuild (spin mode) would stomp onPaletteChange's recolour.
       const mat = new LineFXMaterial({
         color: new THREE.Color(colorAt(activePalette, c / 7)), transparent: true,
-        opacity: c === 3 ? 0.45 : c === 7 ? 0.20 : 0.10,
+        opacity: c === 3 ? 0.48 : c === 7 ? 0.22 : 0.11,
       });
       const seg = new THREE.LineSegments(geo, mat);
       seg.userData.chordPairs = pairs;
