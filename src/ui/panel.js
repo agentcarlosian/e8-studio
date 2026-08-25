@@ -52,8 +52,8 @@ function renderCameraControls(params, caps) {
     -Math.PI, Math.PI, 0.01, v => `${Math.round(v * 180 / Math.PI)}°`);
   // Camera distance runs opposite to a user's mental model of zoom. Render it
   // inverted so moving right always zooms in (smaller physical distance).
-  html += slider('Zoom', 'cameraDistance', params.cameraDistance ?? 6, 2.4, 12, 0.1,
-    v => `${Math.round((12 - v) / 9.6 * 100)}%`, undefined, { invert: true });
+  html += slider('Zoom', 'cameraDistance', params.cameraDistance ?? 6, 0.45, 12, 0.05,
+    v => `${Math.round(100 * 6 / Math.max(0.24, v))}%`, undefined, { invert: true });
   if (caps.extrude) {
     // Shared by the point-based E8 projection and the raymarched E8 SDF.
     // Keeping it here makes its cross-view "breathing" behavior discoverable.
@@ -65,6 +65,12 @@ function renderCameraControls(params, caps) {
   html += `<button class="${params.cameraPath === 'petrieSpiral' ? 'on' : ''}" ${pressed(params.cameraPath === 'petrieSpiral')} data-act="setCameraPreset" data-arg="spiral" title="Spiral around the structure">Spiral</button>`;
   html += '<button data-act="resetCamera" title="Reset camera position">Reset</button>';
   html += '</div>';
+  html += '<div class="ps-subtitle">Motion</div>';
+  html += '<div class="seg seg-wrap">';
+  html += `<button class="${params.autoZoom ? 'on' : ''}" ${pressed(params.autoZoom)} data-act="toggleAutoZoom" title="Travel through the full useful zoom range">Auto zoom</button>`;
+  html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio model catalog">Auto model</button>`;
+  html += '</div>';
+  html += slider('Motion speed', 'cameraSpeed', params.cameraSpeed ?? 1, 0.2, 2, 0.05, v => `${v.toFixed(2)}×`);
   return html;
 }
 
@@ -76,6 +82,7 @@ const VIEW_CAPABILITIES = {
   sixhundred: { shape: true,  rotate: true,  lighting: true,  bloom: false, e8: false, poly: false, sdf: false, extrude: true, math: '600' },
   polytope:   { shape: false, rotate: true,  lighting: true,  bloom: false, e8: false, poly: true,  sdf: false, extrude: true, math: false },
   raymarched: { shape: false, rotate: true,  lighting: false, bloom: false, e8: false, poly: false, sdf: true, extrude: true, math: false },
+  dynkin:     { shape: false, rotate: true,  lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: false },
 };
 
 function renderGalleryControls(params) {
@@ -103,8 +110,8 @@ function renderViewSection(params, data) {
 
   // View switcher (always visible)
   html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'dynkin' ? 'Dynkin' : v;
     html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
   }
   html += '</div>';
@@ -163,7 +170,16 @@ function renderViewSection(params, data) {
       html += slider('Twist', 'shapeTwist', params.shapeTwist || 0, 0, 3, 0.02, v => v.toFixed(2));
       html += slider('Spike', 'shapeSpike', params.shapeSpike || 0, 0, 1.5, 0.02, v => v.toFixed(2));
       html += slider('Jitter', 'shapeJitter', params.shapeJitter || 0, 0, 1, 0.02, v => v.toFixed(2));
+      html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
     }
+  }
+
+  if (params.view === 'dynkin') {
+    html += '<div class="ps-subtitle">Dynkin diagram</div><div class="seg">';
+    for (const diagram of ['E6', 'E7', 'E8']) {
+      html += `<button class="${params.dynkin === diagram ? 'on' : ''}" ${pressed(params.dynkin === diagram)} data-act="setDynkin" data-arg="${diagram}">${diagram.replace('E', 'E₀').replace('₀6', '₆').replace('₀7', '₇').replace('₀8', '₈')}</button>`;
+    }
+    html += '</div>';
   }
 
   // Bloom-specific controls
@@ -279,6 +295,31 @@ function renderE8Controls(params, data) {
   </div>`;
   html += toggle('Inspector', params.showInspector !== false, 'toggleRootInspector');
 
+  const subsetName = params.rootSubset || 'icosahedron';
+  const subset = subsetName === 'simple_roots'
+    ? (data.e8_math?.simple_root_indices || [])
+    : (data.mckay_subsets?.[subsetName] || []);
+  const subsetPosition = subset.indexOf(params.pickedRoot);
+  html += '<div class="ps-subtitle">Root browser</div>';
+  html += '<div class="seg seg-wrap">';
+  for (const [id, label] of [['icosahedron', 'Icosa'], ['dodecahedron', 'Dodeca'], ['simple_roots', 'Simple α']]) {
+    html += `<button class="${subsetName === id ? 'on' : ''}" ${pressed(subsetName === id)} data-act="setRootSubset" data-arg="${id}">${label}</button>`;
+  }
+  html += '</div>';
+  html += `<div class="ps-help root-browser-summary">${subset.length} roots · ${subsetPosition >= 0 ? `${subsetPosition + 1} / ${subset.length} · root #${params.pickedRoot}` : 'choose a root'}</div>`;
+  html += '<div class="seg seg-wrap">';
+  html += '<button data-act="firstSubsetRoot">First</button>';
+  html += '<button data-act="stepSubsetRoot" data-arg="-1" aria-label="Previous subset root">← Prev</button>';
+  html += '<button data-act="stepSubsetRoot" data-arg="1" aria-label="Next subset root">Next →</button>';
+  html += '<button data-act="frameRootSubset">Frame subset</button>';
+  html += '</div>';
+  html += '<div class="seg seg-wrap">';
+  html += '<button data-act="jumpRoot" data-arg="alpha">α₁</button>';
+  html += '<button data-act="jumpRoot" data-arg="neighbor">Neighbor</button>';
+  html += '<button data-act="jumpRoot" data-arg="opposite">Opposite</button>';
+  html += '<button data-act="jumpRoot" data-arg="random">Random</button>';
+  html += '</div>';
+
   if (mode === 'custom') {
     html += '<div style="font-size:10px;color:var(--ink-2);margin:6px 0 4px">Rotate in 8D (ℝ⁸) → reproject to 3D</div>';
     html += slider('Spin', 'e8Spin', params.e8Spin || 0, -3.14, 3.14, 0.01, v => v.toFixed(2));
@@ -324,6 +365,7 @@ function renderPolytopeControls(params, data) {
     html += `<button class="${params.poly4d === k ? 'on' : ''}" ${pressed(params.poly4d === k)} data-act="setPoly4d" data-arg="${k}">${k}</button>`;
   }
   html += '</div>';
+  html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
   html += slider('w-depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
   html += slider('4D speed', 'polyRotationSpeed', params.polyRotationSpeed ?? 0.18, 0.04, 0.6, 0.01, v => v.toFixed(2));
   html += slider('Rot XY', 'polyRotXY', params.polyRotXY || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
@@ -347,8 +389,17 @@ function renderStyleSection(params, data) {
   const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
   let html = '<div class="ps-section" data-section="style"><div class="ps-title">Visuals</div>';
 
-  // Color is the most immediate visual choice. Keep the full catalog together
-  // in one grid rather than splitting it into subjective named families.
+  // Background establishes the canvas before color and effects are layered on.
+  html += '<div class="ps-subtitle">Background</div><div class="seg seg-wrap">';
+  for (const m of backgroundModesForQuality(quality)) {
+    const background = BACKGROUND_PRESETS[m];
+    html += `<button class="${params.bgMode === m ? 'on' : ''}" ${pressed(params.bgMode === m)} data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
+  }
+  html += '</div>';
+  html += slider('Brightness', 'bgIntensity', params.bgIntensity ?? 0.7, 0, 1.5, 0.05, v => Math.round(v * 100) + '%');
+
+  // Keep the full color catalog together rather than splitting it into
+  // subjective named families.
   html += '<div class="ps-subtitle">Palette</div>';
   const activePalette = PALETTE_PRESETS[params.palette] || PALETTE_PRESETS.gold;
   html += `<div class="palette-active-preview" style="background:${palettePreviewCSS(params.palette, 'spectrum')}">
@@ -381,16 +432,6 @@ function renderStyleSection(params, data) {
     });
   }
 
-  // These are backgrounds, so call them backgrounds. Show every option that
-  // the active quality tier can render instead of hiding most behind a gate.
-  html += '<div class="ps-subtitle">Background</div><div class="seg seg-wrap">';
-  for (const m of backgroundModesForQuality(quality)) {
-    const background = BACKGROUND_PRESETS[m];
-    html += `<button class="${params.bgMode === m ? 'on' : ''}" ${pressed(params.bgMode === m)} data-act="setBgMode" data-arg="${m}" title="${background.description} · ${background.quality} quality">${background.label}</button>`;
-  }
-  html += '</div>';
-  html += slider('Brightness', 'bgIntensity', params.bgIntensity ?? 0.7, 0, 1.5, 0.05, v => Math.round(v * 100) + '%');
-
   if (caps.coloring) {
     html += '<div class="ps-subtitle">Color by</div><div class="seg seg-wrap">';
     for (const k of Object.keys(COLORINGS)) {
@@ -411,10 +452,17 @@ function renderStyleSection(params, data) {
   }
   html += '</div>';
   html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  html += toggle('FX shift', !!params.autoFx, 'toggleFXShift');
+  if (params.autoFx) {
+    html += slider('FX interval', 'fxShiftInterval', params.fxShiftInterval ?? 3.2, 2, 20, 0.2, v => `${v.toFixed(1)}s`);
+  }
   if (params.view === 'raymarched') {
-    html += '<div class="ps-help">SDF effects are implemented directly in the raymarcher; point-only effects are omitted.</div>';
+    html += '<div class="ps-help">All catalog effects use native raymarched surface treatments in SDF view.</div>';
   }
 
+  if (params.view !== 'raymarched') {
+    html += slider('Point size', 'pointScale', params.pointScale ?? 1, 0.7, 1.8, 0.05, v => `${Math.round(v * 100)}%`);
+  }
   if (caps.lighting !== false || params.view === 'e8coxeter' || params.view === 'bloom') {
     html += slider('Opacity', 'opacity', params.opacity ?? 0.9, 0.1, 1, 0.05, v => Math.round(v * 100) + '%');
   }
@@ -857,7 +905,7 @@ export class ControlPanel {
         </div>
         <div class="ps-scroll" id="ps-body" role="tabpanel" aria-labelledby="panel-tab-${workspace}"></div>
         <div class="panel-footer">
-          <button data-act="resetConfig" title="Reset all settings"><span style="font-size:13px">↺</span> Reset</button>
+          <button data-act="resetConfig" title="Reset this model's visuals and motion"><span style="font-size:13px">↺</span> Reset</button>
           <button data-act="surprise" title="Surprise: randomize view, palette, FX, shape, and shift settings for discovery"><span style="font-size:13px">✦</span> Surprise</button>
           <button data-act="sharePage" title="Copy the hosted E8 Studio link"><span style="font-size:13px">⎘</span> Share</button>
           <button data-act="shareSnapshot" title="Save a snapshot of the current render"><span style="font-size:13px">▣</span> Snapshot</button>
@@ -921,6 +969,9 @@ const MOTION_STATES = {
   paused:   { label: '⏸ paused',  cls: 'is-paused' },
   intro:    { label: '✦ intro',    cls: 'is-active' },
   cam:      { label: '🎥 path',    cls: 'is-active' },
+  model:    { label: '✦ models',   cls: 'is-active' },
+  zoom:     { label: '↕ zoom',     cls: 'is-active' },
+  fx:       { label: '✧ FX',       cls: 'is-active' },
   orbit:    { label: '↻ orbit',   cls: 'is-active' },
   flux:     { label: '↕ flux',    cls: 'is-active' },
   rotate:   { label: '↻ rotate',  cls: 'is-active' },
@@ -933,7 +984,10 @@ export function updateMotionStatus(params) {
   let key;
   if (params.paused) key = 'paused';
   else if (params.intro) key = 'intro';
+  else if (params.autoModel) key = 'model';
   else if (params.cameraPath && params.cameraPath !== 'manual') key = 'cam';
+  else if (params.autoZoom) key = 'zoom';
+  else if (params.autoFx) key = 'fx';
   else if (params.cameraOrbit) key = 'orbit';
   else if ((params.autoSliders || []).includes('e8MorphT')) key = 'flux';
   else if (params.autoRotate || params.e8AutoRotate || params.polyAutoRotate) key = 'rotate';

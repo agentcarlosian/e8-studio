@@ -184,6 +184,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       depthWrite: false,
     });
     const vPoints = new THREE.Points(vGeo, vMat);
+    vPoints.visible = !!runtimeParams().showVertices;
     group.add(vPoints);
     group.userData.vPoints = vPoints;
     // Expose material so update() can set FX uniforms
@@ -281,6 +282,8 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
         vPositions[i*3 + 2] = p3[2] * R;
       }
       group.userData.vPoints.geometry.attributes.position.needsUpdate = true;
+      group.userData.vPoints.visible = !!params.showVertices;
+      group.userData.vPoints.material.uniforms.uBaseSize.value = 0.06 * baseScale * (params.pointScale || 1);
 
       // FX uniform updates + trail decay.
       // Use canonical 11-mode FX map (was hardcoded 6-mode map that silently

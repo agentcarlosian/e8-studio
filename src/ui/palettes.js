@@ -18,6 +18,7 @@ export const PALETTE_PRESETS = {
   gold:       { colors: ['#fff2b2', '#f4d27a', '#f0a04b', '#9b4f18'], bgDarken: 0.93, description: 'luminous warm gold' },
   ember:      { colors: ['#ffd08a', '#ff9550', '#e44b24', '#7f1818'], bgDarken: 0.94, description: 'banked ember glow' },
   ice:        { colors: ['#ffffff', '#d6e8ff', '#7fb8ff', '#6076d9'], bgDarken: 0.94, description: 'glacial blue light' },
+  cyan:       { colors: ['#ecfffb', '#6affe8', '#3ca7ff'], bgDarken: 0.95, description: 'clear cyan light' },
 
   // Two-color complementary blends
   ocean:      { colors: ['#5ec9ff', '#9b4dff'], bgDarken: 0.92, description: 'ocean + violet' },
@@ -157,6 +158,7 @@ export const BLEND_MODES = {
 // Animated color-shift presets — each cycles through several palettes
 export const SHIFT_PRESETS = {
   static:    [],
+  all:       Object.keys(PALETTE_PRESETS),
   sunset:    ['ember', 'sunset', 'amber', 'plum'],
   rainbow:   ['rainbow', 'prism', 'aurora', 'neon', 'cosmic', 'golden'],
   fire:      ['fire', 'ember', 'amber', 'bronze'],
@@ -247,7 +249,7 @@ export const PALETTE_FAMILIES = {
 };
 
 const PALETTE_FAMILY_MEMBERS = {
-  essentials: ['gold', 'ember', 'ice', 'mono', 'void'],
+  essentials: ['gold', 'ember', 'ice', 'cyan', 'mono', 'void'],
   nature: ['ocean', 'forest', 'sunset', 'lavender', 'amber', 'jade', 'ocean_deep', 'aurora', 'terra', 'abyss', 'coral', 'magma', 'obsidian', 'cotton', 'spectral', 'sakura', 'biolume', 'opal', 'rose_gold', 'viridian'],
   energy: ['cosmic', 'rainbow', 'fire', 'neon', 'prism', 'plum', 'bronze', 'synthwave', 'cyberpunk', 'ultraviolet', 'solar_flare', 'electric', 'midnight'],
   mathematical: ['golden', 'prime', 'binary', 'petrie', 'thread', 'vintage'],

@@ -43,15 +43,16 @@ def main() -> int:
                 {"view": "sixhundred", "label": "600"},
                 {"view": "polytope", "label": "4D"},
                 {"view": "raymarched", "label": "SDF"},
+                {"view": "dynkin", "label": "Dynkin"},
             ], view_switch
-            print("ok compact View selector exposes all six core views")
+            print("ok View selector exposes six core views plus Dynkin")
 
             zoom = page.evaluate("""() => {
               window.__app.switchView('platonic');
               window.__app.setParam('autoSliders', ['cameraDistance']);
               const el = document.querySelector('input[data-param="cameraDistance"]');
-              // Inverted UI: raw 11.2 maps to physical distance 3.2.
-              el.value = '11.2';
+              // Inverted UI: min+max=12.45, so raw 9.25 maps to distance 3.2.
+              el.value = '9.25';
               el.dispatchEvent(new Event('input', { bubbles: true }));
               return {
                 param: window.__app.params.cameraDistance,
@@ -134,9 +135,9 @@ def main() -> int:
                 "poly": False, "rotate": False, "orbit": False,
                 "path": "manual", "zoom": False, "autos": [],
             }, transition
-            assert transition["sdfAutos"] == ["e8MorphT"], transition
+            assert transition["sdfAutos"] == [], transition
             assert not errors, errors
-            print("ok core view switches isolate motion and preserve E8-to-SDF flux")
+            print("ok core view switches isolate all selection-owned motion")
 
             extrude = page.evaluate("""() => {
               const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope'];
@@ -257,6 +258,49 @@ def main() -> int:
             }, sdf_quality
             assert sdf_quality["safeDefines"], sdf_quality
             print("ok SDF compiles full and constrained-GPU shader budgets")
+
+            reset_contract = page.evaluate("""() => {
+              window.__app.switchView('platonic');
+              window.__app.setShape('cube');
+              window.__app.toggleVertices();
+              window.__app.setParam('pointScale', 1.7);
+              window.__app.currentView.update(0.016, 1, window.__app.params);
+              let visibleBefore = 0;
+              window.__app.currentView.object3d.traverse(object => {
+                if (object.isPoints && object.visible) visibleBefore++;
+              });
+              window.__app.setPalette('cyan');
+              window.__app.setBgMode('starfield');
+              window.__app.setFX('glow');
+              window.__app.setParam('autoZoom', true);
+              window.__app.resetConfig();
+              let visibleAfter = 0;
+              window.__app.currentView.object3d.traverse(object => {
+                if (object.isPoints && object.visible) visibleAfter++;
+              });
+              const button = document.querySelector('[data-act="resetConfig"]');
+              return {
+                visibleBefore, visibleAfter,
+                view: window.__app.params.view,
+                shape: window.__app.params.shape,
+                palette: window.__app.params.palette,
+                bg: window.__app.params.bgMode,
+                fx: window.__app.params.fxMode,
+                zoom: window.__app.params.autoZoom,
+                nodes: window.__app.params.showVertices,
+                pointScale: window.__app.params.pointScale,
+                feedback: button?.textContent.trim(),
+                confirmed: button?.classList.contains('is-confirmed'),
+              };
+            }""")
+            assert reset_contract == {
+                "visibleBefore": 1, "visibleAfter": 0,
+                "view": "platonic", "shape": "cube",
+                "palette": "gold", "bg": "void", "fx": "none",
+                "zoom": False, "nodes": False, "pointScale": 1,
+                "feedback": "✓ Reset done", "confirmed": True,
+            }, reset_contract
+            print("ok model reset preserves selection, clears visuals, and confirms visibly")
 
             services = page.evaluate("""() => {
               const learning = window.__app.getLearningState();

@@ -9,6 +9,7 @@ const COMMON_MODIFIER_DEFAULTS = Object.freeze({
   autoRotate: false,
   cameraOrbit: false,
   autoZoom: false,
+  autoModel: false,
   cameraMode: 'orbit',
   cameraPath: 'manual',
   cameraSpeed: 1,
@@ -22,11 +23,15 @@ const COMMON_MODIFIER_DEFAULTS = Object.freeze({
   fxMode: 'none',
   fxByView: {},
   fxIntensity: 0.5,
+  autoFx: false,
+  fxShiftInterval: 3.2,
   blendMode: 'spectrum',
   shiftMode: 'static',
   shiftSpeed: 12,
   galleryPreset: '',
   showStarfield: false,
+  showVertices: false,
+  pointScale: 1,
 });
 
 const VIEW_MODIFIER_DEFAULTS = Object.freeze({
@@ -62,6 +67,7 @@ const VIEW_MODIFIER_DEFAULTS = Object.freeze({
     e8Roll: 0,
     e8MorphT: 0,
     colorBy: 'shell',
+    rootSubset: 'icosahedron',
     compareMode: 'off',
     compareShape: 'dodecahedron',
     showInspector: false,
@@ -134,6 +140,8 @@ export function activeViewModifiers(params, view = params.view) {
   if (params.autoRotate) labels.push('auto rotate');
   if (params.cameraOrbit || (params.cameraPath && params.cameraPath !== 'manual')) labels.push('camera motion');
   if (params.autoZoom) labels.push('auto zoom');
+  if (params.autoModel) labels.push('auto model');
+  if (params.autoFx) labels.push('FX shift');
   if ((params.autoSliders || []).length) labels.push('auto sliders');
 
   if (view === 'bloom') {
