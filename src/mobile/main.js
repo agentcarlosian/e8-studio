@@ -4036,7 +4036,7 @@ function syncBloomRuntimeReadout() {
   if (els.bloomPhaseOutput) els.bloomPhaseOutput.textContent = bloomPhaseLabel();
   if (state.modelMode === 'bloom' && els.sceneChip) {
     const small = els.sceneChip.querySelector('small');
-    if (small) small.textContent = `${bloomPhaseLabel()} / ${state.bloomAmount.toFixed(2)}`;
+    if (small) small.textContent = state.bloomAmount.toFixed(2);
   }
 }
 
@@ -4103,7 +4103,9 @@ function activeSceneSummary() {
   if (state.modelMode === 'bloom') {
     return {
       chipStrong: MODEL_LABELS.bloom,
-      chipSmall: `${bloomPhaseLabel()} / ${state.bloomAmount.toFixed(2)}`,
+      // Keep the tappable scene chip compact across platform font metrics. The
+      // full phase remains available in the accessible label and View timeline.
+      chipSmall: state.bloomAmount.toFixed(2),
       topbarLabel: `Designed Bloom timeline at ${state.bloomAmount.toFixed(2)}, ${bloomPhaseLabel()} phase`,
       canvasLabel: `Designed Bloom visualization in the ${bloomPhaseLabel()} phase`,
       infoCopy: 'Designed Bloom follows the desktop construction: the source solid grows through the 600-cell and twin H4 stages, then opens into the E8 Coxeter plane. Drag to rotate, or open View to scrub the timeline or start Auto.',

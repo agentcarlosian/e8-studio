@@ -51,6 +51,17 @@ let saveTimer = null;
 let pendingSave = null;
 let onLoadCallback = null;
 
+function writePendingSave() {
+  const snapshot = pendingSave || {};
+  pendingSave = null;
+  saveTimer = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    console.warn('localStorage save failed:', e);
+  }
+}
+
 function configSnapshot(params) {
   const toSave = {};
   for (const k of Object.keys(params)) {
@@ -59,19 +70,17 @@ function configSnapshot(params) {
   return JSON.parse(JSON.stringify(toSave));
 }
 
-/** Save current params to localStorage (debounced). */
-export function saveConfig(params) {
+/** Save current params to localStorage, debounced unless explicitly immediate. */
+export function saveConfig(params, { immediate = false } = {}) {
   if (typeof localStorage === 'undefined') return;
   pendingSave = configSnapshot(params);
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pendingSave || {}));
-      pendingSave = null;
-    } catch (e) {
-      console.warn('localStorage save failed:', e);
-    }
-  }, 250);
+  saveTimer = null;
+  if (immediate) {
+    writePendingSave();
+    return;
+  }
+  saveTimer = setTimeout(writePendingSave, 250);
 }
 
 /** Load saved config from localStorage. Returns null if none. */
@@ -90,6 +99,9 @@ export function loadConfig() {
 /** Clear saved config from localStorage. */
 export function clearConfig() {
   if (typeof localStorage === 'undefined') return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  pendingSave = null;
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
 }
 

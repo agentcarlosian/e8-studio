@@ -165,7 +165,7 @@ def main() -> int:
                 width: document.getElementById('scene-chip').getBoundingClientRect().width,
                 scrollWidth: document.getElementById('scene-chip').scrollWidth
             })""")
-            check("scene chip advances to Bloom", scene_step_forward["state"]["modelMode"] == "bloom" and scene_step_forward["chip"] == "Bloom Shape / 0.00", str(scene_step_forward))
+            check("scene chip advances to Bloom", scene_step_forward["state"]["modelMode"] == "bloom" and scene_step_forward["chip"] == "Bloom 0.00", str(scene_step_forward))
             check("Bloom scene chip copy fits the compact control", scene_step_forward["width"] <= 124 and scene_step_forward["scrollWidth"] <= scene_step_forward["width"] + 1, str(scene_step_forward))
             check("scene chip updates compact accessibility label", "Designed Bloom" in scene_step_forward["label"] and scene_step_forward["metrics"]["lastSceneChipLabel"] == scene_step_forward["label"], str(scene_step_forward))
             check("scene chip uses lightweight sync path", scene_step_forward["metrics"]["sceneChipStepCount"] > scene_step_before["sceneChipStepCount"] and scene_step_forward["metrics"]["sceneChipSyncSkipCount"] > scene_step_before["sceneChipSyncSkipCount"] and scene_step_forward["metrics"]["controlSyncCount"] == scene_step_before["controlSyncCount"] and scene_step_forward["metrics"]["lastInteractionType"] == "scene-chip-next", str(scene_step_forward["metrics"]))
@@ -192,7 +192,7 @@ def main() -> int:
                     chip: chip.textContent.trim().replace(/\\s+/g, ' ')
                 };
             }""")
-            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "bloom" and scene_swipe_next["chip"] == "Bloom Shape / 0.00", str(scene_swipe_next))
+            check("scene chip swipe left advances scene", scene_swipe_next["state"]["modelMode"] == "bloom" and scene_swipe_next["chip"] == "Bloom 0.00", str(scene_swipe_next))
             check("scene chip swipe left records gesture telemetry", scene_swipe_next["metrics"]["sceneChipSwipeCount"] > scene_swipe_before["sceneChipSwipeCount"] and scene_swipe_next["metrics"]["lastSceneChipGesture"] == "swipe-next" and scene_swipe_next["metrics"]["lastSceneChipSwipeDirection"] == "next" and scene_swipe_next["metrics"]["lastInteractionType"] == "scene-chip-swipe-next", str(scene_swipe_next["metrics"]))
             scene_swipe_prev = page.evaluate("""() => {
                 const chip = document.getElementById('scene-chip');

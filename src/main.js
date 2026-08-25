@@ -3300,11 +3300,12 @@ window.__app = {
     cameraController.autoZoomFactor = 1;
     syncCameraTargets();
     updateCameraFromSpherical();
-    if (currentView) switchView(targetView, { resetSelection: false });
-    else {
-      params.view = targetView;
-      saveConfig(params);
-    }
+    if (currentView) switchView(targetView, { resetSelection: false, save: false });
+    else params.view = targetView;
+    // Presets are complete, explicit user actions. Commit the resulting state
+    // immediately so animation or a slow renderer cannot keep postponing the
+    // normal debounced save.
+    saveConfig(params, { immediate: true });
     refreshPanel();
     showSavedToast('✦ ' + preset.name);
   },
