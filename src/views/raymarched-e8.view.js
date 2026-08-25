@@ -353,12 +353,18 @@ void main() {
       col = mix(col, k6 * (0.32 + diff * 0.7 + fresnel * 0.55), uFXIntensity * 0.84);
     }
     if (uFXMode == 18) {
-      // DOF: animated focal shell; out-of-focus surfaces soften and desaturate.
-      float focalDistance = 4.8 + sin(uTime * 0.32) * 1.7;
-      float blur = smoothstep(0.5, 3.5, abs(t - focalDistance));
+      // DOF: a narrow animated focal shell stays crisp while depth and lens
+      // radius push the surrounding surface into a cool, translucent bokeh.
+      // The radial term keeps the effect legible even when a software renderer
+      // quantizes most ray hits into a very narrow depth band.
+      float focalDistance = 5.0 + sin(uTime * 0.32) * 0.55;
+      float depthBlur = smoothstep(0.12, 1.15, abs(t - focalDistance));
+      float lensBlur = smoothstep(0.3, 1.55, length(p.xy));
+      float blur = clamp(max(depthBlur, lensBlur * 0.74), 0.0, 1.0);
       float gray = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(col, vec3(gray) * vec3(0.72, 0.84, 1.0), blur * uFXIntensity * 0.72);
-      alpha *= 1.0 - blur * uFXIntensity * 0.34;
+      vec3 defocused = vec3(gray) * vec3(0.66, 0.82, 1.08) + vec3(0.025, 0.055, 0.11);
+      col = mix(col, defocused, (0.14 + blur * 0.86) * uFXIntensity * 0.82);
+      alpha *= 1.0 - (0.06 + blur * 0.28) * uFXIntensity;
     }
     if (uFXMode == 19) {
       float cloud = 0.5 + 0.5 * sin(p.x * 1.7 + uTime * 0.38) * cos(p.y * 1.9 - uTime * 0.27);
