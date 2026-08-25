@@ -63,6 +63,7 @@ const LINE_FS = /* glsl */`
   uniform int uFXMode;
   uniform float uFXIntensity;
   uniform float uTime;
+  uniform float uPixelRatio;
   varying vec3 vWorldPos;
   varying vec3 vLineBase;
 
@@ -229,6 +230,13 @@ const LINE_FS = /* glsl */`
       vec3 prism = 0.5 + 0.5 * cos(6.2831 * (band + vec3(0.0, 0.33, 0.67)));
       col = mix(col, col * prism * 1.5, uFXIntensity);
     }
+    // Native WebGL lines are fixed to one drawing-buffer pixel on most desktop
+    // drivers. At 2x DPR that is only half a CSS pixel, so a sharper framebuffer
+    // can paradoxically make structural lines look dimmer. Preserve their
+    // perceived energy without adding geometry or widening mobile lines.
+    float dpiLift = clamp(uPixelRatio - 1.0, 0.0, 1.0);
+    col *= 1.0 + dpiLift * 0.24;
+    a = min(1.0, a * (1.0 + dpiLift * 0.18));
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -251,6 +259,7 @@ export class LineFXMaterial extends THREE.ShaderMaterial {
         uFXMode: { value: FX_MODE.NONE },
         uFXIntensity: { value: 0.5 },
         uTime: { value: 0 },
+        uPixelRatio: { value: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1 },
       },
       vertexShader: lineVertexShader(vertexColors),
       fragmentShader: LINE_FS,

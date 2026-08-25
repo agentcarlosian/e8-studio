@@ -68,7 +68,7 @@ export function createBloomView({ data, palette, scale: baseScale, context = {} 
   const edgesMat = new LineFXMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.24,
     depthWrite: false,
   });
   const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);

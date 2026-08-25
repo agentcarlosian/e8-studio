@@ -121,7 +121,7 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
     color: 0xffffff,          // multiplied with per-vertex colors in the shader
     vertexColors: true,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.55,
   });
   const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
   group.add(edgeLines);
