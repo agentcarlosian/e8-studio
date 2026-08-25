@@ -11,7 +11,10 @@
 </head>
 <body>
   <main class="mobile-shell">
+    <canvas id="mobile-background-canvas" aria-hidden="true"></canvas>
+    <canvas id="mobile-e8-chord-canvas" aria-hidden="true"></canvas>
     <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots and 12 rings"></canvas>
+    <canvas id="mobile-sdf-canvas" aria-hidden="true"></canvas>
 
     <div class="topbar" aria-label="E8 Coxeter, 240 roots, 12 rings">
       <button id="scene-chip" class="scene-chip" type="button" aria-label="Scene: E8 Coxeter, tap to switch">
@@ -44,7 +47,7 @@
 
       <nav class="sheet-tabs" aria-label="Settings sections">
         <button class="active" type="button" data-section-tab="view">View</button>
-        <button type="button" data-section-tab="style">Style</button>
+        <button type="button" data-section-tab="style">Visuals</button>
         <button type="button" data-section-tab="motion">Motion</button>
         <button type="button" data-section-tab="quality">Quality</button>
         <button type="button" data-section-tab="info">Info</button>
@@ -54,16 +57,25 @@
         <section class="settings-section active" data-section="view">
           <h2>View</h2>
           <div class="control-stack">
-            <div class="view-actions" aria-label="View framing">
+            <div class="view-actions" aria-label="View actions">
               <button class="wide-action" type="button" data-action="reset-view">Reset</button>
-              <button class="wide-action" type="button" data-view-action="fit-all">Fit all</button>
+              <button id="surprise-button" class="wide-action" type="button" data-view-action="surprise">Surprise</button>
+              <button id="settings-done" class="wide-action done-button view-done-action settings-done-action" type="button" data-settings-done>Done</button>
             </div>
-            <div class="scene-preset-panel" aria-label="Scene presets">
+            <div id="bloom-timeline-field" class="bloom-timeline-panel hidden" aria-label="Bloom timeline">
               <div class="browse-head">
-                <strong>Scenes</strong>
-                <output id="scene-preset-output">E8</output>
+                <strong>Bloom timeline</strong>
+                <output id="bloom-phase-output">Shape</output>
               </div>
-              <div id="scene-preset-grid" class="scene-preset-grid"></div>
+              <label class="field bloom-time-field">
+                <span class="field-heading">Time <output id="bloom-time-output">0.00</output></span>
+                <input id="bloom-time" type="range" min="0" max="1" step="0.005" value="0">
+              </label>
+              <div class="browse-actions bloom-actions">
+                <button id="bloom-auto-button" type="button" data-bloom-action="toggle-auto">Auto</button>
+                <button id="bloom-twin-button" type="button" data-bloom-action="toggle-twin">Twin H4</button>
+                <button type="button" data-bloom-action="reset">Reset</button>
+              </div>
             </div>
             <div class="model-shortcut-panel" aria-label="Model shortcuts">
               <div class="browse-head">
@@ -72,27 +84,60 @@
               </div>
               <div id="model-shortcut-groups" class="model-shortcut-groups"></div>
             </div>
-            <label class="field">
+            <!-- The grouped Models catalog above is the sole visible selector.
+                 Native selects remain hidden as compact state/event fallbacks. -->
+            <label class="field" hidden aria-hidden="true">
               <span>Model</span>
               <select id="model-select">
+                <option value="bloom">Bloom</option>
                 <option value="e8_2d">E8 Coxeter</option>
-                <option value="e8_3d">E8 3D roots</option>
+                <option value="sdf">E8 SDF</option>
                 <option value="platonic">Platonic solid</option>
                 <option value="poly4d">4D polytope</option>
                 <option value="dynkin">Dynkin diagram</option>
               </select>
             </label>
-            <label id="shape-field" class="field hidden">
+            <div id="sdf-field" class="model-control-panel hidden" aria-label="SDF surface controls">
+              <div class="browse-head">
+                <strong>SDF surface</strong>
+                <small>Ray-marched in WebGL</small>
+              </div>
+              <label class="field">
+                <span class="field-heading">Sphere radius <output id="sdf-radius-output">0.080</output></span>
+                <input id="sdf-radius" type="range" min="0.04" max="0.13" step="0.005" value="0.08">
+              </label>
+              <label class="field">
+                <span class="field-heading">Smooth blend <output id="sdf-blend-output">0.030</output></span>
+                <input id="sdf-blend" type="range" min="0" max="0.10" step="0.005" value="0.03">
+              </label>
+              <label class="field">
+                <span class="field-heading">Highlight glow <output id="sdf-bloom-output">50%</output></span>
+                <input id="sdf-bloom" type="range" min="0" max="1" step="0.05" value="0.5">
+              </label>
+              <label class="field">
+                <span class="field-heading">Metallic sheen <output id="sdf-aniso-output">60%</output></span>
+                <input id="sdf-aniso" type="range" min="0" max="1" step="0.05" value="0.6">
+              </label>
+            </div>
+            <label id="shape-field" class="field hidden" hidden aria-hidden="true">
               <span>Shape</span>
               <select id="shape-select">
-                <option value="tetrahedron">Tetrahedron</option>
-                <option value="cube">Cube</option>
-                <option value="octahedron">Octahedron</option>
-                <option value="dodecahedron">Dodecahedron</option>
-                <option value="icosahedron">Icosahedron</option>
+                <optgroup label="Platonic solids">
+                  <option value="tetrahedron">Tetrahedron</option>
+                  <option value="cube">Cube</option>
+                  <option value="octahedron">Octahedron</option>
+                  <option value="dodecahedron">Dodecahedron</option>
+                  <option value="icosahedron">Icosahedron</option>
+                </optgroup>
+                <optgroup label="Star polyhedra">
+                  <option value="stellated_dodecahedron">sDodec</option>
+                  <option value="great_dodecahedron">gDodec</option>
+                  <option value="great_icosahedron">gIcosa</option>
+                  <option value="great_stellated_dodecahedron">gsDodec</option>
+                </optgroup>
               </select>
             </label>
-            <label id="polytope4d-field" class="field hidden">
+            <label id="polytope4d-field" class="field hidden" hidden aria-hidden="true">
               <span>4D polytope</span>
               <select id="polytope4d-select">
                 <option value="5cell">5-cell</option>
@@ -100,52 +145,60 @@
                 <option value="16cell">16-cell</option>
                 <option value="24cell">24-cell</option>
                 <option value="600cell">600-cell</option>
+                <option value="120cell">120-cell</option>
               </select>
             </label>
-            <label id="dynkin-field" class="field hidden">
+            <label id="dynkin-field" class="field hidden" hidden aria-hidden="true">
               <span>Dynkin diagram</span>
               <select id="dynkin-select">
                 <option value="E8">E8</option>
                 <option value="E7">E7</option>
                 <option value="E6">E6</option>
-                <option value="D6">D6</option>
-                <option value="D5">D5</option>
-                <option value="D4">D4</option>
-                <option value="A7">A7</option>
-                <option value="A5">A5</option>
-                <option value="A4">A4</option>
-                <option value="A3">A3</option>
               </select>
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>McKay highlight</strong>
                 <small>Show the selected Platonic subset.</small>
               </span>
               <input id="highlight-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>Context rays</strong>
                 <small>Show selected-root neighbors and opposite root.</small>
               </span>
               <input id="context-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>Petrie cycle</strong>
                 <small>Trace the desktop 30-root Coxeter cycle.</small>
               </span>
               <input id="petrie-toggle" type="checkbox">
             </label>
-            <label class="toggle-row">
+            <label class="toggle-row" data-model-context="e8-only">
               <span>
                 <strong>Weyl mirrors</strong>
                 <small>Show the eight simple-reflection mirror lines.</small>
               </span>
               <input id="mirrors-toggle" type="checkbox">
             </label>
-            <label class="field">
+            <label class="toggle-row" data-model-context="e8-only">
+              <span>
+                <strong>Full chords</strong>
+                <small>Show all 21,840 desktop McMullen chords.</small>
+              </span>
+              <input id="edges-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row" data-model-context="vertex-models">
+              <span>
+                <strong>Vertex nodes</strong>
+                <small>Show point markers on solids and 4D polytopes.</small>
+              </span>
+              <input id="vertices-toggle" type="checkbox">
+            </label>
+            <label class="field" data-model-context="e8-roots">
               <span>Subset</span>
               <select id="subset-select">
                 <option value="icosahedron">Icosahedron</option>
@@ -153,7 +206,7 @@
                 <option value="simple_roots">Simple roots</option>
               </select>
             </label>
-            <div class="subset-panel" aria-label="Subset root browser">
+            <div class="subset-panel" data-model-context="e8-roots" aria-label="Subset root browser">
               <div class="browse-head">
                 <strong>Subset roots</strong>
                 <output id="subset-output">0 roots</output>
@@ -166,7 +219,7 @@
                 <button type="button" data-subset-action="frame" aria-label="Frame subset">Frame</button>
               </div>
             </div>
-            <div class="browse-panel" aria-label="Root browser">
+            <div class="browse-panel" data-model-context="e8-roots" aria-label="Root browser">
               <div class="browse-head">
                 <strong>Root browser</strong>
                 <output id="root-output">None</output>
@@ -200,75 +253,153 @@
         </section>
 
         <section class="settings-section" data-section="style">
-          <h2>Style</h2>
+          <h2>Visuals</h2>
           <div class="control-stack">
+            <button id="visuals-done" class="wide-action done-button settings-done-action" type="button" data-settings-done>Done</button>
+            <label class="field">
+              <span>Background</span>
+              <select id="background-select">
+                <option value="void">Void</option>
+                <option value="starfield">Space</option>
+                <option value="grid">Grid</option>
+                <option value="aurora">Cloud</option>
+                <option value="cosmos">Cosmos</option>
+                <option value="mandala">Mandala</option>
+                <option value="plasma">Plasma</option>
+                <option value="vortex">Vortex</option>
+                <option value="quantum">Quantum</option>
+                <option value="eclipse">Eclipse</option>
+                <option value="synthwave">Barset</option>
+                <option value="prism">Prism</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-heading">Background brightness <output id="background-brightness-output">70%</output></span>
+              <input id="background-brightness" type="range" min="0.3" max="1.2" step="0.05">
+            </label>
             <div class="palette-panel" aria-label="Palette swatches">
               <div class="browse-head">
                 <strong>Palette</strong>
                 <output id="palette-output">Gold</output>
+                <button id="palette-expand-button" class="panel-expand-button" type="button" data-palette-action="toggle" aria-expanded="false" aria-controls="palette-swatch-grid">Expand</button>
               </div>
               <div id="palette-swatch-grid" class="palette-swatch-grid"></div>
             </div>
             <label class="field">
-              <span>Palette</span>
-              <select id="palette-select">
-                <option value="gold">Gold</option>
-                <option value="cyan">Cyan</option>
-                <option value="mono">Mono</option>
-                <option value="ember">Ember</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Point size</span>
-              <input id="point-size" type="range" min="0.7" max="1.8" step="0.1">
+              <span>All palettes</span>
+              <select id="palette-select"></select>
             </label>
             <label class="toggle-row">
+              <span>
+                <strong>Color shift</strong>
+                <small>Move automatically through the full palette catalog.</small>
+              </span>
+              <input id="auto-color-toggle" type="checkbox">
+            </label>
+            <label class="field">
+              <span class="field-heading">Shift speed <output id="color-speed-output">Medium</output></span>
+              <input id="color-speed" type="range" min="0.25" max="1.5" step="0.05">
+            </label>
+            <label class="field">
+              <span class="field-heading">Point size <output id="point-size-output">100%</output></span>
+              <input id="point-size" type="range" min="0.7" max="1.8" step="0.1">
+            </label>
+            <label class="field">
+              <span class="field-heading">Opacity <output id="point-opacity-output">72%</output></span>
+              <input id="point-opacity" type="range" min="0.3" max="1" step="0.05">
+            </label>
+            <label class="toggle-row" data-model-context="e8-only">
               <span>
                 <strong>Rings</strong>
                 <small>Draw the Coxeter shell guides.</small>
               </span>
               <input id="rings-toggle" type="checkbox">
             </label>
-            <div class="fx-preset-panel" aria-label="FX presets">
+            <div class="fx-preset-panel" aria-label="Color and motion presets">
               <div class="browse-head">
-                <strong>FX presets</strong>
-                <output id="fx-preset-output">Clean</output>
+                <strong>Color &amp; motion</strong>
+                <output id="fx-preset-output">Static</output>
               </div>
               <div id="fx-preset-grid" class="fx-preset-grid"></div>
             </div>
             <label class="toggle-row">
               <span>
-                <strong>Color cycle</strong>
-                <small>Auto-shift the palette while the canvas is idle.</small>
+                <strong>FX shift</strong>
+                <small>Cycle automatically through effects using Shift speed.</small>
               </span>
-              <input id="auto-color-toggle" type="checkbox">
+              <input id="auto-fx-toggle" type="checkbox">
             </label>
+            <div class="fx-mode-panel" aria-label="Effects">
+              <div class="browse-head">
+                <strong>Effects</strong>
+                <output id="fx-mode-output">Off</output>
+              </div>
+              <div id="fx-mode-grid" class="fx-mode-grid"></div>
+              <small id="fx-mode-description" class="panel-note">Use clean, unmodified shading.</small>
+              <small class="panel-note fx-cost-note">Cost badges indicate approximate GPU work. E8 full chords use a dedicated GPU layer; Canvas-composited FX are paced near 20 fps to protect touch response.</small>
+            </div>
             <label class="toggle-row">
               <span>
-                <strong>Soft FX</strong>
-                <small>Add a lightweight pulse to points and models.</small>
+                <strong>Motion pulse</strong>
+                <small>Add a lightweight breathing animation to points and models.</small>
               </span>
               <input id="soft-fx-toggle" type="checkbox">
             </label>
-            <div class="sheet-action" aria-label="Discovery">
-              <div>
-                <strong>Surprise</strong>
-                <small>Shuffle a safe mobile view.</small>
-              </div>
-              <button id="surprise-button" type="button" data-style-action="surprise">Surprise</button>
-            </div>
+            <label class="field">
+              <span class="field-heading">FX strength <output id="fx-strength-output">100%</output></span>
+              <input id="fx-strength" type="range" min="0.25" max="1.5" step="0.05">
+            </label>
           </div>
         </section>
 
         <section class="settings-section" data-section="motion">
           <h2>Motion</h2>
           <div class="control-stack">
+            <button id="motion-done" class="wide-action done-button settings-done-action" type="button" data-settings-done>Done</button>
+            <div class="motion-camera-panel" aria-label="Camera paths">
+              <div class="browse-head">
+                <strong>Camera path</strong>
+                <output id="camera-path-output">Manual</output>
+              </div>
+              <div class="camera-path-grid">
+                <button type="button" data-motion-action="camera-orbit">Orbit</button>
+                <button type="button" data-motion-action="camera-dive">Dive</button>
+                <button type="button" data-motion-action="camera-spiral">Spiral</button>
+                <button type="button" data-motion-action="camera-reset">Reset</button>
+              </div>
+            </div>
+            <label class="field">
+              <span class="field-heading">Rotation <output id="camera-rotation-output">0°</output></span>
+              <input id="camera-rotation" type="range" min="-180" max="180" step="1" value="0">
+            </label>
+            <label class="field">
+              <span class="field-heading">Tilt <output id="camera-tilt-output">16°</output></span>
+              <input id="camera-tilt" type="range" min="-60" max="60" step="1" value="16">
+            </label>
+            <div class="field">
+              <span class="field-heading">Zoom <output id="camera-zoom-output">100%</output></span>
+              <input id="camera-zoom" type="range" min="0.55" max="25" step="0.05" value="1" aria-label="Zoom">
+            </div>
+            <div class="field">
+              <span class="field-heading">
+                <span>Extrude <output id="camera-extrude-output">0.00</output></span>
+                <button id="camera-extrude-auto" class="motion-auto-toggle" type="button" data-motion-action="toggle-extrude-auto" aria-pressed="false" aria-label="Auto-animate Extrude">⟳ Auto</button>
+              </span>
+              <input id="camera-extrude" type="range" min="0" max="1" step="0.01" value="0" aria-label="Extrude">
+            </div>
             <label class="toggle-row">
               <span>
                 <strong>Auto-rotate</strong>
                 <small>Off by default for battery and speed.</small>
               </span>
               <input id="motion-toggle" type="checkbox">
+            </label>
+            <label id="auto-zoom-row" class="toggle-row">
+              <span>
+                <strong>Auto-zoom</strong>
+                <small>Move smoothly in and out around the current view.</small>
+              </span>
+              <input id="camera-zoom-auto" type="checkbox" data-motion-action="toggle-zoom-auto" aria-label="Auto-zoom">
             </label>
             <label class="field">
               <span>Speed</span>
@@ -343,7 +474,7 @@
                 <strong>Tour</strong>
                 <small id="mobile-tour-output">Ready</small>
               </div>
-              <output id="mobile-tour-step-output">1/5</output>
+              <output id="mobile-tour-step-output">1/6</output>
             </div>
             <div id="mobile-tour-copy" class="tour-copy">
               <strong>Mobile tour</strong>
@@ -392,10 +523,6 @@
           </div>
           <div id="cartan-matrix" class="cartan-matrix" aria-label="E8 simple-root Cartan matrix"></div>
         </section>
-      </div>
-
-      <div class="sheet-footer">
-        <button id="settings-done" class="done-button" type="button">Done</button>
       </div>
     </section>
   </main>

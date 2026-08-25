@@ -1,7 +1,9 @@
 const STORAGE_KEY = 'e8_mobile_v2_config';
 const PROGRESS_KEY = 'e8_progress_v1';
+const MOBILE_CONFIG_REVISION = 1;
 
 const DEFAULT_STATE = {
+  configRevision: MOBILE_CONFIG_REVISION,
   view: 'e8coxeter',
   modelMode: 'e8_2d',
   shape: 'icosahedron',
@@ -9,20 +11,42 @@ const DEFAULT_STATE = {
   dynkinDiagram: 'E8',
   learnTopic: 'auto',
   palette: 'gold',
+  background: 'void',
+  backgroundBrightness: 0.7,
   quality: 'smooth',
   showRings: true,
   showContext: true,
   showPetrie: false,
   showMirrors: false,
+  showEdges: true,
+  showVertices: false,
   highlightSubset: true,
   subset: 'icosahedron',
   pointScale: 1.0,
+  pointOpacity: 0.72,
+  bloomAmount: 0,
+  bloomAuto: false,
+  bloomSpeed: 0.08,
+  bloomTwinH4: true,
   autoRotate: false,
+  autoZoom: false,
+  autoExtrude: false,
   autoModel: false,
   autoColor: false,
+  autoFx: false,
+  colorSpeed: 0.72,
   softFx: false,
+  fxMode: 'none',
+  fxStrength: 1,
   rotationSpeed: 0.7,
   rotation: 0,
+  cameraTilt: 0.28,
+  cameraPath: 'manual',
+  e8MorphT: 0,
+  sdfSphereR: 0.08,
+  sdfBlend: 0.03,
+  sdfBloom: 0.5,
+  sdfAniso: 0.6,
   panX: 0,
   panY: 0,
   zoom: 1,
@@ -39,12 +63,67 @@ const MOTION_SPEED_PRESETS = [
   { id: 'medium', label: 'Med', name: 'Medium', value: 0.7 },
   { id: 'fast', label: 'Fast', value: 1.2 },
 ];
+// Most models use a restrained cinematic band. E8 Coxeter deliberately uses
+// its complete inspection range so Auto-zoom can travel all the way to 2500%.
+const AUTO_ZOOM_MIN = 0.7;
+const AUTO_ZOOM_MAX = 1.65;
+const MANUAL_ZOOM_MIN = 0.55;
+const STANDARD_ZOOM_MAX = 3.2;
+const E8_COXETER_ZOOM_MAX = 25;
+const FX_SHIFT_INTERVAL_S = 3.2;
+const PALETTE_COMPACT_COUNT = 9;
+const AUTO_MOTION_RATE = 0.72;
 const FX_PRESETS = [
-  { id: 'clean', label: 'Clean', autoColor: false, softFx: false },
-  { id: 'pulse', label: 'Pulse', autoColor: false, softFx: true },
-  { id: 'color', label: 'Color', autoColor: true, softFx: false },
-  { id: 'live', label: 'Live', autoColor: true, softFx: true },
+  { id: 'clean', label: 'Static', autoColor: false, softFx: false },
+  { id: 'pulse', label: 'Breathe', autoColor: false, softFx: true },
+  { id: 'color', label: 'Color Shift', autoColor: true, softFx: false },
+  { id: 'live', label: 'Color + Breathe', autoColor: true, softFx: true },
 ];
+const MOBILE_FX_MODES = [
+  { id: 'none', label: 'Off', cost: 'low', description: 'Use clean, unmodified shading.' },
+  { id: 'glow', label: 'Glow', cost: 'low', description: 'Add a luminous rim and brighter highlights.' },
+  { id: 'pulse', label: 'Pulse', cost: 'low', description: 'Breathe the form gently over time.' },
+  { id: 'trail', label: 'Trail', cost: 'medium', description: 'Echo color behind moving geometry.' },
+  { id: 'chromatic', label: 'Chrom', name: 'Chromatic', cost: 'low', description: 'Separate color channels across the form.' },
+  { id: 'kaleidoscope', label: 'Kaleid', name: 'Kaleidoscope', cost: 'medium', description: 'Mirror light into a kaleidoscopic pattern.' },
+  { id: 'ripple', label: 'Ripple', cost: 'low', description: 'Pulse vertices and structural edges in radial waves.' },
+  { id: 'spiral', label: 'Spiral', cost: 'low', description: 'Twist light around the view axis.' },
+  { id: 'fog', label: 'Fog', cost: 'low', description: 'Fade the structure into atmospheric depth.' },
+  { id: 'heat', label: 'Heat', cost: 'low', description: 'Map warm energy bands across the form.' },
+  { id: 'edge-glow', label: 'Edge', name: 'Edge glow', cost: 'low', description: 'Emphasize silhouettes and structural edges.' },
+  { id: 'aura', label: 'Aura', cost: 'low', description: 'Add a soft animated field around the form.' },
+  { id: 'voronoi', label: 'Voronoi', cost: 'high', description: 'Cut a procedural cellular pattern into the view.' },
+  { id: 'caustic', label: 'Caustic', cost: 'medium', description: 'Add moving refractive light bands.' },
+  { id: 'iridescent', label: 'Irides', name: 'Iridescent', cost: 'low', description: 'Shift color like thin-film light.' },
+  { id: 'flowfield', label: 'Flow', name: 'Flow field', cost: 'medium', description: 'Move an animated current across the geometry.' },
+  { id: 'plasma', label: 'Plasma', cost: 'medium', description: 'Add animated plasma color bands.' },
+  { id: 'kaleido6', label: 'K6', name: 'Kaleido 6', cost: 'medium', description: 'Apply six-fold procedural symmetry.' },
+  { id: 'dof', label: 'DOF', name: 'Depth of field', cost: 'medium', description: 'Focus the center while softening depth.' },
+  { id: 'nebula', label: 'Nebula', cost: 'medium', description: 'Suspend the form in a drifting cloudy field.' },
+  { id: 'wireframe', label: 'Wire', name: 'Wireframe', cost: 'low', description: 'Reduce shading to a technical wire look.' },
+  { id: 'hologram', label: 'Holo', name: 'Hologram', cost: 'low', description: 'Add cyan scanlines and digital flicker.' },
+  { id: 'xray', label: 'X-ray', cost: 'low', description: 'Reveal cool rims and dark interiors.' },
+  { id: 'crystal', label: 'Crystal', cost: 'low', description: 'Add sharp faceted prismatic highlights.' },
+];
+const SUPPORTED_MOBILE_FX = new Set(MOBILE_FX_MODES.map(mode => mode.id));
+const MOBILE_FX_MODE_INDEX = Object.freeze(Object.fromEntries(MOBILE_FX_MODES.map((mode, index) => [mode.id, index])));
+// Ripple already paints every chord from its topology coordinate. Give the
+// rest of the FX catalog the same structural color access while preserving
+// each treatment's intended strength and keeping Off class-colored.
+const E8_CHORD_FX_COLOR_MIX = Object.freeze([
+  0, 0.58, 0.54, 0.72, 0.78, 0.68, 1, 0.7,
+  0.48, 0.82, 0.62, 0.72, 0.7, 0.72, 0.88, 0.7,
+  0.84, 0.78, 0.42, 0.76, 0.66, 0.78, 0.8, 0.88,
+]);
+const ANIMATED_MOBILE_FX = new Set([
+  'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripple', 'spiral',
+  'aura', 'caustic', 'iridescent', 'flowfield', 'plasma', 'kaleido6',
+  'nebula', 'hologram', 'crystal',
+]);
+const PATTERNED_CANVAS_FX = new Set([
+  'kaleidoscope', 'spiral', 'voronoi', 'caustic', 'iridescent',
+  'flowfield', 'plasma', 'kaleido6', 'nebula', 'hologram',
+]);
 const MOTION_PRESETS = [
   { id: 'still', label: 'Still', interaction: 'still' },
   { id: 'orbit', label: 'Orbit', interaction: 'orbit' },
@@ -52,42 +131,117 @@ const MOTION_PRESETS = [
 ];
 
 const PALETTES = {
-  gold: ['#f4d27a', '#f0a04b', '#fff4b8'],
+  gold: ['#fff2b2', '#f4d27a', '#f0a04b', '#9b4f18'],
+  ember: ['#ffd08a', '#ff9550', '#e44b24', '#7f1818'],
+  ice: ['#ffffff', '#d6e8ff', '#7fb8ff', '#6076d9'],
   cyan: ['#6affe8', '#3ca7ff', '#ecfffb'],
-  mono: ['#f4f1ea', '#9d9789', '#ffffff'],
-  ember: ['#ffb36c', '#ff6d43', '#ffe2bd'],
+  ocean: ['#5ec9ff', '#9b4dff'],
+  forest: ['#7df9c8', '#00d68f'],
+  sunset: ['#ff6b9d', '#ff9550'],
+  cosmic: ['#4dffff', '#9b4dff'],
+  lavender: ['#c8a2ff', '#ff6b9d'],
+  amber: ['#ffb000', '#ff5500'],
+  jade: ['#00d68f', '#1e90ff'],
+  rainbow: ['#ff3300', '#ffcc00', '#00d68f', '#4dffff', '#9b4dff'],
+  fire: ['#ff0066', '#ff3300', '#ffb000'],
+  ocean_deep: ['#001f3f', '#0074d9', '#7fdbff'],
+  neon: ['#ff00d4', '#00ffea', '#c8ff00'],
+  prism: ['#ff0040', '#ffaa00', '#40ff00', '#00aaff', '#aa00ff'],
+  aurora: ['#00d68f', '#4dffff', '#c8a2ff', '#ff6b9d'],
+  plum: ['#9b4dff', '#ff00d4', '#ff6b9d', '#ff9550'],
+  bronze: ['#ffb000', '#ff5500', '#cc3a1a', '#660033'],
+  sakura: ['#ffb3d1', '#c8a2ff', '#7fb8ff', '#7fffaf'],
+  mono: ['#f0f0f0', '#808080', '#1a1a1a'],
+  void: ['#ffffff', '#aaaaaa', '#444444'],
+  golden: ['#ffd700', '#ffb000', '#ff7700', '#cc4400'],
+  prime: ['#ff0066', '#00ddaa', '#4488ff', '#aa44ff'],
+  binary: ['#ffffff', '#000000'],
+  terra: ['#8b4513', '#cd853f', '#daa520', '#556b2f'],
+  abyss: ['#0fffc0', '#1a8aaa', '#0a3d62', '#4ecdc4'],
+  coral: ['#ff6b6b', '#ff9ff3', '#feca57', '#48dbfb'],
+  magma: ['#fff200', '#ff8c00', '#ff3300', '#7a0010'],
+  obsidian: ['#9b59b6', '#34495e', '#2c3e50', '#000000'],
+  cotton: ['#ffb3d9', '#b3d9ff', '#d9ffb3', '#ffffb3'],
+  spectral: ['#e1bee7', '#b2dfdb', '#fff9c4', '#ffccbc'],
+  synthwave: ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec'],
+  cyberpunk: ['#00f5ff', '#ff00ff', '#fffc00', '#ff0080'],
+  ultraviolet: ['#1b103f', '#643cff', '#d83cff', '#ff6b9d', '#ffb45e'],
+  biolume: ['#062f38', '#00a896', '#00ffd5', '#b8ff70', '#eaffc7'],
+  opal: ['#e8ffff', '#9de7ee', '#c5b8ff', '#ffbad2', '#ffd6a0'],
+  solar_flare: ['#fffbd1', '#ffe66d', '#ff9f1c', '#ff3d00', '#7a0019'],
+  rose_gold: ['#fff0ea', '#f3b6ad', '#c77b6b', '#8e4560', '#3e1738'],
+  electric: ['#071a52', '#0066ff', '#00d9ff', '#e8ffff', '#8c7bff'],
+  viridian: ['#052e2b', '#087f5b', '#20c997', '#a9e34b', '#ffe066'],
+  midnight: ['#050816', '#152b65', '#3f60d9', '#9a7cff', '#ff82bd'],
+  petrie: ['#0000ff', '#00ff00', '#ff0000', '#7f7f7f'],
+  thread: ['#e0e0f0', '#d0e0e0', '#e0d0d0', '#d0d0e0'],
+  vintage: ['#b09090', '#a09090', '#c0a0a0', '#a0a0a0'],
 };
-const PALETTE_LABELS = {
-  gold: 'Gold',
-  cyan: 'Cyan',
-  mono: 'Mono',
-  ember: 'Ember',
+const BACKGROUNDS = {
+  void: { label: 'Void', color: '#07070c', renderer: 'flat' },
+  starfield: { label: 'Space', color: '#020817', renderer: 'stars' },
+  grid: { label: 'Grid', color: '#030b12', renderer: 'grid' },
+  aurora: { label: 'Cloud', color: '#030912', renderer: 'aurora' },
+  cosmos: { label: 'Cosmos', color: '#050510', renderer: 'cosmos' },
+  mandala: { label: 'Mandala', color: '#070510', renderer: 'mandala' },
+  plasma: { label: 'Plasma', color: '#08050e', renderer: 'plasma' },
+  vortex: { label: 'Vortex', color: '#05030d', renderer: 'vortex' },
+  quantum: { label: 'Quantum', color: '#020b10', renderer: 'quantum' },
+  eclipse: { label: 'Eclipse', color: '#090506', renderer: 'eclipse' },
+  synthwave: { label: 'Barset', color: '#0d0412', renderer: 'synthwave' },
+  prism: { label: 'Prism', color: '#050712', renderer: 'prism' },
 };
+const LEGACY_BACKGROUND_MAP = Object.freeze({ space: 'starfield', cloud: 'aurora' });
+
+function paletteLabel(name) {
+  return String(name || '').split('_').map(word => word ? `${word[0].toUpperCase()}${word.slice(1)}` : '').join(' ');
+}
 
 const RENDER_PALETTES = Object.fromEntries(
-  Object.entries(PALETTES).map(([name, colors]) => [name, {
-    name,
-    colors,
-    ringStroke: colorWithAlpha(colors[1], 0.18),
-    rayStroke: colorWithAlpha(colors[2], 0.22),
-    mirrorStroke: colorWithAlpha('#6affe8', 0.34),
-    petrieStroke: colorWithAlpha(colors[2], 0.56),
-    glowPetrie: colorWithAlpha(colors[2], 0.12),
-    glowSelected: colorWithAlpha(colors[2], 0.34),
-    glowNeighbor: colorWithAlpha(colors[2], 0.2),
-    glowAntipode: colorWithAlpha(colors[1], 0.18),
-    glowSubset: colorWithAlpha(colors[2], 0.14),
-  }])
+  Object.entries(PALETTES).map(([name, colors]) => {
+    const secondary = colors[1] || colors[0];
+    const highlight = colors[2] || colors[colors.length - 1] || colors[0];
+    const renderColors = colors.length >= 3 ? colors : [colors[0], secondary, highlight];
+    return [name, {
+      name,
+      colors: renderColors,
+      ringStroke: colorWithAlpha(secondary, 0.18),
+      rayStroke: colorWithAlpha(highlight, 0.22),
+      mirrorStroke: colorWithAlpha('#6affe8', 0.34),
+      petrieStroke: colorWithAlpha(highlight, 0.56),
+      glowPetrie: colorWithAlpha(highlight, 0.12),
+      glowSelected: colorWithAlpha(highlight, 0.34),
+      glowNeighbor: colorWithAlpha(highlight, 0.2),
+      glowAntipode: colorWithAlpha(secondary, 0.18),
+      glowSubset: colorWithAlpha(highlight, 0.14),
+    }];
+  })
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
-const SUPPORTED_MODEL_MODES = new Set(['e8_2d', 'e8_3d', 'platonic', 'poly4d', 'dynkin']);
-const SUPPORTED_SHAPES = new Set(['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron']);
-const SUPPORTED_POLYTOPES4D = new Set(['5cell', 'tesseract', '16cell', '24cell', '600cell']);
-const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['A3', 'A4', 'A5', 'A7', 'D4', 'D5', 'D6', 'E6', 'E7', 'E8']);
+const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'dynkin']);
+const TOUCH_ORBIT_MODEL_MODES = new Set(['bloom', 'sdf', 'platonic', 'poly4d']);
+const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
+const STAR_SHAPES = new Set([
+  'stellated_dodecahedron',
+  'great_dodecahedron',
+  'great_icosahedron',
+  'great_stellated_dodecahedron',
+]);
+const SUPPORTED_SHAPES = new Set([
+  'tetrahedron',
+  'cube',
+  'octahedron',
+  'dodecahedron',
+  'icosahedron',
+  ...STAR_SHAPES,
+]);
+const SUPPORTED_POLYTOPES4D = new Set(['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell']);
+const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['E6', 'E7', 'E8']);
 const MODEL_LABELS = {
+  bloom: 'Bloom',
   e8_2d: 'E8',
-  e8_3d: 'E8 3D',
+  sdf: 'SDF',
   platonic: 'Solid',
   poly4d: '4D',
   dynkin: 'Dynkin',
@@ -98,6 +252,10 @@ const SHAPE_LABELS = {
   octahedron: 'Octahedron',
   dodecahedron: 'Dodecahedron',
   icosahedron: 'Icosahedron',
+  stellated_dodecahedron: 'Small stellated dodecahedron',
+  great_dodecahedron: 'Great dodecahedron',
+  great_icosahedron: 'Great icosahedron',
+  great_stellated_dodecahedron: 'Great stellated dodecahedron',
 };
 const POLYTOPE4D_LABELS = {
   '5cell': '5-cell',
@@ -105,15 +263,9 @@ const POLYTOPE4D_LABELS = {
   '16cell': '16-cell',
   '24cell': '24-cell',
   '600cell': '600-cell',
+  '120cell': '120-cell',
 };
 const DYNKIN_LABELS = {
-  A3: 'A3',
-  A4: 'A4',
-  A5: 'A5',
-  A7: 'A7',
-  D4: 'D4',
-  D5: 'D5',
-  D6: 'D6',
   E6: 'E6',
   E7: 'E7',
   E8: 'E8',
@@ -147,41 +299,198 @@ const SCENE_CHIP_SWIPE_SLOP_PX = 24;
 const SCENE_CHIP_LONG_PRESS_MS = 540;
 const STATUS_HIDE_MS = 1400;
 const MOTION_FRAME_INTERVAL_MS = 33;
+// Full chords use a dedicated WebGL line layer. Canvas-composited FX still
+// rebuild several full-screen images, so those combinations retain the lower
+// pacing budget while clean and shader-native Ripple can run at 30 fps.
+const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
+// Keep these values aligned with e8coxeter.view.js. With the canonical E8 data,
+// classes 3 and 7 are populated (6,720 + 15,120 chords); retaining all eight
+// slots keeps mobile topology and palette classification identical to desktop.
+const PHI = (1 + Math.sqrt(5)) / 2;
+const MOBILE_E8_CHORD_VALUES = [
+  Math.sqrt(2 - PHI), 1, Math.sqrt(3 - PHI), Math.sqrt(2),
+  PHI, Math.sqrt(3), Math.sqrt(2 + PHI), 2,
+];
+const DESKTOP_E8_CHORD_OPACITY = [0.10, 0.10, 0.10, 0.45, 0.10, 0.10, 0.10, 0.20];
+const MOBILE_E8_CHORD_ALPHA_SCALE = 0.19;
+const E8_CHORD_VERTEX_STRIDE_FLOATS = 7;
+const E8_CHORD_VERTEX_SHADER = `
+precision highp float;
+attribute vec3 aRoot;
+attribute vec4 aStyle;
+uniform vec2 uResolution;
+uniform vec2 uOrigin;
+uniform float uScale;
+uniform float uRotation;
+uniform float uPitch;
+uniform float uPathZoom;
+uniform float uExtrude;
+uniform float uRipple;
+uniform float uRipplePhase;
+uniform float uAlphaBoost;
+uniform float uColorLift;
+uniform float uFxMode;
+uniform float uFxStrength;
+uniform float uFxPhase;
+uniform float uFxColorMix;
+uniform vec3 uPalette0;
+uniform vec3 uPalette1;
+uniform vec3 uPalette2;
+uniform vec3 uPalette3;
+uniform vec3 uPalette4;
+varying vec4 vColor;
+
+vec3 paletteAt(float value) {
+  float scaled = clamp(value, 0.0, 1.0) * 4.0;
+  if (scaled < 1.0) return mix(uPalette0, uPalette1, scaled);
+  if (scaled < 2.0) return mix(uPalette1, uPalette2, scaled - 1.0);
+  if (scaled < 3.0) return mix(uPalette2, uPalette3, scaled - 2.0);
+  return mix(uPalette3, uPalette4, scaled - 3.0);
+}
+
+vec3 fxSpectrum(float value) {
+  return 0.55 + 0.45 * cos(6.2831853 * (value + vec3(0.0, 0.33, 0.67)));
+}
+
+void main() {
+  float yawCos = cos(uRotation);
+  float yawSin = sin(uRotation);
+  vec2 flatRoot = vec2(
+    aRoot.x * yawCos - aRoot.y * yawSin,
+    aRoot.x * yawSin + aRoot.y * yawCos
+  );
+  vec2 flatScreen = uOrigin + flatRoot * uScale;
+
+  float depthSource = aRoot.z * 0.62;
+  float rotatedX = aRoot.x * yawCos - depthSource * yawSin;
+  float rotatedZ = aRoot.x * yawSin + depthSource * yawCos;
+  float pitchCos = cos(uPitch);
+  float pitchSin = sin(uPitch);
+  float rotatedY = aRoot.y * pitchCos - rotatedZ * pitchSin;
+  float finalDepth = aRoot.y * pitchSin + rotatedZ * pitchCos;
+  float perspective = 4.2 / max(1.8, 4.2 + finalDepth);
+  vec2 extrudedScreen = uOrigin + vec2(rotatedX, rotatedY) * uScale * perspective * uPathZoom;
+  vec2 screen = mix(flatScreen, extrudedScreen, uExtrude);
+  vec2 clip = vec2(
+    screen.x / max(1.0, uResolution.x) * 2.0 - 1.0,
+    1.0 - screen.y / max(1.0, uResolution.y) * 2.0
+  );
+  gl_Position = vec4(clip, 0.0, 1.0);
+
+  float endpointAngleT = fract(atan(aRoot.y, aRoot.x) / 6.2831853 + 1.0);
+  float fxSeed = fract(
+    aStyle.w * (1.0 + mod(uFxMode, 5.0) * 0.083) +
+    endpointAngleT * (0.18 + mod(uFxMode, 3.0) * 0.11) +
+    aStyle.z * (0.07 + mod(uFxMode, 4.0) * 0.035) +
+    uFxPhase * (0.006 + mod(uFxMode, 6.0) * 0.002)
+  );
+  vec3 baseColor = paletteAt(aStyle.x);
+  vec3 effectColor = paletteAt(fxSeed);
+  float pulse = 0.5 + 0.5 * sin(uFxPhase * 1.4 + aStyle.w * 12.0);
+  float folded10 = abs(fract(endpointAngleT * 10.0 + uFxPhase * 0.018) * 2.0 - 1.0);
+  float folded6 = abs(fract(endpointAngleT * 6.0 - uFxPhase * 0.014) * 2.0 - 1.0);
+
+  if (uFxMode > 0.5 && uFxMode < 1.5) {
+    effectColor = mix(effectColor, vec3(1.0), 0.2 + pulse * 0.18);
+  } else if (uFxMode > 1.5 && uFxMode < 2.5) {
+    effectColor *= 0.72 + pulse * (0.34 + uFxStrength * 0.08);
+  } else if (uFxMode > 2.5 && uFxMode < 3.5) {
+    effectColor = mix(vec3(1.0, 0.12, 0.48), vec3(0.12, 0.9, 1.0), fxSeed);
+  } else if (uFxMode > 3.5 && uFxMode < 4.5) {
+    effectColor = fxSpectrum(fxSeed + uFxPhase * 0.025);
+  } else if (uFxMode > 4.5 && uFxMode < 5.5) {
+    effectColor = fxSpectrum(folded10 + aStyle.z * 0.12);
+  } else if (uFxMode > 5.5 && uFxMode < 6.5) {
+    effectColor = paletteAt(fract(aStyle.w + uRotation * 0.0732113));
+  } else if (uFxMode > 6.5 && uFxMode < 7.5) {
+    effectColor = fxSpectrum(fxSeed + endpointAngleT * 1.7 + aStyle.z * 0.18);
+  } else if (uFxMode > 7.5 && uFxMode < 8.5) {
+    effectColor = mix(vec3(0.34, 0.42, 0.58), vec3(0.86, 0.94, 1.0), fxSeed);
+  } else if (uFxMode > 8.5 && uFxMode < 9.5) {
+    effectColor = fxSeed < 0.48
+      ? mix(vec3(0.54, 0.01, 0.0), vec3(1.0, 0.24, 0.01), fxSeed / 0.48)
+      : mix(vec3(1.0, 0.24, 0.01), vec3(1.0, 0.96, 0.22), (fxSeed - 0.48) / 0.52);
+  } else if (uFxMode > 9.5 && uFxMode < 10.5) {
+    effectColor = mix(vec3(0.24, 0.9, 1.0), vec3(1.0), pulse * 0.72);
+  } else if (uFxMode > 10.5 && uFxMode < 11.5) {
+    effectColor = mix(vec3(0.12, 0.92, 1.0), vec3(0.68, 0.22, 1.0), fxSeed);
+  } else if (uFxMode > 11.5 && uFxMode < 12.5) {
+    effectColor = fxSpectrum(floor(fxSeed * 7.0) / 7.0 + 0.08);
+  } else if (uFxMode > 12.5 && uFxMode < 13.5) {
+    float caustic = pow(0.5 + 0.5 * sin(fxSeed * 38.0 - uFxPhase * 1.3), 4.0);
+    effectColor = mix(vec3(0.03, 0.56, 0.74), vec3(0.8, 1.0, 0.94), caustic);
+  } else if (uFxMode > 13.5 && uFxMode < 14.5) {
+    effectColor = fxSpectrum(fxSeed + uFxPhase * 0.04);
+  } else if (uFxMode > 14.5 && uFxMode < 15.5) {
+    effectColor = mix(vec3(0.03, 0.42, 0.72), vec3(0.08, 1.0, 0.68), 0.5 + 0.5 * sin(fxSeed * 18.0 - uFxPhase));
+  } else if (uFxMode > 15.5 && uFxMode < 16.5) {
+    effectColor = fxSpectrum(fxSeed + sin(endpointAngleT * 22.0 - uFxPhase) * 0.16);
+  } else if (uFxMode > 16.5 && uFxMode < 17.5) {
+    effectColor = fxSpectrum(folded6 + aStyle.w * 0.24);
+  } else if (uFxMode > 17.5 && uFxMode < 18.5) {
+    effectColor = mix(effectColor * 0.7, vec3(0.84, 0.92, 1.0), smoothstep(0.25, 0.82, aStyle.z));
+  } else if (uFxMode > 18.5 && uFxMode < 19.5) {
+    effectColor = mix(vec3(0.24, 0.03, 0.52), vec3(0.08, 0.82, 0.96), 0.5 + 0.5 * sin(fxSeed * 13.0 + uFxPhase * 0.55));
+  } else if (uFxMode > 19.5 && uFxMode < 20.5) {
+    effectColor = mix(vec3(0.14, 0.72, 0.78), vec3(0.88, 1.0, 0.98), step(0.52, fxSeed));
+  } else if (uFxMode > 20.5 && uFxMode < 21.5) {
+    float scan = step(0.52, fract(aRoot.y * 7.0 + uFxPhase * 0.42));
+    effectColor = mix(vec3(0.02, 0.54, 0.62), vec3(0.32, 1.0, 0.9), 0.54 + scan * 0.46);
+  } else if (uFxMode > 21.5 && uFxMode < 22.5) {
+    effectColor = mix(vec3(0.02, 0.14, 0.24), vec3(0.38, 0.96, 1.0), 0.28 + fxSeed * 0.72);
+  } else if (uFxMode > 22.5 && uFxMode < 23.5) {
+    effectColor = mix(fxSpectrum(floor(fxSeed * 9.0) / 9.0), vec3(0.92, 0.98, 1.0), pulse * 0.24);
+  }
+
+  float wave = sin(aStyle.z * 8.0 - uRipplePhase);
+  float wave01 = clamp(0.5 + wave * 0.5, 0.0, 1.0);
+  // The Canvas version received a second energy contribution from shadowBlur.
+  // WebGL lines have no portable glow width, so carry that energy in alpha to
+  // keep Rainbow Ripple legible without adding another 21,840-line pass.
+  float rippleBrightness = 0.34 + wave01 * 1.16;
+  // All active FX need enough chord energy to carry their color. The old
+  // class alpha left 15,120 long chords far dimmer than Ripple, making the
+  // point layer appear to own the treatment even when chord RGB had changed.
+  float fxAlpha = mix(aStyle.y, 0.118 * (0.72 + pulse * 0.28), min(0.9, uFxColorMix));
+  float alpha = clamp(mix(fxAlpha, 0.12 * rippleBrightness, uRipple) * uAlphaBoost, 0.0, 0.56);
+  vec3 chordColor = mix(baseColor, effectColor, uFxColorMix);
+  chordColor = mix(chordColor, vec3(1.0), clamp(uColorLift, 0.0, 0.22));
+  vColor = vec4(chordColor, alpha);
+}`;
+const E8_CHORD_FRAGMENT_SHADER = `
+precision mediump float;
+varying vec4 vColor;
+void main() {
+  gl_FragColor = vColor;
+}`;
+const RIPPLE_COLOR_BANDS = 12;
+const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
 const DRAW_SELECTED = 2;
 const DRAW_NEIGHBOR = 4;
 const DRAW_ANTIPODE = 8;
 const DRAW_PETRIE = 16;
-const BASE_POINT_BUCKET_COUNT = 2;
+const BASE_POINT_BUCKET_COUNT = 5;
 const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'e8_2d', shape: 'icosahedron' },
-  { modelMode: 'e8_3d', shape: 'icosahedron' },
+  { modelMode: 'bloom', shape: 'icosahedron' },
+  { modelMode: 'sdf', shape: 'icosahedron' },
   { modelMode: 'platonic', shape: 'tetrahedron' },
   { modelMode: 'platonic', shape: 'cube' },
   { modelMode: 'platonic', shape: 'octahedron' },
   { modelMode: 'platonic', shape: 'dodecahedron' },
   { modelMode: 'platonic', shape: 'icosahedron' },
+  { modelMode: 'platonic', shape: 'stellated_dodecahedron' },
+  { modelMode: 'platonic', shape: 'great_dodecahedron' },
+  { modelMode: 'platonic', shape: 'great_icosahedron' },
+  { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' },
   { modelMode: 'poly4d', polytope4d: '24cell' },
   { modelMode: 'poly4d', polytope4d: '600cell' },
+  { modelMode: 'poly4d', polytope4d: '120cell' },
   { modelMode: 'dynkin', dynkinDiagram: 'E8' },
-];
-const SCENE_PRESETS = [
-  { id: 'e8_2d', label: 'E8', target: { modelMode: 'e8_2d' } },
-  { id: 'e8_3d', label: 'E8 3D', target: { modelMode: 'e8_3d' } },
-  { id: 'tetrahedron', label: 'Tet', target: { modelMode: 'platonic', shape: 'tetrahedron' } },
-  { id: 'cube', label: 'Cube', target: { modelMode: 'platonic', shape: 'cube' } },
-  { id: 'octahedron', label: 'Oct', target: { modelMode: 'platonic', shape: 'octahedron' } },
-  { id: 'dodecahedron', label: 'Dod', target: { modelMode: 'platonic', shape: 'dodecahedron' } },
-  { id: 'icosahedron', label: 'Ico', target: { modelMode: 'platonic', shape: 'icosahedron' } },
-  { id: '5cell', label: '5-cell', target: { modelMode: 'poly4d', polytope4d: '5cell' } },
-  { id: 'tesseract', label: 'Tess', target: { modelMode: 'poly4d', polytope4d: 'tesseract' } },
-  { id: '16cell', label: '16', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
-  { id: '24cell', label: '24', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
-  { id: '600cell', label: '600', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
-  { id: 'dynkin-e8', label: 'Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E8' } },
 ];
 const MOBILE_TOUR_STEPS = [
   {
@@ -193,12 +502,20 @@ const MOBILE_TOUR_STEPS = [
     detail: 'This is the fast default phone scene.',
   },
   {
-    id: 'e8-depth',
-    label: 'E8 3D',
-    target: { modelMode: 'e8_3d' },
-    title: 'E8 depth view',
-    body: 'The same roots are projected with depth so the lattice structure feels spatial without WebGL.',
-    detail: 'Drag or enable Orbit after the tour for movement.',
+    id: 'designed-bloom',
+    label: 'Bloom',
+    target: { modelMode: 'bloom' },
+    title: 'Designed Bloom',
+    body: 'The source solid grows through the 600-cell and twin H4 stages before opening into the Coxeter plane.',
+    detail: 'Open View to scrub the Bloom timeline or start Auto.',
+  },
+  {
+    id: 'distance-field',
+    label: 'SDF',
+    target: { modelMode: 'sdf' },
+    title: 'E8 distance field',
+    body: 'All 240 Coxeter-plane roots become smoothly joined, shaded spheres in an implicit surface.',
+    detail: 'This preserves the desktop SDF composition on a lightweight phone height field.',
   },
   {
     id: 'platonic-bridge',
@@ -227,11 +544,12 @@ const MOBILE_TOUR_STEPS = [
 ];
 const MODEL_SHORTCUT_GROUPS = [
   {
-    id: 'e8',
-    label: 'E8',
+    id: 'views',
+    label: 'Views',
     items: [
-      { id: 'e8_2d', label: '2D', name: 'E8 Coxeter', target: { modelMode: 'e8_2d' } },
-      { id: 'e8_3d', label: '3D', name: 'E8 3D roots', target: { modelMode: 'e8_3d' } },
+      { id: 'bloom', label: 'Bloom', name: 'Designed Bloom', target: { modelMode: 'bloom' } },
+      { id: 'e8_2d', label: 'E8', name: 'E8 Coxeter', target: { modelMode: 'e8_2d' } },
+      { id: 'sdf', label: 'SDF', name: 'E8 distance field', target: { modelMode: 'sdf' } },
     ],
   },
   {
@@ -246,6 +564,16 @@ const MODEL_SHORTCUT_GROUPS = [
     ],
   },
   {
+    id: 'stars',
+    label: 'Star polyhedra',
+    items: [
+      { id: 'shape-stellated_dodecahedron', label: 'sDod', name: 'Small stellated dodecahedron', target: { modelMode: 'platonic', shape: 'stellated_dodecahedron' } },
+      { id: 'shape-great_dodecahedron', label: 'gDod', name: 'Great dodecahedron', target: { modelMode: 'platonic', shape: 'great_dodecahedron' } },
+      { id: 'shape-great_icosahedron', label: 'gIco', name: 'Great icosahedron', target: { modelMode: 'platonic', shape: 'great_icosahedron' } },
+      { id: 'shape-great_stellated_dodecahedron', label: 'gsDod', name: 'Great stellated dodecahedron', target: { modelMode: 'platonic', shape: 'great_stellated_dodecahedron' } },
+    ],
+  },
+  {
     id: 'poly4d',
     label: '4D',
     items: [
@@ -254,19 +582,13 @@ const MODEL_SHORTCUT_GROUPS = [
       { id: 'poly-16cell', label: '16', name: '16-cell', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
       { id: 'poly-24cell', label: '24', name: '24-cell', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
       { id: 'poly-600cell', label: '600', name: '600-cell', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
+      { id: 'poly-120cell', label: '120', name: '120-cell', target: { modelMode: 'poly4d', polytope4d: '120cell' } },
     ],
   },
   {
     id: 'dynkin',
     label: 'Dynkin',
     items: [
-      { id: 'dynkin-A3', label: 'A3', name: 'A3 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A3' } },
-      { id: 'dynkin-A4', label: 'A4', name: 'A4 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A4' } },
-      { id: 'dynkin-A5', label: 'A5', name: 'A5 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A5' } },
-      { id: 'dynkin-A7', label: 'A7', name: 'A7 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'A7' } },
-      { id: 'dynkin-D4', label: 'D4', name: 'D4 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D4' } },
-      { id: 'dynkin-D5', label: 'D5', name: 'D5 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D5' } },
-      { id: 'dynkin-D6', label: 'D6', name: 'D6 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'D6' } },
       { id: 'dynkin-E6', label: 'E6', name: 'E6 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E6' } },
       { id: 'dynkin-E7', label: 'E7', name: 'E7 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E7' } },
       { id: 'dynkin-E8', label: 'E8', name: 'E8 Dynkin', target: { modelMode: 'dynkin', dynkinDiagram: 'E8' } },
@@ -313,10 +635,16 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'polytope4d',
   'dynkinDiagram',
   'selectedRoot',
+  'bloomAmount',
+  'bloomAuto',
+  'bloomTwinH4',
   'autoRotate',
   'autoModel',
   'autoColor',
+  'autoFx',
   'softFx',
+  'fxMode',
+  'showVertices',
 ];
 
 let metrics = {
@@ -338,6 +666,14 @@ let metrics = {
   canvasTransformSkipCount: 0,
   lastCanvasTransformSetMs: null,
   lastCanvasTransformScale: null,
+  e8ChordWebglInitCount: 0,
+  e8ChordWebglFallbackCount: 0,
+  e8ChordWebglDrawCount: 0,
+  e8ChordWebglContextLossCount: 0,
+  e8ChordWebglContextRestoreCount: 0,
+  lastE8ChordRenderer: null,
+  lastE8ChordWebglDrawMs: null,
+  lastE8ChordVertexCount: 0,
   settingsCanvasResizeDeferredCount: 0,
   lastSettingsCanvasResizeDeferredMs: null,
   lastSettingsCanvasResizeDeferredScale: null,
@@ -364,7 +700,12 @@ let metrics = {
   modelProjectedVertices: 0,
   modelEdgeStrokes: 0,
   modelFaceFills: 0,
+  modelVertexFills: 0,
   e8Projection3DCount: 0,
+  bloomDrawCount: 0,
+  bloomAutoFrameCount: 0,
+  bloomTimelineSyncCount: 0,
+  sdfDrawCount: 0,
   platonicDrawCount: 0,
   polytope4DDrawCount: 0,
   dynkinDrawCount: 0,
@@ -434,13 +775,6 @@ let metrics = {
   lastSceneChipGesture: null,
   lastSceneChipGestureMs: null,
   lastSceneChipSwipeDirection: null,
-  scenePresetButtonCount: 0,
-  scenePresetSelectCount: 0,
-  scenePresetSyncSkipCount: 0,
-  lastScenePresetId: null,
-  lastScenePresetLabel: null,
-  lastScenePresetMs: null,
-  lastScenePresetTarget: null,
   modelShortcutButtonCount: 0,
   modelShortcutSelectCount: 0,
   modelShortcutSyncSkipCount: 0,
@@ -452,6 +786,9 @@ let metrics = {
   paletteSwatchButtonCount: 0,
   paletteSwatchSelectCount: 0,
   paletteSwatchSyncSkipCount: 0,
+  paletteExpandToggleCount: 0,
+  lastPaletteExpanded: false,
+  lastPaletteExpandMs: null,
   lastPaletteSwatch: null,
   lastPaletteSwatchLabel: null,
   lastPaletteSwatchMs: null,
@@ -461,6 +798,12 @@ let metrics = {
   lastFxPreset: null,
   lastFxPresetLabel: null,
   lastFxPresetMs: null,
+  fxModeButtonCount: 0,
+  fxModeSelectCount: 0,
+  fxModeSyncSkipCount: 0,
+  lastFxMode: null,
+  lastFxModeLabel: null,
+  lastFxModeMs: null,
   motionPresetButtonCount: 0,
   motionPresetSelectCount: 0,
   motionPresetSyncSkipCount: 0,
@@ -547,7 +890,13 @@ let metrics = {
   lastAutoModelSwitchMs: null,
   lastAutoModelTarget: null,
   autoColorFrameCount: 0,
+  autoFxFrameCount: 0,
+  fxShiftCount: 0,
+  lastFxShiftMode: null,
+  lastFxShiftMs: null,
   softFxFrameCount: 0,
+  autoZoomFrameCount: 0,
+  autoExtrudeFrameCount: 0,
   lastStylePhase: 0,
   lastRuntimePalette: null,
   lastMotionFrameRenderMs: null,
@@ -689,6 +1038,7 @@ let directPointQueue = [];
 let platonicGeometry = {};
 let platonicFaceCache = new Map();
 let polytope4DGeometry = {};
+let bloomOrder600 = [];
 let dynkinGeometry = {};
 let dynkinHitTargets = [];
 let mckayInfo = {};
@@ -698,6 +1048,8 @@ let subsetSets = {};
 let subsetLists = {};
 let petrieCycle = [];
 let petrieSet = EMPTY_SET;
+let e8ChordClasses = Array.from({ length: MOBILE_E8_CHORD_VALUES.length }, () => []);
+let e8ChordEdges = [];
 let simpleRootIndices = [];
 let simpleRootOrdinalByIndex = new Map();
 let cartanMatrix = [];
@@ -705,6 +1057,33 @@ let selectedContext = null;
 let startedAt = performance.now();
 let canvas;
 let ctx;
+let e8ChordCanvas;
+let e8ChordGl;
+let e8ChordProgram;
+let e8ChordBuffer;
+let e8ChordAttributes;
+let e8ChordUniforms;
+let e8ChordVertexCount = 0;
+let e8ChordWebglUnavailable = false;
+let e8ChordContextHandlersInstalled = false;
+let fxSourceCanvas;
+let fxSourceContext;
+let fxTintCanvas;
+let fxTintContext;
+let backgroundCanvas;
+let backgroundCtx;
+let sdfCanvas;
+let sdfGl;
+let sdfWebglUnavailable = false;
+let sdfRingUniformData = new Float32Array(8 * 4);
+let sdfPaletteUniformData = new Float32Array(5 * 3);
+const sdfPrograms = new Map();
+let sdfRasterCanvas;
+let sdfRasterContext;
+let sdfRasterImageData;
+let sdfHeightField;
+let sdfCoverageField;
+let sdfRingField;
 let canvasCssWidth = 0;
 let canvasCssHeight = 0;
 let canvasTransformScale = null;
@@ -717,9 +1096,14 @@ let mobileTourPausedForSettings = false;
 let mobileTourStorageBaseState = null;
 let saveTimer = null;
 let statusTimer = null;
+let resetFeedbackTimer = null;
 let savePending = false;
 let saveRequestedAt = 0;
 let stylePhase = 0;
+let fxShiftElapsed = 0;
+let motionPhase = 0;
+let autoZoomPhaseOffset = 0;
+let autoExtrudePhaseOffset = 0;
 let autoModelElapsed = 0;
 let autoModelIndex = 0;
 let drag = null;
@@ -732,6 +1116,7 @@ let liveControlLiteRenderReason = null;
 let settingsDeferredRenderReason = null;
 let selectionUiDetailsDeferred = false;
 let lastSelectionDetailHtml = null;
+let paletteExpanded = false;
 let settingsCanvasResizeDeferred = false;
 let lastTap = null;
 let nativeBackHandlerInstalled = false;
@@ -784,7 +1169,13 @@ function setMobileLessonComplete(lessonId, complete = true) {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return normalizeState({ ...DEFAULT_STATE, ...JSON.parse(raw) });
+    if (raw) {
+      const stored = JSON.parse(raw);
+      // Full desktop chord parity became the E8 default in revision 1. Migrate
+      // existing mobile installs once; later user toggles remain persistent.
+      if ((Number(stored.configRevision) || 0) < MOBILE_CONFIG_REVISION) stored.showEdges = true;
+      return normalizeState({ ...DEFAULT_STATE, ...stored, configRevision: MOBILE_CONFIG_REVISION });
+    }
   } catch (error) {
     recordError(error);
   }
@@ -832,7 +1223,11 @@ function flushSave() {
 }
 
 function normalizeState(next) {
+  next.configRevision = MOBILE_CONFIG_REVISION;
+  if (LEGACY_MODEL_MODE_MAP[next.modelMode]) next.modelMode = LEGACY_MODEL_MODE_MAP[next.modelMode];
+  if (LEGACY_BACKGROUND_MAP[next.background]) next.background = LEGACY_BACKGROUND_MAP[next.background];
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
+  if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
   if (!QUALITY[next.quality]) next.quality = DEFAULT_STATE.quality;
   if (!SUPPORTED_MODEL_MODES.has(next.modelMode)) next.modelMode = DEFAULT_STATE.modelMode;
   if (!SUPPORTED_SHAPES.has(next.shape)) next.shape = DEFAULT_STATE.shape;
@@ -841,11 +1236,29 @@ function normalizeState(next) {
   if (LEARN_TOPIC_IDS.size > 1 && !LEARN_TOPIC_IDS.has(next.learnTopic)) next.learnTopic = DEFAULT_STATE.learnTopic;
   if (!SUPPORTED_SUBSETS.has(next.subset)) next.subset = DEFAULT_STATE.subset;
   next.pointScale = clamp(Number(next.pointScale) || 1, 0.7, 1.8);
+  next.pointOpacity = clamp(Number(next.pointOpacity) || DEFAULT_STATE.pointOpacity, 0.3, 1);
+  next.backgroundBrightness = clamp(Number(next.backgroundBrightness) || DEFAULT_STATE.backgroundBrightness, 0.3, 1.2);
+  next.colorSpeed = clamp(Number(next.colorSpeed) || DEFAULT_STATE.colorSpeed, 0.25, 1.5);
+  next.fxStrength = clamp(Number(next.fxStrength) || DEFAULT_STATE.fxStrength, 0.25, 1.5);
+  next.bloomAmount = clamp(Number(next.bloomAmount) || 0, 0, 1);
+  next.bloomSpeed = clamp(Number(next.bloomSpeed) || DEFAULT_STATE.bloomSpeed, 0.02, 0.25);
   next.rotationSpeed = clamp(Number(next.rotationSpeed) || 0.7, 0.2, 2);
   next.rotation = Number(next.rotation) || 0;
+  const cameraTilt = Number(next.cameraTilt);
+  next.cameraTilt = clamp(Number.isFinite(cameraTilt) ? cameraTilt : DEFAULT_STATE.cameraTilt, -Math.PI / 3, Math.PI / 3);
+  if (!['manual', 'orbit', 'dive', 'spiral'].includes(next.cameraPath)) next.cameraPath = DEFAULT_STATE.cameraPath;
+  next.e8MorphT = clamp(Number(next.e8MorphT) || 0, 0, 1);
+  const sdfSphereR = Number(next.sdfSphereR);
+  const sdfBlend = Number(next.sdfBlend);
+  const sdfBloom = Number(next.sdfBloom);
+  const sdfAniso = Number(next.sdfAniso);
+  next.sdfSphereR = clamp(Number.isFinite(sdfSphereR) ? sdfSphereR : DEFAULT_STATE.sdfSphereR, 0.04, 0.13);
+  next.sdfBlend = clamp(Number.isFinite(sdfBlend) ? sdfBlend : DEFAULT_STATE.sdfBlend, 0, 0.1);
+  next.sdfBloom = clamp(Number.isFinite(sdfBloom) ? sdfBloom : DEFAULT_STATE.sdfBloom, 0, 1);
+  next.sdfAniso = clamp(Number.isFinite(sdfAniso) ? sdfAniso : DEFAULT_STATE.sdfAniso, 0, 1);
   next.panX = Number(next.panX) || 0;
   next.panY = Number(next.panY) || 0;
-  next.zoom = clamp(Number(next.zoom) || 1, 0.55, 3.2);
+  next.zoom = clamp(Number(next.zoom) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(next.modelMode));
   if (next.selectedRoot != null) {
     const selected = Number(next.selectedRoot);
     next.selectedRoot = Number.isInteger(selected) && selected >= 0 && selected < 240 ? selected : null;
@@ -854,12 +1267,20 @@ function normalizeState(next) {
   if (typeof next.showContext !== 'boolean') next.showContext = true;
   if (typeof next.showPetrie !== 'boolean') next.showPetrie = false;
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
+  if (typeof next.showEdges !== 'boolean') next.showEdges = DEFAULT_STATE.showEdges;
+  if (typeof next.showVertices !== 'boolean') next.showVertices = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
+  if (typeof next.autoZoom !== 'boolean') next.autoZoom = false;
+  if (typeof next.autoExtrude !== 'boolean') next.autoExtrude = false;
+  if (typeof next.bloomAuto !== 'boolean') next.bloomAuto = false;
+  if (typeof next.bloomTwinH4 !== 'boolean') next.bloomTwinH4 = true;
   if (typeof next.autoModel !== 'boolean') next.autoModel = false;
   if (typeof next.autoColor !== 'boolean') next.autoColor = false;
+  if (typeof next.autoFx !== 'boolean') next.autoFx = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
-  if (next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
+  if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
+  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
   return next;
 }
 
@@ -878,31 +1299,37 @@ function markInteraction(type) {
 
 async function loadData() {
   if (window.MOBILE_DATA) return window.MOBILE_DATA;
-  const [e8, e8Math, mckaySubsets, platonic, polytopes4d, dynkin, mckay, curriculum] = await Promise.all([
+  const [e8, e8Math, mckaySubsets, platonic, stellations, polytopes4d, dynkin, mckay, curriculum] = await Promise.all([
     fetch('data/e8.json').then(r => r.json()),
     fetch('data/e8_math.json').then(r => r.json()),
     fetch('data/mckay_subsets.json').then(r => r.json()),
     fetch('data/platonic.json').then(r => r.json()),
+    fetch('data/stellations.json').then(r => r.json()),
     fetch('data/polytopes4d.json').then(r => r.json()),
     fetch('data/dynkin.json').then(r => r.json()),
     fetch('data/mckay.json').then(r => r.json()),
     fetch('data/curriculum.json').then(r => r.json()),
   ]);
-  return { e8, e8_math: e8Math, mckay_subsets: mckaySubsets, platonic, polytopes4d, dynkin, mckay, curriculum };
+  return { e8, e8_math: e8Math, mckay_subsets: mckaySubsets, platonic, stellations, polytopes4d, dynkin, mckay, curriculum };
 }
 
 function cacheElements() {
   els.shell = document.querySelector('.mobile-shell');
+  backgroundCanvas = document.getElementById('mobile-background-canvas');
+  backgroundCtx = backgroundCanvas.getContext('2d', { alpha: false });
+  e8ChordCanvas = document.getElementById('mobile-e8-chord-canvas');
   canvas = document.getElementById('mobile-canvas');
-  ctx = canvas.getContext('2d', { alpha: false });
+  ctx = canvas.getContext('2d', { alpha: true });
+  sdfCanvas = document.getElementById('mobile-sdf-canvas');
   els.settingsButton = document.getElementById('settings-button');
   els.qualityChip = document.getElementById('quality-chip');
   els.sceneChip = document.getElementById('scene-chip');
   els.statusToast = document.getElementById('status-toast');
+  els.resetView = document.querySelector('[data-action="reset-view"]');
   els.sheet = document.getElementById('settings-sheet');
   els.sheetBody = els.sheet.querySelector('.sheet-body');
   els.close = document.getElementById('settings-close');
-  els.done = document.getElementById('settings-done');
+  els.doneButtons = [...els.sheet.querySelectorAll('[data-settings-done]')];
   els.rootDrawer = document.getElementById('root-drawer');
   els.infoCopy = document.getElementById('info-copy');
   els.infoSelection = document.getElementById('info-selection');
@@ -929,15 +1356,30 @@ function cacheElements() {
   els.contextToggle = document.getElementById('context-toggle');
   els.petrieToggle = document.getElementById('petrie-toggle');
   els.mirrorsToggle = document.getElementById('mirrors-toggle');
+  els.edgesToggle = document.getElementById('edges-toggle');
+  els.verticesToggle = document.getElementById('vertices-toggle');
   els.modelSelect = document.getElementById('model-select');
+  els.bloomTimelineField = document.getElementById('bloom-timeline-field');
+  els.bloomTime = document.getElementById('bloom-time');
+  els.bloomTimeOutput = document.getElementById('bloom-time-output');
+  els.bloomPhaseOutput = document.getElementById('bloom-phase-output');
+  els.bloomAutoButton = document.getElementById('bloom-auto-button');
+  els.bloomTwinButton = document.getElementById('bloom-twin-button');
   els.shapeField = document.getElementById('shape-field');
   els.shapeSelect = document.getElementById('shape-select');
   els.polytope4DField = document.getElementById('polytope4d-field');
   els.polytope4DSelect = document.getElementById('polytope4d-select');
   els.dynkinField = document.getElementById('dynkin-field');
   els.dynkinSelect = document.getElementById('dynkin-select');
-  els.scenePresetGrid = document.getElementById('scene-preset-grid');
-  els.scenePresetOutput = document.getElementById('scene-preset-output');
+  els.sdfField = document.getElementById('sdf-field');
+  els.sdfRadius = document.getElementById('sdf-radius');
+  els.sdfRadiusOutput = document.getElementById('sdf-radius-output');
+  els.sdfBlend = document.getElementById('sdf-blend');
+  els.sdfBlendOutput = document.getElementById('sdf-blend-output');
+  els.sdfBloom = document.getElementById('sdf-bloom');
+  els.sdfBloomOutput = document.getElementById('sdf-bloom-output');
+  els.sdfAniso = document.getElementById('sdf-aniso');
+  els.sdfAnisoOutput = document.getElementById('sdf-aniso-output');
   els.modelShortcutGroups = document.getElementById('model-shortcut-groups');
   els.modelShortcutOutput = document.getElementById('model-shortcut-output');
   els.subsetChipGrid = document.getElementById('subset-chip-grid');
@@ -949,14 +1391,29 @@ function cacheElements() {
   els.rootJumpOutput = document.getElementById('root-jump-output');
   els.zoomOutput = document.getElementById('zoom-output');
   els.paletteSwatchGrid = document.getElementById('palette-swatch-grid');
+  els.paletteExpandButton = document.getElementById('palette-expand-button');
   els.paletteOutput = document.getElementById('palette-output');
   els.paletteSelect = document.getElementById('palette-select');
+  els.backgroundSelect = document.getElementById('background-select');
+  els.backgroundBrightness = document.getElementById('background-brightness');
+  els.backgroundBrightnessOutput = document.getElementById('background-brightness-output');
   els.fxPresetGrid = document.getElementById('fx-preset-grid');
   els.fxPresetOutput = document.getElementById('fx-preset-output');
+  els.fxModeGrid = document.getElementById('fx-mode-grid');
+  els.fxModeOutput = document.getElementById('fx-mode-output');
+  els.fxModeDescription = document.getElementById('fx-mode-description');
   els.pointSize = document.getElementById('point-size');
+  els.pointSizeOutput = document.getElementById('point-size-output');
+  els.pointOpacity = document.getElementById('point-opacity');
+  els.pointOpacityOutput = document.getElementById('point-opacity-output');
   els.ringsToggle = document.getElementById('rings-toggle');
   els.autoColorToggle = document.getElementById('auto-color-toggle');
+  els.autoFxToggle = document.getElementById('auto-fx-toggle');
+  els.colorSpeed = document.getElementById('color-speed');
+  els.colorSpeedOutput = document.getElementById('color-speed-output');
   els.softFxToggle = document.getElementById('soft-fx-toggle');
+  els.fxStrength = document.getElementById('fx-strength');
+  els.fxStrengthOutput = document.getElementById('fx-strength-output');
   els.motionToggle = document.getElementById('motion-toggle');
   els.autoModelToggle = document.getElementById('auto-model-toggle');
   els.motionSpeed = document.getElementById('motion-speed');
@@ -964,9 +1421,21 @@ function cacheElements() {
   els.motionSpeedOutput = document.getElementById('motion-speed-output');
   els.motionPresetGrid = document.getElementById('motion-preset-grid');
   els.motionPresetOutput = document.getElementById('motion-preset-output');
+  els.cameraPathOutput = document.getElementById('camera-path-output');
+  els.cameraRotation = document.getElementById('camera-rotation');
+  els.cameraRotationOutput = document.getElementById('camera-rotation-output');
+  els.cameraTilt = document.getElementById('camera-tilt');
+  els.cameraTiltOutput = document.getElementById('camera-tilt-output');
+  els.cameraZoom = document.getElementById('camera-zoom');
+  els.cameraZoomOutput = document.getElementById('camera-zoom-output');
+  els.cameraZoomAuto = document.getElementById('camera-zoom-auto');
+  els.cameraExtrude = document.getElementById('camera-extrude');
+  els.cameraExtrudeOutput = document.getElementById('camera-extrude-output');
+  els.cameraExtrudeAuto = document.getElementById('camera-extrude-auto');
   els.sectionTabs = [...els.sheet.querySelectorAll('[data-section-tab]')];
   els.sectionPanels = [...els.sheet.querySelectorAll('[data-section]')];
   els.qualityButtons = [...els.sheet.querySelectorAll('[data-quality]')];
+  els.modelContextControls = [...els.sheet.querySelectorAll('[data-model-context]')];
 }
 
 function bindEvents() {
@@ -1005,7 +1474,9 @@ function bindEvents() {
   els.sceneChip.addEventListener('contextmenu', (event) => event.preventDefault());
   els.qualityChip.addEventListener('click', cycleQuality);
   els.close.addEventListener('click', () => closeSettings('settings-close'));
-  els.done.addEventListener('click', () => closeSettings('settings-done'));
+  els.doneButtons.forEach(button => {
+    button.addEventListener('click', () => closeSettings('settings-done'));
+  });
   els.rootDrawer.addEventListener('click', (event) => {
     if (event.target.closest('[data-root-drawer-toggle]')) {
       toggleRootDrawer();
@@ -1030,14 +1501,14 @@ function bindEvents() {
       handleRootAction(rootAction);
       return;
     }
-    const scenePreset = event.target.closest('[data-scene-preset]')?.dataset.scenePreset;
-    if (scenePreset) {
-      selectScenePreset(scenePreset);
-      return;
-    }
     const modelShortcut = event.target.closest('[data-model-shortcut]')?.dataset.modelShortcut;
     if (modelShortcut) {
       selectModelShortcut(modelShortcut);
+      return;
+    }
+    const bloomAction = event.target.closest('[data-bloom-action]')?.dataset.bloomAction;
+    if (bloomAction) {
+      handleBloomAction(bloomAction);
       return;
     }
     const viewAction = event.target.closest('[data-view-action]')?.dataset.viewAction;
@@ -1065,14 +1536,19 @@ function bindEvents() {
       selectFxPreset(fxPreset);
       return;
     }
-    const styleAction = event.target.closest('[data-style-action]')?.dataset.styleAction;
-    if (styleAction) {
-      handleStyleAction(styleAction);
+    const fxMode = event.target.closest('[data-fx-treatment]')?.dataset.fxTreatment;
+    if (fxMode) {
+      selectFxMode(fxMode);
       return;
     }
     const paletteSwatch = event.target.closest('[data-palette-swatch]')?.dataset.paletteSwatch;
     if (paletteSwatch) {
       selectPaletteSwatch(paletteSwatch);
+      return;
+    }
+    const paletteAction = event.target.closest('[data-palette-action]')?.dataset.paletteAction;
+    if (paletteAction === 'toggle') {
+      togglePaletteExpanded();
       return;
     }
     const learnTopic = event.target.closest('[data-learn-topic]')?.dataset.learnTopic;
@@ -1110,13 +1586,19 @@ function bindEvents() {
       setSettingState({ quality: quality.dataset.quality }, 'quality-setting', { syncQuality: true });
       return;
     }
-    if (event.target.closest('[data-action="reset-view"]')) resetView();
+    const resetButton = event.target.closest('[data-action="reset-view"]');
+    if (resetButton) {
+      resetView(resetButton);
+      return;
+    }
   });
 
   els.highlightToggle.addEventListener('change', () => setSettingState({ highlightSubset: els.highlightToggle.checked }, 'highlight-toggle'));
   els.contextToggle.addEventListener('change', () => setSettingState({ showContext: els.contextToggle.checked }, 'context-toggle'));
   els.petrieToggle.addEventListener('change', () => setSettingState({ showPetrie: els.petrieToggle.checked }, 'petrie-toggle'));
   els.mirrorsToggle.addEventListener('change', () => setSettingState({ showMirrors: els.mirrorsToggle.checked }, 'mirrors-toggle'));
+  els.edgesToggle.addEventListener('change', () => setSettingState({ showEdges: els.edgesToggle.checked }, 'edges-toggle'));
+  els.verticesToggle.addEventListener('change', () => setSettingState({ showVertices: els.verticesToggle.checked }, 'vertices-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
     autoModel: false,
@@ -1140,27 +1622,101 @@ function bindEvents() {
     autoModel: false,
     selectedRoot: els.dynkinSelect.value === 'E8' && simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null,
   }, 'dynkin-select'));
+  els.sdfRadius.addEventListener('input', () => {
+    previewState({ sdfSphereR: Number(els.sdfRadius.value) }, 'sdf-radius');
+    syncSdfControls();
+  });
+  els.sdfRadius.addEventListener('change', () => commitLiveControl('sdf-radius'));
+  els.sdfBlend.addEventListener('input', () => {
+    previewState({ sdfBlend: Number(els.sdfBlend.value) }, 'sdf-blend');
+    syncSdfControls();
+  });
+  els.sdfBlend.addEventListener('change', () => commitLiveControl('sdf-blend'));
+  els.sdfBloom.addEventListener('input', () => {
+    previewState({ sdfBloom: Number(els.sdfBloom.value) }, 'sdf-bloom');
+    syncSdfControls();
+  });
+  els.sdfBloom.addEventListener('change', () => commitLiveControl('sdf-bloom'));
+  els.sdfAniso.addEventListener('input', () => {
+    previewState({ sdfAniso: Number(els.sdfAniso.value) }, 'sdf-aniso');
+    syncSdfControls();
+  });
+  els.sdfAniso.addEventListener('change', () => commitLiveControl('sdf-aniso'));
+  els.bloomTime.addEventListener('input', () => {
+    previewState({ bloomAmount: Number(els.bloomTime.value), bloomAuto: false }, 'bloom-time');
+    syncBloomControls();
+    syncSceneAccessibility(activeSceneSummary());
+  });
+  els.bloomTime.addEventListener('change', () => commitLiveControl('bloom-time'));
   els.subsetSelect.addEventListener('change', () => setManualExploreState({ subset: els.subsetSelect.value }, 'subset-select', { syncSubset: true }));
   els.rootRange.addEventListener('input', () => selectRoot(Number(els.rootRange.value), { save: false, interactionType: 'root-scrub' }));
   els.rootRange.addEventListener('change', () => selectRoot(Number(els.rootRange.value), { interactionType: 'root-commit' }));
   els.paletteSelect.addEventListener('change', () => setSettingState({ palette: els.paletteSelect.value }, 'palette-select', { syncPalette: true }));
-  els.pointSize.addEventListener('input', () => previewState({ pointScale: Number(els.pointSize.value) }, 'point-size'));
+  els.backgroundSelect.addEventListener('change', () => setSettingState({ background: els.backgroundSelect.value }, 'background-select'));
+  els.backgroundBrightness.addEventListener('input', () => {
+    previewState({ backgroundBrightness: Number(els.backgroundBrightness.value) }, 'background-brightness');
+    syncVisualRangeOutputs();
+  });
+  els.backgroundBrightness.addEventListener('change', () => commitLiveControl('background-brightness'));
+  els.pointSize.addEventListener('input', () => {
+    previewState({ pointScale: Number(els.pointSize.value) }, 'point-size');
+    syncVisualRangeOutputs();
+  });
   els.pointSize.addEventListener('change', () => commitLiveControl('point-size'));
+  els.pointOpacity.addEventListener('input', () => {
+    previewState({ pointOpacity: Number(els.pointOpacity.value) }, 'point-opacity');
+    syncVisualRangeOutputs();
+  });
+  els.pointOpacity.addEventListener('change', () => commitLiveControl('point-opacity'));
   els.ringsToggle.addEventListener('change', () => setSettingState({ showRings: els.ringsToggle.checked }, 'rings-toggle'));
   els.autoColorToggle.addEventListener('change', () => setManualRuntimeState({ autoColor: els.autoColorToggle.checked }, 'auto-color-toggle', { syncFx: true, syncMotionPreset: true }));
+  els.autoFxToggle.addEventListener('change', () => setFxShiftEnabled(els.autoFxToggle.checked));
+  els.colorSpeed.addEventListener('input', () => {
+    previewState({ colorSpeed: Number(els.colorSpeed.value) }, 'color-speed', { render: false });
+    syncVisualRangeOutputs();
+  });
+  els.colorSpeed.addEventListener('change', () => commitLiveControl('color-speed', { render: false }));
   els.softFxToggle.addEventListener('change', () => setManualRuntimeState({ softFx: els.softFxToggle.checked }, 'soft-fx-toggle', { syncFx: true, syncMotionPreset: true }));
-  els.motionToggle.addEventListener('change', () => setManualRuntimeState({ autoRotate: els.motionToggle.checked }, 'motion-toggle', { syncMotionPreset: true }));
+  els.fxStrength.addEventListener('input', () => {
+    previewState({ fxStrength: Number(els.fxStrength.value) }, 'fx-strength');
+    syncVisualRangeOutputs();
+  });
+  els.fxStrength.addEventListener('change', () => commitLiveControl('fx-strength'));
+  els.motionToggle.addEventListener('change', () => setManualRuntimeState({
+    autoRotate: els.motionToggle.checked,
+    cameraPath: els.motionToggle.checked ? (state.cameraPath === 'manual' ? 'orbit' : state.cameraPath) : 'manual',
+  }, 'motion-toggle', { syncMotionPreset: true, syncMotionCamera: true }));
   els.autoModelToggle.addEventListener('change', () => setManualRuntimeState({ autoModel: els.autoModelToggle.checked }, 'auto-model-toggle', { syncMotionPreset: true }));
   els.motionSpeed.addEventListener('input', () => {
     previewState({ rotationSpeed: Number(els.motionSpeed.value) }, 'motion-speed', { render: false });
     syncMotionSpeedControls();
   });
   els.motionSpeed.addEventListener('change', () => commitLiveControl('motion-speed', { render: false }));
+  els.cameraRotation.addEventListener('input', () => {
+    previewState({ rotation: Number(els.cameraRotation.value) * Math.PI / 180, cameraPath: 'manual', autoRotate: false }, 'camera-rotation');
+    syncMotionPresetControls();
+  });
+  els.cameraRotation.addEventListener('change', () => commitLiveControl('camera-rotation'));
+  els.cameraTilt.addEventListener('input', () => {
+    previewState({ cameraTilt: Number(els.cameraTilt.value) * Math.PI / 180, cameraPath: 'manual', autoRotate: false }, 'camera-tilt');
+    syncMotionPresetControls();
+  });
+  els.cameraTilt.addEventListener('change', () => commitLiveControl('camera-tilt'));
+  els.cameraZoom.addEventListener('input', () => {
+    previewState({ zoom: Number(els.cameraZoom.value), autoZoom: false }, 'camera-zoom');
+    syncCameraControls();
+  });
+  els.cameraZoom.addEventListener('change', () => commitLiveControl('camera-zoom'));
+  els.cameraExtrude.addEventListener('input', () => {
+    previewState({ e8MorphT: Number(els.cameraExtrude.value), autoExtrude: false }, 'camera-extrude');
+    syncCameraControls();
+  });
+  els.cameraExtrude.addEventListener('change', () => commitLiveControl('camera-extrude'));
 
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   installNativeBackHandler();
 }
@@ -1182,6 +1738,7 @@ function handleViewAction(action) {
   if (action === 'zoom-out') return stepZoom(-1);
   if (action === 'zoom-in') return stepZoom(1);
   if (action === 'zoom-reset') return setZoom(1);
+  if (action === 'surprise') return mobileSurprise();
   if (action === 'fit-all') return fitAllRoots();
   return false;
 }
@@ -1192,12 +1749,6 @@ function handleSubsetAction(action) {
   if (action === 'prev') return selectSubsetRoot(-1);
   if (action === 'next') return selectSubsetRoot(1);
   if (action === 'frame') return frameSubset();
-  return false;
-}
-
-function handleStyleAction(action) {
-  if (!action) return false;
-  if (action === 'surprise') return mobileSurprise();
   return false;
 }
 
@@ -1218,7 +1769,7 @@ function handleInfoAction(action) {
 }
 
 function selectedRootForModelMode(modelMode) {
-  if (modelMode === 'platonic' || modelMode === 'poly4d') return null;
+  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d') return null;
   if (modelMode === 'dynkin') return simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null;
   return state.selectedRoot;
 }
@@ -1226,6 +1777,12 @@ function selectedRootForModelMode(modelMode) {
 function handleMotionAction(action) {
   if (!action) return false;
   if (action === 'still' || action === 'orbit' || action === 'showcase') return selectMotionPreset(action);
+  if (action === 'camera-orbit') return selectCameraPath('orbit');
+  if (action === 'camera-dive') return selectCameraPath('dive');
+  if (action === 'camera-spiral') return selectCameraPath('spiral');
+  if (action === 'camera-reset') return resetCameraMotion();
+  if (action === 'toggle-zoom-auto') return toggleCameraAuto('zoom');
+  if (action === 'toggle-extrude-auto') return toggleCameraAuto('extrude');
   return false;
 }
 
@@ -1460,11 +2017,16 @@ function activeGeometryRecord() {
   const e8 = data?.e8;
   if (!e8) return null;
   const subset = [...rootSubset()];
+  const presentation = state.modelMode === 'bloom'
+    ? { name: 'e8-designed-bloom', label: 'Designed Bloom' }
+    : state.modelMode === 'sdf'
+      ? { name: 'e8-distance-field', label: 'E8 SDF' }
+      : { name: 'e8-coxeter', label: 'E8 Coxeter' };
   return {
     ...base,
     kind: 'e8-root-system',
-    name: state.modelMode === 'e8_3d' ? 'e8-3d-roots' : 'e8-coxeter',
-    label: state.modelMode === 'e8_3d' ? 'E8 3D roots' : 'E8 Coxeter',
+    name: presentation.name,
+    label: presentation.label,
     dimension: 8,
     count: points.length,
     roots8d: cloneJson(e8.roots8d || []),
@@ -1538,22 +2100,27 @@ function activeObjRecord() {
   }
 
   if (!points.length) return null;
-  const isDepth = state.modelMode === 'e8_3d';
+  const isDepth = state.modelMode === 'bloom';
   const vertices = points.map(point => {
     if (isDepth) {
-      const v = e8ModelVector(point.idx);
-      return [v.x, v.y, v.z];
+      return point.bloomVisible
+        ? [point.bloomX, point.bloomY, point.bloomZ]
+        : [point.x, point.y, 0];
     }
     return [point.x, point.y, 0];
   });
   const record = {
     kind: isDepth ? 'e8-root-point-cloud-3d-obj' : 'e8-root-point-cloud-2d-obj',
-    name: isDepth ? 'e8-3d-roots' : 'e8-coxeter',
+    name: state.modelMode === 'bloom' ? 'e8-designed-bloom' : state.modelMode === 'sdf' ? 'e8-distance-field' : 'e8-coxeter',
     vertices,
     lines: state.showPetrie ? petrieCycle.map((idx, order) => [idx, petrieCycle[(order + 1) % petrieCycle.length]]) : [],
     faces: [],
     pointsOnly: true,
-    note: isDepth ? 'E8 roots exported with the mobile depth coordinate.' : 'E8 Coxeter roots exported on the z=0 plane.',
+    note: isDepth
+      ? 'E8 roots exported with the mobile depth coordinate underlying this presentation.'
+      : state.modelMode === 'sdf'
+        ? 'The 240 Coxeter-plane centres underlying the mobile SDF, exported on z=0.'
+        : 'E8 Coxeter roots exported on the z=0 plane.',
   };
   record.text = objTextFromParts(record);
   return record;
@@ -1581,8 +2148,24 @@ function canvasElementToPngBlob(sourceCanvas, errorMessage = 'Could not create P
   });
 }
 
+function compositeRenderCanvas() {
+  const composite = document.createElement('canvas');
+  composite.width = Math.max(1, canvas.width);
+  composite.height = Math.max(1, canvas.height);
+  const target = composite.getContext('2d', { alpha: false });
+  target.drawImage(backgroundCanvas, 0, 0, backgroundCanvas.width, backgroundCanvas.height, 0, 0, composite.width, composite.height);
+  if (isE8ChordGpuActive() && !e8ChordCanvas.classList.contains('fx-composited')) {
+    target.drawImage(e8ChordCanvas, 0, 0, e8ChordCanvas.width, e8ChordCanvas.height, 0, 0, composite.width, composite.height);
+  }
+  target.drawImage(canvas, 0, 0, composite.width, composite.height);
+  if (state.modelMode === 'sdf' && sdfCanvas?.classList.contains('active') && sdfGl) {
+    target.drawImage(sdfCanvas, 0, 0, sdfCanvas.width, sdfCanvas.height, 0, 0, composite.width, composite.height);
+  }
+  return composite;
+}
+
 function canvasToPngBlob() {
-  return canvasElementToPngBlob(canvas, 'Could not create PNG snapshot');
+  return canvasElementToPngBlob(compositeRenderCanvas(), 'Could not create PNG snapshot');
 }
 
 function downloadBlob(blob, name) {
@@ -1791,8 +2374,9 @@ function buildPostcardCanvas(options = {}) {
   }
   target.globalAlpha = 1;
 
-  const srcW = Math.max(1, canvas?.width || 1);
-  const srcH = Math.max(1, canvas?.height || 1);
+  const renderCanvas = compositeRenderCanvas();
+  const srcW = Math.max(1, renderCanvas?.width || 1);
+  const srcH = Math.max(1, renderCanvas?.height || 1);
   const srcAspect = srcW / srcH;
   const maxImageW = width - pad * 2;
   const maxImageH = Math.round(height * 0.6);
@@ -1814,7 +2398,7 @@ function buildPostcardCanvas(options = {}) {
   target.save();
   drawRoundedRect(target, imageX, imageY, imageW, imageH, Math.round(width * 0.028));
   target.clip();
-  target.drawImage(canvas, 0, 0, srcW, srcH, imageX, imageY, imageW, imageH);
+  target.drawImage(renderCanvas, 0, 0, srcW, srcH, imageX, imageY, imageW, imageH);
   target.restore();
 
   const textX = pad;
@@ -1832,7 +2416,7 @@ function buildPostcardCanvas(options = {}) {
   target.fillRect(textX, Math.min(height - pad * 1.65, nextY + Math.round(width * 0.034)), Math.round(width * 0.18), Math.max(3, Math.round(width * 0.006)));
   target.font = `800 ${Math.round(width * 0.024)}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   target.fillStyle = 'rgba(248,244,232,0.56)';
-  target.fillText('MOBILE V2 / CANVAS 2D', textX, height - pad);
+  target.fillText('MOBILE V2 / WEBGL + CANVAS', textX, height - pad);
   target.textAlign = 'right';
   target.fillStyle = colorWithAlpha(accent, 0.82);
   target.fillText(QUALITY[state.quality].label.toUpperCase(), width - pad, height - pad);
@@ -1921,6 +2505,13 @@ function buildDiagnostics() {
       css: { width: canvasCssWidth, height: canvasCssHeight },
       renderScale: metrics.renderScale,
       quality: state.quality,
+      e8Chords: {
+        type: metrics.lastE8ChordRenderer || 'none',
+        canvas: e8ChordCanvas ? { width: e8ChordCanvas.width, height: e8ChordCanvas.height } : null,
+        vertices: e8ChordVertexCount,
+        contextLosses: metrics.e8ChordWebglContextLossCount,
+        fallbacks: metrics.e8ChordWebglFallbackCount,
+      },
     },
     state: getState(),
     metrics: getMetrics(),
@@ -2198,6 +2789,7 @@ function randomDifferent(items, current) {
 function mobileSurprise() {
   const palettes = Object.keys(PALETTES);
   const subsets = [...SUPPORTED_SUBSETS];
+  const fxModes = MOBILE_FX_MODES.map(mode => mode.id);
   const patch = {
     palette: randomDifferent(palettes, state.palette),
     subset: randomDifferent(subsets, state.subset),
@@ -2205,19 +2797,30 @@ function mobileSurprise() {
     showRings: Math.random() > 0.18,
     showPetrie: Math.random() < 0.34,
     showMirrors: Math.random() < 0.28,
+    showVertices: false,
     highlightSubset: true,
     showContext: true,
     quality: 'smooth',
     autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
     autoModel: false,
     autoColor: false,
+    autoFx: false,
     softFx: false,
+    fxMode: randomDifferent(fxModes, state.fxMode),
     rotationSpeed: DEFAULT_STATE.rotationSpeed,
     rotation: Math.random() * TAU,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    e8MorphT: 0,
     panX: 0,
     panY: 0,
     zoom: 1,
     selectedRoot: null,
+    bloomAmount: DEFAULT_STATE.bloomAmount,
+    bloomAuto: false,
+    bloomTwinH4: DEFAULT_STATE.bloomTwinH4,
   };
   metrics.surpriseCount++;
   metrics.lastSurpriseMs = performance.now();
@@ -2244,21 +2847,33 @@ function setAutoPreset(mode) {
       shape: 'icosahedron',
       selectedRoot: null,
       autoRotate: true,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: true,
       autoColor: true,
+      autoFx: false,
       softFx: true,
+      cameraPath: 'spiral',
     };
   } else if (mode === 'orbit') {
     patch = {
       autoRotate: true,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: false,
+      autoFx: false,
+      cameraPath: 'orbit',
     };
   } else {
     patch = {
       autoRotate: false,
+      autoZoom: false,
+      autoExtrude: false,
       autoModel: false,
       autoColor: false,
+      autoFx: false,
       softFx: false,
+      cameraPath: 'manual',
     };
   }
   const interactionType = mode === 'showcase' ? 'auto-preset-showcase' : mode === 'orbit' ? 'auto-preset-orbit' : 'auto-preset-still';
@@ -2324,7 +2939,12 @@ function setState(patch, options = {}) {
   }
   const previousQuality = state.quality;
   const previousAutoModel = state.autoModel;
+  const previousAutoZoom = state.autoZoom;
+  const previousAutoExtrude = state.autoExtrude;
+  const previousModelMode = state.modelMode;
   state = next;
+  if (state.autoZoom && (!previousAutoZoom || state.modelMode !== previousModelMode)) syncAutoMotionPhase('zoom');
+  if (state.autoExtrude && !previousAutoExtrude) syncAutoMotionPhase('extrude');
   if (state.autoModel && (!previousAutoModel || patch.modelMode != null || patch.shape != null || patch.polytope4d != null || patch.dynkinDiagram != null)) {
     autoModelIndex = currentAutoModelIndex();
     autoModelElapsed = AUTO_MODEL_INTERVAL_S;
@@ -2375,9 +2995,13 @@ function setSettingState(patch, interactionType, options = {}) {
   if (options.syncQuality) syncQualityControls();
   if (options.syncPalette) syncPaletteControls();
   if (options.syncFx) syncFxPresetControls();
+  if (options.syncFxMode) syncFxModeControls();
   if (options.syncSubset) syncSubsetControls();
   if (options.syncMotionSpeed) syncMotionSpeedControls();
   if (options.syncMotionPreset) syncMotionPresetControls();
+  if (options.syncMotionCamera) syncCameraControls();
+  if (options.syncSdf) syncSdfControls();
+  if (options.syncBloom) syncBloomControls();
   if (options.syncModel) {
     syncModelControls();
     updateSelectionUI({ reason: interactionType });
@@ -2431,64 +3055,36 @@ function commitLiveControl(controlName, options = {}) {
   return true;
 }
 
-function resetView() {
+function showResetFeedback(button = els.resetView) {
+  if (!button) return false;
+  if (resetFeedbackTimer) clearTimeout(resetFeedbackTimer);
+  button.classList.add('is-confirmed');
+  button.textContent = 'Reset done';
+  resetFeedbackTimer = setTimeout(() => {
+    resetFeedbackTimer = null;
+    button.classList.remove('is-confirmed');
+    button.textContent = 'Reset';
+  }, 1200);
+  return true;
+}
+
+function resetView(button = els.resetView) {
   stopMobileTourForManualExplore();
-  setState({ rotation: 0, panX: 0, panY: 0, zoom: 1, selectedRoot: null });
-  showStatus('View reset');
-}
-
-function scenePresetLabel(preset) {
-  const target = preset?.target || {};
-  if (target.modelMode === 'e8_2d') return 'E8 Coxeter';
-  if (target.modelMode === 'e8_3d') return 'E8 3D roots';
-  if (target.modelMode === 'platonic') return SHAPE_LABELS[target.shape] || preset.label;
-  if (target.modelMode === 'poly4d') return POLYTOPE4D_LABELS[target.polytope4d] || preset.label;
-  if (target.modelMode === 'dynkin') return `${DYNKIN_LABELS[target.dynkinDiagram] || preset.label} Dynkin`;
-  return preset?.label || 'Scene';
-}
-
-function scenePresetMatches(preset) {
-  const target = preset?.target;
-  if (!target || target.modelMode !== state.modelMode) return false;
-  if (target.modelMode === 'platonic') return target.shape === state.shape;
-  if (target.modelMode === 'poly4d') return target.polytope4d === state.polytope4d;
-  if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
+  motionPhase = 0;
+  const activeSelection = {
+    modelMode: state.modelMode,
+    shape: state.shape,
+    polytope4d: state.polytope4d,
+    dynkinDiagram: state.dynkinDiagram,
+    learnTopic: state.learnTopic,
+  };
+  setState({
+    ...defaultMobileState(),
+    ...activeSelection,
+  }, { interactionType: 'reset-view' });
+  showResetFeedback(button);
+  showStatus(`${MODEL_LABELS[state.modelMode] || 'Model'} visuals reset`);
   return true;
-}
-
-function activeScenePreset() {
-  return SCENE_PRESETS.find(scenePresetMatches) || null;
-}
-
-function renderScenePresetButtons() {
-  if (!els.scenePresetGrid) return false;
-  els.scenePresetGrid.innerHTML = SCENE_PRESETS.map(preset => (
-    `<button type="button" data-scene-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(scenePresetLabel(preset))}">${escapeHtml(preset.label)}</button>`
-  )).join('');
-  metrics.scenePresetButtonCount = SCENE_PRESETS.length;
-  return true;
-}
-
-function syncScenePresetControls() {
-  if (!els.scenePresetGrid) return false;
-  const active = activeScenePreset();
-  if (els.scenePresetOutput) els.scenePresetOutput.textContent = active ? active.label : sceneStatusText();
-  els.scenePresetGrid.querySelectorAll('[data-scene-preset]').forEach(button => {
-    const isActive = active?.id === button.dataset.scenePreset;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  });
-  return true;
-}
-
-function selectScenePreset(id) {
-  const preset = SCENE_PRESETS.find(item => item.id === id);
-  if (!preset) return false;
-  return setScenePreset(preset.target, {
-    interactionType: `scene-preset-${preset.id}`,
-    metricKind: 'scene-preset',
-    preset,
-  });
 }
 
 function modelShortcutLabel(shortcut) {
@@ -2545,17 +3141,53 @@ function selectModelShortcut(id) {
 function renderPaletteSwatches() {
   if (!els.paletteSwatchGrid) return false;
   els.paletteSwatchGrid.innerHTML = Object.entries(PALETTES).map(([name, colors]) => {
-    const label = PALETTE_LABELS[name] || name;
+    const label = paletteLabel(name);
     const dots = colors.map(color => `<i style="--dot:${escapeHtml(color)}"></i>`).join('');
     return `<button type="button" data-palette-swatch="${escapeHtml(name)}" aria-label="${escapeHtml(label)} palette"><span class="palette-dots" aria-hidden="true">${dots}</span><span>${escapeHtml(label)}</span></button>`;
   }).join('');
+  if (els.paletteSelect) {
+    els.paletteSelect.innerHTML = Object.keys(PALETTES).map(name => (
+      `<option value="${escapeHtml(name)}">${escapeHtml(paletteLabel(name))}</option>`
+    )).join('');
+  }
   metrics.paletteSwatchButtonCount = Object.keys(PALETTES).length;
+  syncPaletteExpansion();
   return true;
+}
+
+function syncPaletteExpansion() {
+  if (els.paletteSwatchGrid) els.paletteSwatchGrid.classList.toggle('expanded', paletteExpanded);
+  if (els.paletteExpandButton) {
+    els.paletteExpandButton.textContent = paletteExpanded ? 'Collapse' : 'Expand';
+    els.paletteExpandButton.setAttribute('aria-expanded', paletteExpanded ? 'true' : 'false');
+    els.paletteExpandButton.setAttribute('aria-label', paletteExpanded ? 'Collapse palette catalog' : 'Expand palette catalog');
+  }
+  return paletteExpanded;
+}
+
+function syncPaletteCompactSwatches() {
+  if (!els.paletteSwatchGrid) return 0;
+  const buttons = [...els.paletteSwatchGrid.querySelectorAll('[data-palette-swatch]')];
+  const compact = buttons.slice(0, PALETTE_COMPACT_COUNT);
+  const active = buttons.find(button => button.dataset.paletteSwatch === state.palette);
+  if (active && !compact.includes(active)) compact[compact.length - 1] = active;
+  const compactSet = new Set(compact);
+  buttons.forEach(button => button.classList.toggle('compact-visible', compactSet.has(button)));
+  return compactSet.size;
+}
+
+function togglePaletteExpanded(force = null) {
+  paletteExpanded = typeof force === 'boolean' ? force : !paletteExpanded;
+  metrics.paletteExpandToggleCount++;
+  metrics.lastPaletteExpanded = paletteExpanded;
+  metrics.lastPaletteExpandMs = performance.now();
+  syncPaletteExpansion();
+  return paletteExpanded;
 }
 
 function syncPaletteControls() {
   if (els.paletteSelect) els.paletteSelect.value = state.palette;
-  const label = PALETTE_LABELS[state.palette] || state.palette;
+  const label = paletteLabel(state.palette);
   if (els.paletteOutput) els.paletteOutput.textContent = label;
   if (els.paletteSwatchGrid) {
     els.paletteSwatchGrid.querySelectorAll('[data-palette-swatch]').forEach(button => {
@@ -2563,6 +3195,7 @@ function syncPaletteControls() {
       button.classList.toggle('active', isActive);
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
+    syncPaletteCompactSwatches();
   }
   return true;
 }
@@ -2575,7 +3208,7 @@ function selectPaletteSwatch(name) {
   metrics.paletteSwatchSelectCount++;
   metrics.paletteSwatchSyncSkipCount++;
   metrics.lastPaletteSwatch = state.palette;
-  metrics.lastPaletteSwatchLabel = PALETTE_LABELS[state.palette] || state.palette;
+  metrics.lastPaletteSwatchLabel = paletteLabel(state.palette);
   metrics.lastPaletteSwatchMs = performance.now();
   showStatus(`Palette: ${metrics.lastPaletteSwatchLabel}`);
   return result;
@@ -2592,7 +3225,7 @@ function activeFxPreset() {
 function renderFxPresets() {
   if (!els.fxPresetGrid) return false;
   els.fxPresetGrid.innerHTML = FX_PRESETS.map(preset => (
-    `<button type="button" data-fx-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(fxPresetLabel(preset))} FX preset">${escapeHtml(preset.label)}</button>`
+    `<button type="button" data-fx-preset="${escapeHtml(preset.id)}" aria-label="${escapeHtml(fxPresetLabel(preset))} color and motion preset">${escapeHtml(preset.label)}</button>`
   )).join('');
   metrics.fxPresetButtonCount = FX_PRESETS.length;
   return true;
@@ -2613,6 +3246,34 @@ function syncFxPresetControls() {
   return true;
 }
 
+function colorSpeedLabel(value) {
+  if (value < 0.5) return 'Slow';
+  if (value < 1) return 'Medium';
+  return 'Fast';
+}
+
+function syncVisualRangeOutputs() {
+  if (els.backgroundBrightnessOutput) els.backgroundBrightnessOutput.textContent = `${Math.round(state.backgroundBrightness * 100)}%`;
+  if (els.pointSizeOutput) els.pointSizeOutput.textContent = `${Math.round(state.pointScale * 100)}%`;
+  if (els.pointOpacityOutput) els.pointOpacityOutput.textContent = `${Math.round(state.pointOpacity * 100)}%`;
+  if (els.colorSpeedOutput) els.colorSpeedOutput.textContent = colorSpeedLabel(state.colorSpeed);
+  if (els.fxStrengthOutput) els.fxStrengthOutput.textContent = `${Math.round(state.fxStrength * 100)}%`;
+  syncFxSurface();
+  return true;
+}
+
+function syncVisualControls() {
+  if (els.backgroundSelect) els.backgroundSelect.value = state.background;
+  if (els.backgroundBrightness) els.backgroundBrightness.value = String(state.backgroundBrightness);
+  if (els.pointSize) els.pointSize.value = String(state.pointScale);
+  if (els.pointOpacity) els.pointOpacity.value = String(state.pointOpacity);
+  if (els.colorSpeed) els.colorSpeed.value = String(state.colorSpeed);
+  if (els.fxStrength) els.fxStrength.value = String(state.fxStrength);
+  syncVisualRangeOutputs();
+  syncFxModeControls();
+  return true;
+}
+
 function selectFxPreset(id) {
   const preset = FX_PRESETS.find(item => item.id === id);
   if (!preset) return false;
@@ -2628,8 +3289,91 @@ function selectFxPreset(id) {
   metrics.lastFxPreset = preset.id;
   metrics.lastFxPresetLabel = fxPresetLabel(preset);
   metrics.lastFxPresetMs = performance.now();
-  showStatus(`FX: ${metrics.lastFxPresetLabel}`);
+  showStatus(`Color & motion: ${metrics.lastFxPresetLabel}`);
   return result;
+}
+
+function fxModeLabel(mode) {
+  return mode?.name || mode?.label || 'FX';
+}
+
+function activeFxMode() {
+  return MOBILE_FX_MODES.find(mode => mode.id === state.fxMode) || MOBILE_FX_MODES[0];
+}
+
+function renderFxModes() {
+  if (!els.fxModeGrid) return false;
+  els.fxModeGrid.innerHTML = MOBILE_FX_MODES.map(mode => (
+    `<button type="button" data-fx-treatment="${escapeHtml(mode.id)}" data-fx-cost="${escapeHtml(mode.cost)}" aria-label="${escapeHtml(fxModeLabel(mode))} effect, ${escapeHtml(mode.cost)} GPU cost"><span>${escapeHtml(mode.label)}</span><small>${escapeHtml(mode.cost)}</small></button>`
+  )).join('');
+  metrics.fxModeButtonCount = MOBILE_FX_MODES.length;
+  return true;
+}
+
+function syncFxSurface() {
+  if (!els.shell) return false;
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  els.shell.dataset.fxMode = state.fxMode;
+  els.shell.style.setProperty('--mobile-fx-strength', strength.toFixed(2));
+  els.shell.style.setProperty('--mobile-fx-brightness', (1 + strength * 0.13).toFixed(3));
+  els.shell.style.setProperty('--mobile-fx-saturation', (1 + strength * 0.32).toFixed(3));
+  els.shell.style.setProperty('--mobile-fx-blur', `${(4 + strength * 6).toFixed(1)}px`);
+  els.shell.style.setProperty('--mobile-fx-fringe', `${(0.8 + strength * 1.35).toFixed(1)}px`);
+  els.shell.style.setProperty('--mobile-fx-alpha', clamp(0.08 + strength * 0.12, 0.1, 0.3).toFixed(3));
+  return true;
+}
+
+function syncFxModeControls() {
+  const active = activeFxMode();
+  if (els.autoFxToggle) els.autoFxToggle.checked = state.autoFx;
+  if (els.fxModeOutput) els.fxModeOutput.textContent = fxModeLabel(active);
+  if (els.fxModeDescription) els.fxModeDescription.textContent = active.description;
+  if (els.fxModeGrid) {
+    els.fxModeGrid.querySelectorAll('[data-fx-treatment]').forEach(button => {
+      const isActive = button.dataset.fxTreatment === active.id;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+  syncFxSurface();
+  return true;
+}
+
+function selectFxMode(id) {
+  const mode = MOBILE_FX_MODES.find(item => item.id === id);
+  if (!mode) return false;
+  const previous = state.fxMode;
+  const result = setManualRuntimeState({ fxMode: mode.id }, `fx-mode-${mode.id}`, { syncFxMode: true });
+  if (state.fxMode === previous) return result;
+  metrics.fxModeSelectCount++;
+  metrics.fxModeSyncSkipCount++;
+  metrics.lastFxMode = mode.id;
+  metrics.lastFxModeLabel = fxModeLabel(mode);
+  metrics.lastFxModeMs = performance.now();
+  fxShiftElapsed = 0;
+  showStatus(`Effect: ${metrics.lastFxModeLabel}`);
+  return result;
+}
+
+function setFxShiftEnabled(enabled) {
+  fxShiftElapsed = 0;
+  return setManualRuntimeState({ autoFx: !!enabled }, 'auto-fx-toggle', {
+    syncFxMode: true,
+    syncMotionPreset: true,
+  });
+}
+
+function advanceFxShift() {
+  const modes = MOBILE_FX_MODES.filter(mode => mode.id !== 'none');
+  const current = modes.findIndex(mode => mode.id === state.fxMode);
+  const next = modes[(current + 1 + modes.length) % modes.length] || modes[0];
+  if (!next) return false;
+  state.fxMode = next.id;
+  metrics.fxShiftCount++;
+  metrics.lastFxShiftMode = next.id;
+  metrics.lastFxShiftMs = performance.now();
+  syncFxModeControls();
+  return next.id;
 }
 
 function subsetChipLabel(name) {
@@ -2814,16 +3558,93 @@ function motionPresetLabel(preset) {
 }
 
 function activeMotionPreset() {
-  if (state.autoRotate && state.autoModel && state.autoColor && state.softFx) {
+  if (state.autoRotate && state.autoModel && state.autoColor && !state.autoFx && state.softFx && !state.autoZoom && !state.autoExtrude) {
     return MOTION_PRESETS.find(preset => preset.id === 'showcase') || null;
   }
-  if (state.autoRotate && !state.autoModel) {
+  if (state.autoRotate && !state.autoModel && !state.autoFx && !state.autoZoom && !state.autoExtrude && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
     return MOTION_PRESETS.find(preset => preset.id === 'orbit') || null;
   }
-  if (!state.autoRotate && !state.autoModel && !state.autoColor && !state.softFx) {
+  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.autoFx && !state.softFx) {
     return MOTION_PRESETS.find(preset => preset.id === 'still') || null;
   }
   return null;
+}
+
+function cameraPathLabel(path = state.cameraPath) {
+  return ({ manual: 'Manual', orbit: 'Orbit', dive: 'Dive', spiral: 'Spiral' })[path] || 'Manual';
+}
+
+function syncCameraControls() {
+  const rotationDegrees = ((state.rotation * 180 / Math.PI + 180) % 360 + 360) % 360 - 180;
+  if (els.cameraPathOutput) els.cameraPathOutput.textContent = cameraPathLabel();
+  if (els.cameraRotation) els.cameraRotation.value = String(Math.round(rotationDegrees));
+  if (els.cameraRotationOutput) els.cameraRotationOutput.textContent = `${Math.round(rotationDegrees)}°`;
+  if (els.cameraTilt) els.cameraTilt.value = String(Math.round(state.cameraTilt * 180 / Math.PI));
+  if (els.cameraTiltOutput) els.cameraTiltOutput.textContent = `${Math.round(state.cameraTilt * 180 / Math.PI)}°`;
+  if (els.cameraZoom) {
+    els.cameraZoom.min = String(MANUAL_ZOOM_MIN);
+    els.cameraZoom.max = String(zoomMaxForModel(state.modelMode));
+    els.cameraZoom.value = String(state.zoom);
+  }
+  if (els.zoomOutput) els.zoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
+  if (els.cameraZoomOutput) els.cameraZoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
+  if (els.cameraZoomAuto) {
+    els.cameraZoomAuto.checked = state.autoZoom;
+  }
+  if (els.cameraExtrude) els.cameraExtrude.value = String(state.e8MorphT);
+  if (els.cameraExtrudeOutput) els.cameraExtrudeOutput.textContent = state.e8MorphT.toFixed(2);
+  if (els.cameraExtrudeAuto) {
+    els.cameraExtrudeAuto.classList.toggle('active', state.autoExtrude);
+    els.cameraExtrudeAuto.setAttribute('aria-pressed', state.autoExtrude ? 'true' : 'false');
+  }
+  document.querySelectorAll('.camera-path-grid [data-motion-action]').forEach(button => {
+    const path = button.dataset.motionAction?.replace('camera-', '');
+    const active = path !== 'reset' && path === state.cameraPath && state.autoRotate;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  return true;
+}
+
+function toggleCameraAuto(kind) {
+  const key = kind === 'zoom' ? 'autoZoom' : kind === 'extrude' ? 'autoExtrude' : null;
+  if (!key) return false;
+  const enabled = !state[key];
+  const result = setManualRuntimeState({ [key]: enabled }, `${kind}-auto-toggle`, {
+    syncMotionPreset: true,
+    syncMotionCamera: true,
+  });
+  showStatus(`${kind === 'zoom' ? 'Zoom' : 'Extrude'} auto ${enabled ? 'on' : 'off'}`);
+  return result;
+}
+
+function selectCameraPath(path) {
+  if (!['orbit', 'dive', 'spiral'].includes(path)) return false;
+  motionPhase = 0;
+  const result = setManualRuntimeState({ cameraPath: path, autoRotate: true, autoZoom: false }, `camera-path-${path}`, {
+    syncMotionPreset: true,
+    syncMotionCamera: true,
+  });
+  showStatus(`${cameraPathLabel(path)} camera`);
+  return result;
+}
+
+function resetCameraMotion() {
+  motionPhase = 0;
+  const result = setManualRuntimeState({
+    rotation: 0,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
+    zoom: 1,
+    e8MorphT: 0,
+    panX: 0,
+    panY: 0,
+  }, 'camera-reset', { syncMotionPreset: true, syncMotionCamera: true });
+  showStatus('Camera reset');
+  return result;
 }
 
 function renderMotionPresets() {
@@ -2848,6 +3669,7 @@ function syncMotionPresetControls() {
       button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
+  syncCameraControls();
   return true;
 }
 
@@ -2857,14 +3679,20 @@ function selectMotionPreset(id) {
   if (mobileTourActive) stopMobileTour({ interactionType: 'mobile-tour-manual-runtime-stop', status: false });
   const previous = {
     autoRotate: state.autoRotate,
+    autoZoom: state.autoZoom,
+    autoExtrude: state.autoExtrude,
     autoModel: state.autoModel,
     autoColor: state.autoColor,
+    autoFx: state.autoFx,
     softFx: state.softFx,
   };
   const result = setAutoPreset(preset.interaction);
   const changed = previous.autoRotate !== state.autoRotate
+    || previous.autoZoom !== state.autoZoom
+    || previous.autoExtrude !== state.autoExtrude
     || previous.autoModel !== state.autoModel
     || previous.autoColor !== state.autoColor
+    || previous.autoFx !== state.autoFx
     || previous.softFx !== state.softFx;
   if (!changed) return result;
   metrics.motionPresetSelectCount++;
@@ -2978,15 +3806,31 @@ function cycleQuality() {
 }
 
 function scenePatchForTarget(target) {
-  const patch = {
+  // Manual scene selection is a replacement operation. Keep global user
+  // preferences and hidden E8-root choices, but clear active animation,
+  // selection, and framing so A→B starts from a predictable camera state.
+  return {
     modelMode: target.modelMode,
+    shape: target.shape || DEFAULT_STATE.shape,
+    polytope4d: target.polytope4d || DEFAULT_STATE.polytope4d,
+    dynkinDiagram: target.dynkinDiagram || DEFAULT_STATE.dynkinDiagram,
+    showVertices: DEFAULT_STATE.showVertices,
+    autoRotate: false,
+    autoZoom: false,
+    autoExtrude: false,
+    autoModel: false,
+    autoColor: false,
+    autoFx: false,
+    softFx: false,
+    rotationSpeed: DEFAULT_STATE.rotationSpeed,
+    rotation: 0,
+    cameraTilt: DEFAULT_STATE.cameraTilt,
+    cameraPath: 'manual',
+    panX: 0,
+    panY: 0,
+    zoom: 1,
     selectedRoot: null,
   };
-  if (target.shape) patch.shape = target.shape;
-  if (target.polytope4d) patch.polytope4d = target.polytope4d;
-  if (target.dynkinDiagram) patch.dynkinDiagram = target.dynkinDiagram;
-  if (state.autoModel) patch.autoModel = false;
-  return patch;
 }
 
 function sceneTargetSnapshot(index = currentAutoModelIndex(), target = state) {
@@ -3021,7 +3865,7 @@ function setScenePreset(targetOrIndex, options = {}) {
     });
   }
   if (!target || !SUPPORTED_MODEL_MODES.has(target.modelMode)) return getState();
-  const interactionType = options.interactionType || 'scene-preset';
+  const interactionType = options.interactionType || 'model-target';
   if (mobileTourActive && !interactionType.startsWith('mobile-tour')) {
     stopMobileTour({ interactionType: 'mobile-tour-manual-stop', status: false });
   }
@@ -3037,14 +3881,7 @@ function setScenePreset(targetOrIndex, options = {}) {
   autoModelElapsed = 0;
   const snapshotIndex = targetIndex >= 0 ? targetIndex : autoModelIndex;
   const snapshot = sceneTargetSnapshot(snapshotIndex, state);
-  if (metricKind === 'scene-preset') {
-    metrics.scenePresetSelectCount++;
-    metrics.scenePresetSyncSkipCount++;
-    metrics.lastScenePresetId = options.preset?.id || null;
-    metrics.lastScenePresetLabel = options.preset ? scenePresetLabel(options.preset) : sceneStatusText();
-    metrics.lastScenePresetMs = performance.now();
-    metrics.lastScenePresetTarget = snapshot;
-  } else if (metricKind === 'model-shortcut') {
+  if (metricKind === 'model-shortcut') {
     metrics.modelShortcutSelectCount++;
     metrics.modelShortcutSyncSkipCount++;
     metrics.lastModelShortcutId = options.modelShortcut?.id || null;
@@ -3061,6 +3898,13 @@ function setScenePreset(targetOrIndex, options = {}) {
     metrics.lastSceneChipStoppedAutoModel = !!(previousAutoModel && !state.autoModel);
   }
   syncModelControls();
+  // Scene replacement also clears color/motion presets and camera framing.
+  // Keep those already-rendered controls truthful while the settings sheet is
+  // open without paying for a full settings synchronization.
+  syncFxPresetControls();
+  syncFxModeControls();
+  syncMotionPresetControls();
+  syncMotionSpeedControls();
   updateSelectionUI({ reason: interactionType });
   showStatus(`Scene: ${sceneStatusText()}`);
   return result;
@@ -3089,16 +3933,19 @@ function syncControlValues() {
   els.contextToggle.checked = state.showContext;
   els.petrieToggle.checked = state.showPetrie;
   els.mirrorsToggle.checked = state.showMirrors;
+  els.edgesToggle.checked = state.showEdges;
+  els.verticesToggle.checked = state.showVertices;
   syncSubsetControls();
   els.rootRange.value = String(state.selectedRoot ?? 0);
   els.rootOutput.textContent = state.selectedRoot == null ? 'None' : `#${state.selectedRoot}`;
   syncRootJumpControls();
   els.zoomOutput.textContent = `${Math.round(state.zoom * 100)}%`;
-  els.pointSize.value = String(state.pointScale);
+  syncVisualControls();
   els.ringsToggle.checked = state.showRings;
   syncFxPresetControls();
   syncMotionPresetControls();
   syncMotionSpeedControls();
+  syncCameraControls();
   syncMobileTourCard();
   updateSelectionUI();
 }
@@ -3111,8 +3958,11 @@ function syncModelControls() {
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
+  if (els.sdfField) els.sdfField.classList.toggle('hidden', state.modelMode !== 'sdf');
+  syncModelContextControls();
+  syncSdfControls();
+  syncBloomControls();
   if (els.autoModelToggle) els.autoModelToggle.checked = state.autoModel;
-  syncScenePresetControls();
   syncModelShortcutControls();
   const scene = activeSceneSummary();
   if (els.sceneChip) {
@@ -3126,20 +3976,99 @@ function syncModelControls() {
   syncCuriosityCard();
 }
 
+function modelContextVisible(context) {
+  if (context === 'e8-roots') return state.modelMode === 'e8_2d' || state.modelMode === 'bloom';
+  if (context === 'e8-only') return state.modelMode === 'e8_2d';
+  if (context === 'vertex-models') return state.modelMode === 'platonic' || state.modelMode === 'poly4d';
+  return true;
+}
+
+function syncModelContextControls() {
+  for (const control of els.modelContextControls || []) {
+    const visible = modelContextVisible(control.dataset.modelContext);
+    control.hidden = !visible;
+    control.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+  return true;
+}
+
+function syncSdfControls() {
+  if (els.sdfRadius) els.sdfRadius.value = String(state.sdfSphereR);
+  if (els.sdfRadiusOutput) els.sdfRadiusOutput.textContent = state.sdfSphereR.toFixed(3);
+  if (els.sdfBlend) els.sdfBlend.value = String(state.sdfBlend);
+  if (els.sdfBlendOutput) els.sdfBlendOutput.textContent = state.sdfBlend.toFixed(3);
+  if (els.sdfBloom) els.sdfBloom.value = String(state.sdfBloom);
+  if (els.sdfBloomOutput) els.sdfBloomOutput.textContent = `${Math.round(state.sdfBloom * 100)}%`;
+  if (els.sdfAniso) els.sdfAniso.value = String(state.sdfAniso);
+  if (els.sdfAnisoOutput) els.sdfAnisoOutput.textContent = `${Math.round(state.sdfAniso * 100)}%`;
+  return true;
+}
+
+function bloomPhaseLabel(amount = state.bloomAmount) {
+  if (amount < 0.1) return 'Shape';
+  if (amount < 0.5) return '600-cell';
+  if (amount < 0.75) return 'Twin H4';
+  if (amount < 0.9) return 'Unfold';
+  return 'Coxeter';
+}
+
+function syncBloomControls() {
+  const active = state.modelMode === 'bloom';
+  if (els.bloomTimelineField) els.bloomTimelineField.classList.toggle('hidden', !active);
+  syncBloomRuntimeReadout();
+  if (els.bloomAutoButton) {
+    els.bloomAutoButton.textContent = state.bloomAuto ? 'Pause' : 'Auto';
+    els.bloomAutoButton.classList.toggle('active', state.bloomAuto);
+    els.bloomAutoButton.setAttribute('aria-pressed', String(state.bloomAuto));
+  }
+  if (els.bloomTwinButton) {
+    els.bloomTwinButton.classList.toggle('active', state.bloomTwinH4);
+    els.bloomTwinButton.setAttribute('aria-pressed', String(state.bloomTwinH4));
+  }
+  metrics.bloomTimelineSyncCount++;
+  metrics.lastBloomTimelineSyncMs = performance.now();
+  return active;
+}
+
+function syncBloomRuntimeReadout() {
+  if (els.bloomTime) els.bloomTime.value = String(state.bloomAmount);
+  if (els.bloomTimeOutput) els.bloomTimeOutput.textContent = state.bloomAmount.toFixed(2);
+  if (els.bloomPhaseOutput) els.bloomPhaseOutput.textContent = bloomPhaseLabel();
+  if (state.modelMode === 'bloom' && els.sceneChip) {
+    const small = els.sceneChip.querySelector('small');
+    if (small) small.textContent = state.bloomAmount.toFixed(2);
+  }
+}
+
+function handleBloomAction(action) {
+  if (action === 'toggle-auto') {
+    return setManualRuntimeState({ bloomAuto: !state.bloomAuto }, 'bloom-auto-toggle', { syncBloom: true });
+  }
+  if (action === 'toggle-twin') {
+    return setManualRuntimeState({ bloomTwinH4: !state.bloomTwinH4 }, 'bloom-twin-toggle', { syncBloom: true });
+  }
+  if (action === 'reset') {
+    return setManualRuntimeState({ bloomAmount: 0, bloomAuto: false }, 'bloom-reset', { syncBloom: true });
+  }
+  return false;
+}
+
 function activeSceneSummary() {
   if (state.modelMode === 'platonic') {
     const shape = platonicGeometry[state.shape];
     const label = SHAPE_LABELS[state.shape] || state.shape;
+    const family = STAR_SHAPES.has(state.shape) ? 'star polyhedron' : 'Platonic solid';
     const verts = shape?.verts?.length || 0;
     const edges = shape?.edges?.length || 0;
     const source = activeMckaySource();
     const info = mckayInfo[source] || {};
+    const bridgeCopy = STAR_SHAPES.has(state.shape) ? 'its icosahedral symmetry' : 'this source';
     return {
       chipStrong: MODEL_LABELS.platonic,
       chipSmall: `${label} / ${verts}v`,
-      topbarLabel: `${label} Platonic solid, ${verts} vertices, ${edges} edges`,
-      canvasLabel: `${label} Platonic solid visualization with ${verts} vertices and ${edges} edges`,
-      infoCopy: `${label} renders desktop Platonic solid data on the mobile Canvas 2D path. Drag, pinch, or enable Motion to inspect it; the McKay bridge links this source to ${info.roots || 'ADE roots'}.`,
+      topbarLabel: `${label} ${family}, ${verts} vertices, ${edges} edges`,
+      canvasLabel: `${label} ${family} visualization with ${verts} vertices and ${edges} edges`,
+      infoCopy: `${label} renders desktop ${family} geometry on the mobile Canvas 2D path. Drag to rotate, pinch to zoom, or enable Motion to inspect it; the McKay bridge links ${bridgeCopy} to ${info.roots || 'ADE roots'}.`,
     };
   }
   if (state.modelMode === 'poly4d') {
@@ -3152,7 +4081,7 @@ function activeSceneSummary() {
       chipSmall: `${label} / ${verts}v`,
       topbarLabel: `${label} 4D polytope, ${verts} vertices, ${edges} edges`,
       canvasLabel: `${label} 4D polytope projection with ${verts} vertices and ${edges} edges`,
-      infoCopy: `${label} is projected from 4D into a depth view and then drawn with Canvas 2D. Motion rotates the projection without switching to a heavy mobile renderer.`,
+      infoCopy: `${label} is projected from 4D into a depth view and then drawn with Canvas 2D. Drag to rotate, pinch to zoom, or enable Motion to animate the projection.`,
     };
   }
   if (state.modelMode === 'dynkin') {
@@ -3171,13 +4100,24 @@ function activeSceneSummary() {
       infoCopy: `${label} shows simple roots as nodes and Cartan dot -1 relationships as edges. ${action}`,
     };
   }
-  if (state.modelMode === 'e8_3d') {
+  if (state.modelMode === 'bloom') {
     return {
-      chipStrong: MODEL_LABELS.e8_3d,
-      chipSmall: '240 roots / depth',
-      topbarLabel: 'E8 3D roots, 240 roots, depth projection',
-      canvasLabel: 'E8 3D root visualization with 240 roots and depth projection',
-      infoCopy: 'The same 240 E8 root vectors are given a lightweight depth coordinate for phone inspection. Tap a root for McKay, Cartan, neighbor, opposite-root, and 8D coordinate context.',
+      chipStrong: MODEL_LABELS.bloom,
+      // Keep the tappable scene chip compact across platform font metrics. The
+      // full phase remains available in the accessible label and View timeline.
+      chipSmall: state.bloomAmount.toFixed(2),
+      topbarLabel: `Designed Bloom timeline at ${state.bloomAmount.toFixed(2)}, ${bloomPhaseLabel()} phase`,
+      canvasLabel: `Designed Bloom visualization in the ${bloomPhaseLabel()} phase`,
+      infoCopy: 'Designed Bloom follows the desktop construction: the source solid grows through the 600-cell and twin H4 stages, then opens into the E8 Coxeter plane. Drag to rotate, or open View to scrub the timeline or start Auto.',
+    };
+  }
+  if (state.modelMode === 'sdf') {
+    return {
+      chipStrong: MODEL_LABELS.sdf,
+      chipSmall: 'implicit surface',
+      topbarLabel: 'E8 SDF, 240 smoothly joined root spheres',
+      canvasLabel: 'E8 signed-distance-field visualization with 240 fused Coxeter-plane root spheres',
+      infoCopy: 'The SDF view smoothly joins all 240 Coxeter-plane root spheres into one shaded implicit surface. Drag to rotate and tilt it; pinch to zoom. It preserves the desktop raymarcher composition at a conservative internal resolution for phone performance.',
     };
   }
   return {
@@ -3206,13 +4146,14 @@ function syncSceneAccessibility(scene) {
 }
 
 function activeMckaySource() {
+  if (state.modelMode === 'platonic' && STAR_SHAPES.has(state.shape)) return 'icosahedron';
   if (state.modelMode === 'platonic' && mckayInfo[state.shape]) return state.shape;
   if (state.modelMode === 'dynkin') {
     if (state.dynkinDiagram === 'E6') return 'tetrahedron';
     if (state.dynkinDiagram === 'E7') return 'cube';
     if (state.dynkinDiagram === 'E8') return 'icosahedron';
   }
-  if (state.modelMode === 'poly4d' && state.polytope4d === '600cell') return 'icosahedron';
+  if (state.modelMode === 'poly4d' && (state.polytope4d === '600cell' || state.polytope4d === '120cell')) return 'icosahedron';
   if (mckayInfo[state.subset]) return state.subset;
   if (mckayInfo[state.shape]) return state.shape;
   return 'icosahedron';
@@ -3271,11 +4212,17 @@ function activeCuriosityNotes() {
       body: 'The 240 E8 roots land in eight rings of 30 in this projection.',
       detail: 'Petrie and mirror overlays expose different slices of the same root system.',
     });
-  } else if (state.modelMode === 'e8_3d') {
+  } else if (state.modelMode === 'bloom') {
     notes.push({
-      title: 'Depth view',
-      body: 'E8 3D reuses the same 240 roots and gives them a phone-friendly depth coordinate.',
-      detail: 'Tap still selects roots; drag and Motion rotate the depth cue.',
+      title: 'Designed Bloom',
+      body: 'A source solid grows through a 600-cell, gains its twin H4 layer, then unfolds into all 240 E8 roots.',
+      detail: 'Open View to scrub the construction, pause it, or compare the warm and cool H4 layers.',
+    });
+  } else if (state.modelMode === 'sdf') {
+    notes.push({
+      title: 'Distance field',
+      body: 'The 240 Coxeter roots blend into a continuously shaded implicit surface rather than another point rendering.',
+      detail: 'A compact height field mirrors the desktop sphere union while remaining responsive.',
     });
   } else if (state.modelMode === 'platonic') {
     notes.push({
@@ -3339,6 +4286,8 @@ function learnTopicById(id) {
 }
 
 function sceneLearnTopicId() {
+  if (state.modelMode === 'bloom') return 'designed-bloom';
+  if (state.modelMode === 'sdf') return 'distance-fields';
   if (state.modelMode === 'platonic') return 'why-five-solids';
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
   if (state.modelMode === 'dynkin') return 'roots-reflections';
@@ -3528,7 +4477,10 @@ function mobileTourPatchForTarget(target) {
     autoRotate: false,
     autoModel: false,
     autoColor: false,
+    autoFx: false,
     softFx: false,
+    fxMode: DEFAULT_STATE.fxMode,
+    bloomAuto: false,
   };
 }
 
@@ -3648,6 +4600,7 @@ function applyMobileTourStep(index, options = {}) {
   metrics.lastMobileTourAction = interactionType;
   metrics.lastMobileTourMs = performance.now();
   syncModelControls();
+  syncFxModeControls();
   updateSelectionUI({ reason: interactionType });
   syncMobileTourCard();
   if (options.status !== false) showStatus(`Tour: ${step.label}`);
@@ -3752,8 +4705,10 @@ function syncSubsetControls() {
   metrics.lastSubsetControlSyncMs = performance.now();
 }
 
-function openSettings(section = 'view') {
-  const target = SETTINGS_SECTIONS.has(section) ? section : 'view';
+function openSettings(section = null) {
+  const target = section == null
+    ? (activeSettingsSection() || 'view')
+    : (SETTINGS_SECTIONS.has(section) ? section : 'view');
   const wasOpen = isSettingsOpen();
   cancelQueuedRenderForSettings('settings-open');
   if (wasOpen) {
@@ -3856,7 +4811,19 @@ function handleViewportChange() {
 
 function renderScale() {
   const q = QUALITY[state.quality] || QUALITY.smooth;
-  return typeof q.scale === 'function' ? q.scale() : q.scale;
+  const scale = typeof q.scale === 'function' ? q.scale() : q.scale;
+  // The SDF's continuous shading exposes upscaling artifacts far more than
+  // points or wireframes do. Keep it at a full CSS-pixel backing store even
+  // in Smooth mode; its own raster still follows the selected quality tier.
+  if (state.modelMode === 'sdf') return Math.max(1, scale);
+  // Smooth mode intentionally uses a small backing store, but sub-pixel
+  // Coxeter chords become visibly stair-stepped when magnified. Raise the
+  // floor only for close E8 edge inspection; the chord layer remains a single
+  // GPU draw during pinch and orbit gestures.
+  if (state.modelMode === 'e8_2d' && state.showEdges && state.zoom > 1.15) {
+    return Math.max(1, scale);
+  }
+  return scale;
 }
 
 function activePaletteSet() {
@@ -3877,6 +4844,8 @@ function resizeCanvas() {
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
+    backgroundCanvas.width = w;
+    backgroundCanvas.height = h;
     backingStoreChanged = true;
     canvasTransformScale = null;
     metrics.canvasResizeCount++;
@@ -3888,6 +4857,8 @@ function resizeCanvas() {
   if (canvasCssWidth !== viewportWidth || canvasCssHeight !== viewportHeight) {
     canvas.style.width = `${viewportWidth}px`;
     canvas.style.height = `${viewportHeight}px`;
+    backgroundCanvas.style.width = `${viewportWidth}px`;
+    backgroundCanvas.style.height = `${viewportHeight}px`;
     canvasCssWidth = viewportWidth;
     canvasCssHeight = viewportHeight;
     metrics.canvasStyleSyncCount++;
@@ -3902,6 +4873,7 @@ function resizeCanvas() {
   settingsCanvasResizeDeferred = false;
   if (backingStoreChanged || canvasTransformScale !== scale) {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    backgroundCtx.setTransform(scale, 0, 0, scale, 0, 0);
     canvasTransformScale = scale;
     metrics.canvasTransformSetCount++;
     metrics.lastCanvasTransformSetMs = performance.now();
@@ -3920,12 +4892,320 @@ function deferSettingsCanvasResize() {
   return false;
 }
 
+function buildMobileE8ChordTopology(roots) {
+  const chordClasses = Array.from({ length: MOBILE_E8_CHORD_VALUES.length }, () => []);
+  if (!Array.isArray(roots) || roots.length < 2) return chordClasses;
+  for (let i = 0; i < roots.length; i++) {
+    const a = roots[i];
+    if (!Array.isArray(a)) continue;
+    for (let j = i + 1; j < roots.length; j++) {
+      const b = roots[j];
+      if (!Array.isArray(b)) continue;
+      let distanceSquared = 0;
+      for (let axis = 0; axis < Math.min(a.length, b.length); axis++) {
+        const delta = a[axis] - b[axis];
+        distanceSquared += delta * delta;
+      }
+      const distance = Math.sqrt(distanceSquared);
+      let bestIndex = 0;
+      let bestError = Math.abs(distance - MOBILE_E8_CHORD_VALUES[0]);
+      for (let chordClass = 1; chordClass < MOBILE_E8_CHORD_VALUES.length; chordClass++) {
+        const error = Math.abs(distance - MOBILE_E8_CHORD_VALUES[chordClass]);
+        if (error < bestError) {
+          bestError = error;
+          bestIndex = chordClass;
+        }
+      }
+      if (bestError < 0.05) chordClasses[bestIndex].push([i, j]);
+    }
+  }
+  return chordClasses;
+}
+
+function compileE8ChordShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'E8 chord shader compilation failed';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function resetE8ChordWebglResources() {
+  e8ChordProgram = null;
+  e8ChordBuffer = null;
+  e8ChordAttributes = null;
+  e8ChordUniforms = null;
+  e8ChordVertexCount = 0;
+}
+
+function buildE8ChordVertexData() {
+  const data = new Float32Array(e8ChordEdges.length * 2 * E8_CHORD_VERTEX_STRIDE_FLOATS);
+  let offset = 0;
+  for (let chordClass = 0; chordClass < e8ChordClasses.length; chordClass++) {
+    const classT = chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1);
+    const alpha = DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE;
+    for (const edge of e8ChordClasses[chordClass]) {
+      const a = points[edge[0]];
+      const b = points[edge[1]];
+      if (!a || !b) continue;
+      const midpointX = (a.x + b.x) * 0.5;
+      const midpointY = (a.y + b.y) * 0.5;
+      const rippleRadius = Math.hypot(midpointX, midpointY);
+      const angleT = (Math.atan2(midpointY, midpointX) + Math.PI) / TAU;
+      const topologyT = ((edge[0] * 37 + edge[1] * 17) % 97) / 96;
+      const rippleColorT = ((angleT * 0.46 + topologyT * 0.54) % 1 + 1) % 1;
+      for (const point of [a, b]) {
+        data[offset++] = point.x;
+        data[offset++] = point.y;
+        data[offset++] = point.norm;
+        data[offset++] = classT;
+        data[offset++] = alpha;
+        data[offset++] = rippleRadius;
+        data[offset++] = rippleColorT;
+      }
+    }
+  }
+  return offset === data.length ? data : data.slice(0, offset);
+}
+
+function setE8ChordCanvasActive(active) {
+  if (!e8ChordCanvas) return false;
+  e8ChordCanvas.classList.toggle('active', !!active);
+  if (!active) e8ChordCanvas.classList.remove('fx-composited');
+  // The semantic visualization remains the labelled interaction canvas; this
+  // implementation layer must never become a second accessibility target.
+  e8ChordCanvas.setAttribute('aria-hidden', 'true');
+  return !!active;
+}
+
+function setE8ChordCanvasComposited(composited) {
+  if (!e8ChordCanvas) return false;
+  e8ChordCanvas.classList.toggle('fx-composited', !!composited);
+  return !!composited;
+}
+
+function isE8ChordGpuActive() {
+  return !!(e8ChordGl && e8ChordCanvas?.classList.contains('active'));
+}
+
+function ensureE8ChordWebgl() {
+  if (!e8ChordCanvas || e8ChordWebglUnavailable || !e8ChordEdges.length || !points.length) return false;
+  if (e8ChordGl && e8ChordProgram && e8ChordBuffer && e8ChordUniforms && e8ChordAttributes) return true;
+  try {
+    e8ChordGl = e8ChordCanvas.getContext('webgl', {
+      alpha: true,
+      antialias: true,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: true,
+      // Canvas FX and image exports read this layer after WebGL submits it.
+      // Chromium may clear a non-preserved buffer before drawImage observes it,
+      // which makes composited effects lose the chord mesh.
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    if (!e8ChordGl) {
+      e8ChordWebglUnavailable = true;
+      metrics.e8ChordWebglFallbackCount++;
+      metrics.lastE8ChordRenderer = 'canvas-fallback';
+      return false;
+    }
+    if (!e8ChordContextHandlersInstalled) {
+      e8ChordContextHandlersInstalled = true;
+      e8ChordCanvas.addEventListener('webglcontextlost', event => {
+        event.preventDefault();
+        metrics.e8ChordWebglContextLossCount++;
+        metrics.lastE8ChordWebglContextLossMs = performance.now();
+        e8ChordGl = null;
+        resetE8ChordWebglResources();
+        setE8ChordCanvasActive(false);
+        requestRender('e8-chord-context-lost');
+      });
+      e8ChordCanvas.addEventListener('webglcontextrestored', () => {
+        metrics.e8ChordWebglContextRestoreCount++;
+        metrics.lastE8ChordWebglContextRestoreMs = performance.now();
+        e8ChordGl = null;
+        e8ChordWebglUnavailable = false;
+        resetE8ChordWebglResources();
+        requestRender('e8-chord-context-restored');
+      });
+    }
+
+    const gl = e8ChordGl;
+    const vertex = compileE8ChordShader(gl, gl.VERTEX_SHADER, E8_CHORD_VERTEX_SHADER);
+    const fragment = compileE8ChordShader(gl, gl.FRAGMENT_SHADER, E8_CHORD_FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    gl.deleteShader(vertex);
+    gl.deleteShader(fragment);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const message = gl.getProgramInfoLog(program) || 'E8 chord shader linking failed';
+      gl.deleteProgram(program);
+      throw new Error(message);
+    }
+
+    const vertexData = buildE8ChordVertexData();
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
+    e8ChordProgram = program;
+    e8ChordBuffer = buffer;
+    e8ChordVertexCount = vertexData.length / E8_CHORD_VERTEX_STRIDE_FLOATS;
+    e8ChordAttributes = {
+      root: gl.getAttribLocation(program, 'aRoot'),
+      style: gl.getAttribLocation(program, 'aStyle'),
+    };
+    const uniformNames = [
+      'uResolution', 'uOrigin', 'uScale', 'uRotation', 'uPitch', 'uPathZoom',
+      'uExtrude', 'uRipple', 'uRipplePhase', 'uAlphaBoost', 'uColorLift',
+      'uFxMode', 'uFxStrength', 'uFxPhase', 'uFxColorMix',
+      'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
+    ];
+    e8ChordUniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
+    metrics.e8ChordWebglInitCount++;
+    metrics.lastE8ChordWebglInitMs = performance.now();
+    metrics.lastE8ChordVertexCount = e8ChordVertexCount;
+    metrics.lastE8ChordRenderer = 'webgl-lines';
+    return true;
+  } catch (error) {
+    e8ChordWebglUnavailable = true;
+    metrics.e8ChordWebglFallbackCount++;
+    metrics.lastE8ChordWebglError = error?.message || String(error);
+    metrics.lastE8ChordRenderer = 'canvas-fallback';
+    e8ChordGl = null;
+    resetE8ChordWebglResources();
+    setE8ChordCanvasActive(false);
+    return false;
+  }
+}
+
+function drawE8ChordWebglField(layout, paletteSet) {
+  if (!ensureE8ChordWebgl()) return null;
+  try {
+    const started = performance.now();
+    const gl = e8ChordGl;
+    if (e8ChordCanvas.width !== canvas.width || e8ChordCanvas.height !== canvas.height) {
+      e8ChordCanvas.width = canvas.width;
+      e8ChordCanvas.height = canvas.height;
+    }
+    e8ChordCanvas.style.width = `${canvasCssWidth}px`;
+    e8ChordCanvas.style.height = `${canvasCssHeight}px`;
+    gl.viewport(0, 0, e8ChordCanvas.width, e8ChordCanvas.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(e8ChordProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, e8ChordBuffer);
+    const stride = E8_CHORD_VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+    gl.enableVertexAttribArray(e8ChordAttributes.root);
+    gl.vertexAttribPointer(e8ChordAttributes.root, 3, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(e8ChordAttributes.style);
+    gl.vertexAttribPointer(e8ChordAttributes.style, 4, gl.FLOAT, false, stride, 3 * Float32Array.BYTES_PER_ELEMENT);
+
+    const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+    const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+    const pathZoom = state.cameraPath === 'dive' && state.autoRotate
+      ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+      : 1;
+    gl.uniform2f(e8ChordUniforms.uResolution, window.innerWidth, window.innerHeight);
+    gl.uniform2f(e8ChordUniforms.uOrigin, layout.cx + state.panX, layout.cy + state.panY);
+    gl.uniform1f(e8ChordUniforms.uScale, layout.scale);
+    gl.uniform1f(e8ChordUniforms.uRotation, state.rotation);
+    gl.uniform1f(e8ChordUniforms.uPitch, pitch);
+    gl.uniform1f(e8ChordUniforms.uPathZoom, pathZoom);
+    gl.uniform1f(e8ChordUniforms.uExtrude, state.e8MorphT);
+    gl.uniform1f(e8ChordUniforms.uRipple, state.fxMode === 'ripple' ? 1 : 0);
+    gl.uniform1f(e8ChordUniforms.uRipplePhase, ripplePhaseAngle());
+    gl.uniform1f(e8ChordUniforms.uAlphaBoost, e8ChordAlphaBoost());
+    gl.uniform1f(e8ChordUniforms.uColorLift, e8ChordColorLift());
+    gl.uniform1f(e8ChordUniforms.uFxMode, MOBILE_FX_MODE_INDEX[state.fxMode] || 0);
+    gl.uniform1f(e8ChordUniforms.uFxStrength, state.fxStrength);
+    gl.uniform1f(e8ChordUniforms.uFxPhase, stylePhase * TAU);
+    gl.uniform1f(e8ChordUniforms.uFxColorMix, e8ChordFxColorMix());
+    for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
+      const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
+      gl.uniform3f(
+        e8ChordUniforms[`uPalette${paletteIndex}`],
+        channels[0] / 255,
+        channels[1] / 255,
+        channels[2] / 255,
+      );
+    }
+    const lineRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) || [1, 1];
+    gl.lineWidth(clamp(0.62 * renderScale(), lineRange[0], lineRange[1]));
+    gl.drawArrays(gl.LINES, 0, e8ChordVertexCount);
+    setE8ChordCanvasActive(true);
+
+    const classCounts = e8ChordClasses.map(edges => edges.length);
+    const classes = classCounts.filter(Boolean).length;
+    const ripple = state.fxMode === 'ripple';
+    metrics.e8ChordWebglDrawCount++;
+    metrics.lastE8ChordWebglDrawMs = performance.now() - started;
+    metrics.lastE8ChordRenderer = 'webgl-lines';
+    return {
+      segments: e8ChordEdges.length,
+      strokes: classes,
+      classes,
+      classCounts,
+      colorBands: ripple ? RIPPLE_COLOR_BANDS : classes,
+      brightnessBands: ripple ? RIPPLE_BRIGHTNESS_BANDS : 1,
+      ripple,
+      renderer: 'webgl-lines',
+      gpuDrawCalls: 1,
+      vertices: e8ChordVertexCount,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
+    };
+  } catch (error) {
+    e8ChordWebglUnavailable = true;
+    metrics.e8ChordWebglFallbackCount++;
+    metrics.lastE8ChordWebglError = error?.message || String(error);
+    metrics.lastE8ChordRenderer = 'canvas-fallback';
+    e8ChordGl = null;
+    resetE8ChordWebglResources();
+    setE8ChordCanvasActive(false);
+    return null;
+  }
+}
+
 function preparePoints() {
   const proj = data.e8.proj2d;
   const roots = data.e8.roots8d || [];
-  platonicGeometry = data.platonic || {};
+  e8ChordClasses = buildMobileE8ChordTopology(roots);
+  e8ChordEdges = e8ChordClasses.flat();
+  metrics.e8ChordEdgeCount = e8ChordEdges.length;
+  metrics.e8ChordClassCounts = e8ChordClasses.map(edges => edges.length);
+  metrics.e8ChordClassCount = e8ChordClasses.filter(edges => edges.length).length;
+  const e8ChordDegrees = Array.from({ length: roots.length }, () => 0);
+  for (const [a, b] of e8ChordEdges) {
+    e8ChordDegrees[a]++;
+    e8ChordDegrees[b]++;
+  }
+  metrics.e8ChordDegreeMin = e8ChordDegrees.length ? Math.min(...e8ChordDegrees) : 0;
+  metrics.e8ChordDegreeMax = e8ChordDegrees.length ? Math.max(...e8ChordDegrees) : 0;
+  platonicGeometry = { ...(data.platonic || {}), ...(data.stellations || {}) };
   platonicFaceCache = new Map();
   polytope4DGeometry = data.polytopes4d || {};
+  const cell600 = polytope4DGeometry['600cell'];
+  const classes600 = Array.isArray(cell600?.conjugacy_classes) ? cell600.conjugacy_classes : [];
+  const byClass600 = Array.from({ length: 9 }, () => []);
+  for (let index = 0; index < (cell600?.verts?.length || 0); index++) {
+    const classIndex = clamp(Number(classes600[index]) || 0, 0, byClass600.length - 1);
+    byClass600[classIndex].push(index);
+  }
+  bloomOrder600 = byClass600.flat();
+  if (bloomOrder600.length !== 120) bloomOrder600 = Array.from({ length: cell600?.verts?.length || 0 }, (_, index) => index);
   dynkinGeometry = data.dynkin || {};
   mckayInfo = data.mckay || {};
   const ringRadii = data.e8.ring_radii || [];
@@ -3968,8 +5248,11 @@ function preparePoints() {
       r: p.r,
       ring: p.ring,
       norm,
-      baseSize: 3.4 + (1 - norm) * 5.2,
-      baseFillSlot: p.ring / ringBucketCount < 0.5 ? 0 : 1,
+      // Keep the dense inner Coxeter rings legible on a narrow screen. The
+      // former inverse-radius sizing made inner roots almost three times the
+      // diameter of outer roots, merging the centre into a bright disc.
+      baseSize: 1.9 + norm * 1.15,
+      baseFillSlot: Math.min(BASE_POINT_BUCKET_COUNT - 1, Math.floor((p.ring / ringBucketCount) * BASE_POINT_BUCKET_COUNT)),
       drawMask: 0,
       sx: 0,
       sy: 0,
@@ -4072,11 +5355,20 @@ function render() {
   try {
     const t0 = performance.now();
     resizeCanvas();
+    setSdfCanvasActive(state.modelMode === 'sdf');
+    setE8ChordCanvasActive(false);
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#07070c';
-    ctx.fillRect(0, 0, w, h);
+    backgroundCtx.clearRect(0, 0, w, h);
+    const foregroundCtx = ctx;
+    ctx = backgroundCtx;
+    let backgroundStats;
+    try {
+      backgroundStats = drawMobileBackground(w, h);
+    } finally {
+      ctx = foregroundCtx;
+    }
 
     const layout = layoutForCanvas();
     const paletteSet = activePaletteSet();
@@ -4126,6 +5418,9 @@ function render() {
       mirrorStrokes: 0,
       petrieSegments: 0,
       petrieStrokes: 0,
+      backgroundMode: backgroundStats.mode,
+      backgroundRenderer: backgroundStats.renderer,
+      backgroundPrimitives: backgroundStats.primitives,
       modelMode: state.modelMode,
       modelLabel: MODEL_LABELS[state.modelMode] || MODEL_LABELS.e8_2d,
       shape: state.shape,
@@ -4136,14 +5431,44 @@ function render() {
       dynkinLabel: DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram,
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
+      autoFx: state.autoFx,
       softFx: state.softFx,
+      fxMode: state.fxMode,
       stylePhase,
       modelVertices: 0,
       modelProjectedVertices: 0,
       modelEdges: 0,
       modelEdgeStrokes: 0,
+      e8ChordEdges: 0,
+      e8ChordEdgeStrokes: 0,
+      e8ChordClassCount: 0,
+      e8ChordClassCounts: [],
+      e8ChordRenderer: 'none',
+      e8ChordGpuDrawCalls: 0,
+      e8ChordGpuVertices: 0,
+      e8ChordAlphaBoost: 1,
+      e8ChordColorLift: 0,
+      e8ChordFxColorMix: 0,
+      e8EdgesSkippedForInteraction: 0,
+      ripplePointCount: 0,
+      rippleEdgeSegments: 0,
+      rippleEdgeStrokes: 0,
+      rippleColorBands: 0,
+      rippleBrightnessBands: 0,
+      nativeFxApplied: false,
+      nativeFxPrimitives: 0,
+      nativeFxRenderer: null,
+      canvasFxPassApplied: false,
+      canvasFxPassPrimitives: 0,
+      canvasFxPassRenderer: null,
       modelFaces: 0,
       modelFaceFills: 0,
+      modelVertexFills: 0,
+      minPointRadius: null,
+      maxPointRadius: null,
+      sdfRasterSize: 0,
+      sdfPixels: 0,
+      sdfSpheres: 0,
     };
 
     if (state.modelMode === 'platonic') {
@@ -4164,10 +5489,16 @@ function render() {
       return;
     }
 
-    if (state.modelMode === 'e8_3d') {
-      projectE83DIntoCache(layout, drawStats);
-      const projectedAllFrame = projectedPointFrameMetrics(allRootList);
-      drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
+    if (state.modelMode === 'bloom') {
+      const visibleBloomPoints = projectBloomIntoCache(layout, drawStats);
+      const projectedAllFrame = projectedPointFrameMetrics(visibleBloomPoints);
+      drawBloomModel(layout, paletteSet, subset, visibleContext, drawStats, interactionLiteFrame);
+      completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
+      return;
+    }
+
+    if (state.modelMode === 'sdf') {
+      const projectedAllFrame = drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -4186,6 +5517,33 @@ function render() {
 
     projectPointsIntoCache(layout, drawStats);
     const projectedAllFrame = projectedPointFrameMetrics(allRootList);
+
+    if (state.showEdges) {
+      let edgeStats = drawE8ChordWebglField(layout, paletteSet);
+      if (!edgeStats && !interactionLiteFrame) {
+        edgeStats = drawDesktopE8ChordField(points, e8ChordClasses, layout, paletteSet);
+        edgeStats.renderer = 'canvas-fallback';
+        edgeStats.gpuDrawCalls = 0;
+        edgeStats.vertices = 0;
+      }
+      if (edgeStats) {
+      drawStats.e8ChordEdges = edgeStats.segments;
+      drawStats.e8ChordEdgeStrokes = edgeStats.strokes;
+      drawStats.e8ChordClassCount = edgeStats.classes;
+      drawStats.e8ChordClassCounts = edgeStats.classCounts;
+      drawStats.e8ChordRenderer = edgeStats.renderer;
+      drawStats.e8ChordGpuDrawCalls = edgeStats.gpuDrawCalls;
+      drawStats.e8ChordGpuVertices = edgeStats.vertices;
+      drawStats.e8ChordAlphaBoost = edgeStats.alphaBoost;
+      drawStats.e8ChordColorLift = edgeStats.colorLift;
+      drawStats.e8ChordFxColorMix = edgeStats.fxColorMix;
+      drawStats.modelEdges += edgeStats.segments;
+      drawStats.modelEdgeStrokes += edgeStats.strokes;
+      recordRippleEdgeStats(drawStats, edgeStats);
+      } else {
+        drawStats.e8EdgesSkippedForInteraction = e8ChordEdges.length;
+      }
+    }
 
     if (state.showMirrors) {
       const mirrorStats = drawMirrorLines(layout, paletteSet);
@@ -4259,13 +5617,462 @@ function render() {
   }
 }
 
+function ensureCanvasFxBuffers() {
+  if (!fxSourceCanvas) {
+    fxSourceCanvas = document.createElement('canvas');
+    fxSourceContext = fxSourceCanvas.getContext('2d', { alpha: true });
+    fxTintCanvas = document.createElement('canvas');
+    fxTintContext = fxTintCanvas.getContext('2d', { alpha: true });
+  }
+  if (!fxSourceContext || !fxTintContext) return false;
+  if (fxSourceCanvas.width !== canvas.width || fxSourceCanvas.height !== canvas.height) {
+    fxSourceCanvas.width = canvas.width;
+    fxSourceCanvas.height = canvas.height;
+    fxTintCanvas.width = canvas.width;
+    fxTintCanvas.height = canvas.height;
+  }
+  return true;
+}
+
+function captureCanvasFxSource() {
+  if (!ensureCanvasFxBuffers()) return false;
+  fxSourceContext.setTransform(1, 0, 0, 1, 0, 0);
+  fxSourceContext.globalAlpha = 1;
+  fxSourceContext.globalCompositeOperation = 'source-over';
+  fxSourceContext.filter = 'none';
+  fxSourceContext.clearRect(0, 0, fxSourceCanvas.width, fxSourceCanvas.height);
+  // GPU E8 chords carry their FX directly in the vertex shader, just like
+  // Ripple. Keep them out of the root compositor so their color is not
+  // attenuated by several full-screen Canvas passes.
+  fxSourceContext.drawImage(canvas, 0, 0);
+  return true;
+}
+
+function tintCanvasFxSource(color) {
+  fxTintContext.setTransform(1, 0, 0, 1, 0, 0);
+  fxTintContext.globalAlpha = 1;
+  fxTintContext.globalCompositeOperation = 'source-over';
+  fxTintContext.filter = 'none';
+  fxTintContext.clearRect(0, 0, fxTintCanvas.width, fxTintCanvas.height);
+  fxTintContext.drawImage(fxSourceCanvas, 0, 0);
+  fxTintContext.globalCompositeOperation = 'source-in';
+  fxTintContext.fillStyle = color;
+  fxTintContext.fillRect(0, 0, fxTintCanvas.width, fxTintCanvas.height);
+  fxTintContext.globalCompositeOperation = 'source-over';
+  return fxTintCanvas;
+}
+
+function drawCanvasFxImage(source, width, height, options = {}) {
+  const cx = options.cx ?? width * 0.5;
+  const cy = options.cy ?? height * 0.5;
+  ctx.save();
+  ctx.globalAlpha = options.alpha ?? 1;
+  ctx.globalCompositeOperation = options.composite || 'source-over';
+  ctx.filter = options.filter || 'none';
+  ctx.translate(cx + (options.dx || 0), cy + (options.dy || 0));
+  if (options.rotation) ctx.rotate(options.rotation);
+  const scaleX = options.scaleX ?? options.scale ?? 1;
+  const scaleY = options.scaleY ?? options.scale ?? 1;
+  ctx.scale(scaleX, scaleY);
+  ctx.translate(-cx, -cy);
+  ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, width, height);
+  ctx.restore();
+}
+
+function clipCanvasFxWedge(cx, cy, radius, start, end) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(start) * radius, cy + Math.sin(start) * radius);
+  ctx.arc(cx, cy, radius, start, end);
+  ctx.closePath();
+  ctx.clip();
+}
+
+function drawCanvasKaleidoscope(width, height, cx, cy, segments, phase, strength) {
+  const wedge = TAU / segments;
+  const radius = Math.hypot(width, height) * 1.15;
+  for (let index = 0; index < segments; index++) {
+    const start = index * wedge - Math.PI * 0.5;
+    ctx.save();
+    clipCanvasFxWedge(cx, cy, radius, start, start + wedge + 0.002);
+    ctx.translate(cx, cy);
+    ctx.rotate(index * wedge + phase * 0.035);
+    if (index % 2) ctx.scale(-1, 1);
+    ctx.rotate(-index * wedge);
+    ctx.translate(-cx, -cy);
+    ctx.globalAlpha = 0.72 + strength * 0.16;
+    ctx.globalCompositeOperation = index % 3 === 0 ? 'lighter' : 'source-over';
+    ctx.drawImage(fxSourceCanvas, 0, 0, fxSourceCanvas.width, fxSourceCanvas.height, 0, 0, width, height);
+    ctx.restore();
+  }
+  return segments;
+}
+
+function applyNativeCanvasFx(width, height, interactionLiteFrame = false) {
+  const mode = state.fxMode;
+  if (mode === 'none' || mode === 'ripple' || state.modelMode === 'sdf' || interactionLiteFrame) {
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : mode === 'ripple' ? 'geometry-ripple' : 'skipped' };
+  }
+  if (!captureCanvasFxSource()) return { applied: false, primitives: 0, renderer: 'unavailable' };
+
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  const layout = layoutForCanvas();
+  const cx = layout.cx + state.panX;
+  const cy = layout.cy + state.panY;
+  const phase = stylePhase * TAU;
+  const pulse = 0.5 + 0.5 * Math.sin(phase * 0.72);
+  const clear = () => ctx.clearRect(0, 0, width, height);
+  const drawOriginal = (options = {}) => drawCanvasFxImage(fxSourceCanvas, width, height, { cx, cy, ...options });
+  let primitives = 0;
+
+  clear();
+  if (mode === 'glow') {
+    drawOriginal({ alpha: 0.5 + strength * 0.14, composite: 'lighter', filter: `blur(${3 + strength * 3}px) brightness(1.8)` });
+    drawOriginal({ alpha: 0.34, composite: 'lighter', scale: 1.008 + strength * 0.006 });
+    drawOriginal();
+    primitives = 3;
+  } else if (mode === 'pulse') {
+    const scale = 0.94 + pulse * (0.07 + strength * 0.035);
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${2 + pulse * 3}px)`, scale: scale * 1.012 });
+    drawOriginal({ scale });
+    primitives = 2;
+  } else if (mode === 'trail') {
+    const drift = 4 + strength * 5;
+    const angle = phase * 0.16;
+    const colors = ['#ff4da6', '#7b5cff', '#4dffff'];
+    for (let index = colors.length - 1; index >= 0; index--) {
+      const distance = drift * (index + 1);
+      const source = tintCanvasFxSource(colors[index]);
+      drawCanvasFxImage(source, width, height, {
+        cx, cy,
+        dx: Math.cos(angle) * distance,
+        dy: Math.sin(angle) * distance,
+        rotation: (index + 1) * 0.004,
+        alpha: 0.18 + (colors.length - index) * 0.035,
+        composite: 'lighter',
+      });
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.88 });
+    primitives++;
+  } else if (mode === 'chromatic') {
+    const fringe = 2.5 + strength * 3.5 + pulse * 1.5;
+    const red = tintCanvasFxSource('#ff2c7d');
+    drawCanvasFxImage(red, width, height, { cx, cy, dx: fringe, alpha: 0.58, composite: 'lighter' });
+    const cyan = tintCanvasFxSource('#28e6ff');
+    drawCanvasFxImage(cyan, width, height, { cx, cy, dx: -fringe, alpha: 0.58, composite: 'lighter' });
+    drawOriginal({ alpha: 0.7 });
+    primitives = 3;
+  } else if (mode === 'kaleidoscope') {
+    primitives = drawCanvasKaleidoscope(width, height, cx, cy, 10, phase, strength);
+  } else if (mode === 'spiral') {
+    const maxRadius = Math.hypot(width, height) * 0.72;
+    const rings = 9;
+    for (let index = rings - 1; index >= 0; index--) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxRadius * (index + 1) / rings, 0, TAU);
+      ctx.clip();
+      drawOriginal({ rotation: (index - rings * 0.5) * (0.025 + strength * 0.012) + phase * 0.012, alpha: 0.78 + index / rings * 0.2 });
+      ctx.restore();
+      primitives++;
+    }
+  } else if (mode === 'fog') {
+    drawOriginal({ alpha: 0.42 + strength * 0.08, filter: `blur(${1.2 + strength}px)` });
+    drawOriginal({ alpha: 0.55 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const fog = ctx.createRadialGradient(cx, cy, layout.size * 0.08, cx, cy, layout.size * 0.68);
+    fog.addColorStop(0, 'rgba(230,242,255,0.02)');
+    fog.addColorStop(0.58, `rgba(180,210,235,${0.12 + strength * 0.08})`);
+    fog.addColorStop(1, `rgba(75,92,118,${0.42 + strength * 0.14})`);
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    primitives = 3;
+  } else if (mode === 'heat') {
+    drawOriginal({ alpha: 0.38 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const heat = ctx.createRadialGradient(cx, cy, 0, cx, cy, layout.size * 0.72);
+    heat.addColorStop(0, '#fff26b');
+    heat.addColorStop(0.38, '#ff8a24');
+    heat.addColorStop(0.72, '#ff214d');
+    heat.addColorStop(1, '#4b1dff');
+    ctx.globalAlpha = 0.62 + strength * 0.18;
+    ctx.fillStyle = heat;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.24, composite: 'lighter', filter: `blur(${1.5 + strength}px)` });
+    primitives = 3;
+  } else if (mode === 'edge-glow') {
+    const white = tintCanvasFxSource('#f6ffff');
+    drawCanvasFxImage(white, width, height, { cx, cy, alpha: 0.7, composite: 'lighter', filter: `blur(${1 + strength}px)` });
+    drawOriginal({ alpha: 0.66, filter: 'contrast(1.75) brightness(1.12)' });
+    drawOriginal({ alpha: 0.34, composite: 'lighter', scale: 1.006 });
+    primitives = 3;
+  } else if (mode === 'aura') {
+    const auraA = tintCanvasFxSource('#63f6ff');
+    drawCanvasFxImage(auraA, width, height, { cx, cy, alpha: 0.4, composite: 'lighter', filter: `blur(${5 + strength * 4}px)`, scale: 1.018 + pulse * 0.015 });
+    const auraB = tintCanvasFxSource('#a75cff');
+    drawCanvasFxImage(auraB, width, height, { cx, cy, alpha: 0.28, composite: 'lighter', filter: `blur(${10 + strength * 5}px)`, scale: 1.035 + pulse * 0.02 });
+    drawOriginal({ alpha: 0.88 });
+    primitives = 3;
+  } else if (mode === 'voronoi') {
+    drawOriginal({ alpha: 0.72, filter: 'contrast(1.35) saturate(1.2)' });
+    const cool = tintCanvasFxSource('#72ffe3');
+    drawCanvasFxImage(cool, width, height, { cx, cy, dx: 1.5, dy: -1.5, alpha: 0.24, composite: 'lighter' });
+    primitives = 2;
+  } else if (mode === 'caustic') {
+    drawOriginal({ alpha: 0.72, filter: 'contrast(1.2) saturate(1.18)' });
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${1.4 + pulse * 1.4}px)`, scale: 1.004 + pulse * 0.01 });
+    primitives = 2;
+  } else if (mode === 'iridescent') {
+    drawOriginal({ alpha: 0.42 });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = 0.75;
+    const iridescence = typeof ctx.createConicGradient === 'function'
+      ? ctx.createConicGradient(phase * 0.035, cx, cy)
+      : ctx.createLinearGradient(cx - layout.size * 0.5, cy - layout.size * 0.5, cx + layout.size * 0.5, cy + layout.size * 0.5);
+    iridescence.addColorStop(0, '#ff52a8');
+    iridescence.addColorStop(0.25, '#64ffff');
+    iridescence.addColorStop(0.5, '#ffe36e');
+    iridescence.addColorStop(0.75, '#8f5cff');
+    iridescence.addColorStop(1, '#ff52a8');
+    ctx.fillStyle = iridescence;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.22, composite: 'lighter', scale: 1.006 });
+    primitives = 3;
+  } else if (mode === 'flowfield') {
+    const slices = 24;
+    for (let index = 0; index < slices; index++) {
+      const sourceY = Math.round(index * fxSourceCanvas.height / slices);
+      const sourceY2 = Math.round((index + 1) * fxSourceCanvas.height / slices);
+      const destY = index * height / slices;
+      const destH = height / slices + 0.5;
+      const offset = Math.sin(index * 0.86 + phase * 0.2) * (3 + strength * 6);
+      ctx.drawImage(fxSourceCanvas, 0, sourceY, fxSourceCanvas.width, Math.max(1, sourceY2 - sourceY), offset, destY, width, destH);
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.22, composite: 'lighter' });
+    primitives++;
+  } else if (mode === 'plasma') {
+    drawOriginal({ alpha: 0.34, filter: 'contrast(1.24) saturate(1.5)' });
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = 0.72;
+    const plasma = ctx.createLinearGradient(0, cy - layout.size * 0.6, width, cy + layout.size * 0.6);
+    const shift = (stylePhase * 0.08) % 1;
+    plasma.addColorStop(0, shift > 0.5 ? '#00f6ff' : '#ff2bd6');
+    plasma.addColorStop(0.33, '#754dff');
+    plasma.addColorStop(0.66, '#ff6a24');
+    plasma.addColorStop(1, shift > 0.5 ? '#ff2bd6' : '#00f6ff');
+    ctx.fillStyle = plasma;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    drawOriginal({ alpha: 0.32, composite: 'lighter', filter: `blur(${1 + pulse}px)` });
+    primitives = 3;
+  } else if (mode === 'kaleido6') {
+    primitives = drawCanvasKaleidoscope(width, height, cx, cy, 6, phase * 1.25, strength);
+  } else if (mode === 'dof') {
+    drawOriginal({ alpha: 0.76, filter: `blur(${2.4 + strength * 2.2}px) brightness(0.82)` });
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, layout.size * 0.28, 0, TAU);
+    ctx.clip();
+    drawOriginal({ alpha: 1, filter: 'contrast(1.08)' });
+    ctx.restore();
+    drawOriginal({ alpha: 0.18, composite: 'lighter', filter: 'blur(7px)' });
+    primitives = 3;
+  } else if (mode === 'nebula') {
+    const violet = tintCanvasFxSource('#9b63ff');
+    drawCanvasFxImage(violet, width, height, { cx, cy, alpha: 0.32, composite: 'lighter', filter: `blur(${5 + pulse * 4}px)`, scale: 1.02 });
+    drawOriginal({ alpha: 0.76, filter: 'saturate(1.22)' });
+    primitives = 2;
+  } else if (mode === 'wireframe') {
+    const wire = tintCanvasFxSource('#8fffee');
+    drawCanvasFxImage(wire, width, height, { cx, cy, alpha: 0.88, composite: 'lighter', filter: 'contrast(1.8)' });
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    drawOriginal({ alpha: 0.58, scale: 0.982 });
+    ctx.restore();
+    drawOriginal({ alpha: 0.28, filter: 'grayscale(1) contrast(1.55)' });
+    primitives = 3;
+  } else if (mode === 'hologram') {
+    const hologram = tintCanvasFxSource('#55eaff');
+    drawCanvasFxImage(hologram, width, height, { cx, cy, alpha: 0.82, composite: 'lighter', filter: `blur(${0.6 + pulse}px)` });
+    drawOriginal({ alpha: 0.34 });
+    primitives = 2;
+  } else if (mode === 'xray') {
+    const xray = tintCanvasFxSource('#78fff0');
+    drawCanvasFxImage(xray, width, height, { cx, cy, alpha: 0.44, composite: 'lighter', filter: `blur(${2 + strength * 2}px)` });
+    drawCanvasFxImage(xray, width, height, { cx, cy, alpha: 0.9, filter: 'contrast(1.7) brightness(0.82)' });
+    drawOriginal({ alpha: 0.16, composite: 'lighter' });
+    primitives = 3;
+  } else if (mode === 'crystal') {
+    const segments = 12;
+    const radius = Math.hypot(width, height);
+    const colors = ['#77edff', '#a978ff', '#ff73ba', '#ffe47d'];
+    for (let index = 0; index < segments; index++) {
+      const angle = index * TAU / segments - Math.PI * 0.5;
+      const crystal = tintCanvasFxSource(colors[index % colors.length]);
+      ctx.save();
+      clipCanvasFxWedge(cx, cy, radius, angle, angle + TAU / segments + 0.002);
+      drawCanvasFxImage(crystal, width, height, {
+        cx, cy,
+        rotation: Math.sin(phase * 0.09 + index) * 0.008,
+        alpha: 0.64,
+        composite: 'lighter',
+      });
+      ctx.restore();
+      primitives++;
+    }
+    drawOriginal({ alpha: 0.5, filter: 'contrast(1.28)' });
+    primitives++;
+  } else {
+    drawOriginal();
+    return { applied: false, primitives: 1, renderer: 'fallback' };
+  }
+
+  return { applied: primitives > 0, primitives, renderer: `canvas-composite-${mode}` };
+}
+
+function drawForegroundFxOverlay(width, height, interactionLiteFrame = false) {
+  const mode = state.fxMode;
+  if (mode === 'none' || state.modelMode === 'sdf' || interactionLiteFrame) {
+    return { applied: false, primitives: 0, renderer: mode === 'none' ? 'none' : 'skipped' };
+  }
+  if (!PATTERNED_CANVAS_FX.has(mode)) return { applied: false, primitives: 0, renderer: 'filter' };
+
+  const strength = clamp(state.fxStrength, 0.25, 1.5);
+  const cx = width * 0.5;
+  const cy = height * 0.46;
+  const phase = stylePhase * TAU;
+  let primitives = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.globalAlpha = clamp(0.1 + strength * 0.11, 0.12, 0.28);
+
+  if (mode === 'voronoi') {
+    ctx.strokeStyle = 'rgba(106,255,232,0.72)';
+    ctx.lineWidth = 1.15;
+    const cell = 54;
+    for (let y = -cell; y < height + cell; y += cell) {
+      for (let x = -cell; x < width + cell; x += cell) {
+        const row = Math.round(y / cell);
+        const jitter = Math.sin((x + y) * 0.031) * 9;
+        ctx.beginPath();
+        ctx.moveTo(x + jitter + (row % 2 ? cell * 0.5 : 0), y);
+        ctx.lineTo(x + cell * 0.52, y + cell * 0.48);
+        ctx.lineTo(x + jitter + (row % 2 ? cell * 0.5 : 0), y + cell);
+        ctx.stroke();
+        primitives++;
+      }
+    }
+  } else if (mode === 'caustic' || mode === 'nebula' || mode === 'plasma') {
+    const centers = mode === 'caustic'
+      ? [[0.28, 0.34, '#6affe8'], [0.7, 0.62, '#f4d27a'], [0.52, 0.46, '#9b4dff']]
+      : mode === 'nebula'
+        ? [[0.25, 0.42, '#9b4dff'], [0.72, 0.5, '#4dffff'], [0.5, 0.7, '#ff6b9d']]
+        : [[0.22, 0.3, '#ff00d4'], [0.76, 0.66, '#00ffea'], [0.52, 0.48, '#9b4dff']];
+    for (let index = 0; index < centers.length; index++) {
+      const [px, py, color] = centers[index];
+      const driftX = Math.sin(phase * 0.18 + index * 2.1) * width * 0.05;
+      const driftY = Math.cos(phase * 0.16 + index * 1.7) * height * 0.04;
+      const gradient = ctx.createRadialGradient(width * px + driftX, height * py + driftY, 0, width * px + driftX, height * py + driftY, Math.max(width, height) * 0.42);
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      primitives++;
+    }
+  } else if (mode === 'flowfield') {
+    ctx.strokeStyle = 'rgba(106,255,232,0.78)';
+    ctx.lineWidth = 1.5;
+    for (let y = -30; y < height + 30; y += 28) {
+      ctx.beginPath();
+      for (let x = -30; x < width + 30; x += 18) {
+        const waveY = y + Math.sin(x * 0.025 + phase * 0.24 + y * 0.01) * 14;
+        if (x < -20) ctx.moveTo(x, waveY);
+        else ctx.lineTo(x, waveY);
+      }
+      ctx.stroke();
+      primitives++;
+    }
+  } else if (mode === 'hologram') {
+    ctx.fillStyle = 'rgba(106,255,232,0.76)';
+    for (let y = (stylePhase * 18) % 6; y < height; y += 6) {
+      ctx.fillRect(0, y, width, 1);
+      primitives++;
+    }
+  } else if (mode === 'iridescent') {
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, '#ff6b9d');
+    gradient.addColorStop(0.33, '#6affe8');
+    gradient.addColorStop(0.66, '#f4d27a');
+    gradient.addColorStop(1, '#9b4dff');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    primitives++;
+  } else {
+    const spokes = mode === 'kaleido6' ? 6 : mode === 'kaleidoscope' ? 12 : 18;
+    ctx.strokeStyle = mode === 'spiral' ? 'rgba(244,210,122,0.76)' : 'rgba(106,255,232,0.72)';
+    ctx.lineWidth = 2;
+    const maxRadius = Math.hypot(width, height);
+    for (let index = 0; index < spokes; index++) {
+      const angle = phase * 0.035 + index * TAU / spokes;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.quadraticCurveTo(
+        cx + Math.cos(angle + 0.72) * maxRadius * 0.32,
+        cy + Math.sin(angle + 0.72) * maxRadius * 0.32,
+        cx + Math.cos(angle) * maxRadius,
+        cy + Math.sin(angle) * maxRadius,
+      );
+      ctx.stroke();
+      primitives++;
+    }
+  }
+
+  ctx.restore();
+  return { applied: primitives > 0, primitives, renderer: 'foreground-mask' };
+}
+
 function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) {
+  const canvasFxPass = applyNativeCanvasFx(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
+  // All GPU chord treatments remain a direct layer. This gives every FX the
+  // same full-strength color path that made Ripple successful.
+  setE8ChordCanvasComposited(false);
+  drawStats.canvasFxPassApplied = canvasFxPass.applied;
+  drawStats.canvasFxPassPrimitives = canvasFxPass.primitives;
+  drawStats.canvasFxPassRenderer = canvasFxPass.renderer;
+  if (canvasFxPass.applied) {
+    drawStats.nativeFxApplied = true;
+    drawStats.nativeFxPrimitives += canvasFxPass.primitives;
+    drawStats.nativeFxRenderer = canvasFxPass.renderer;
+  }
+  const fxOverlay = drawForegroundFxOverlay(window.innerWidth, window.innerHeight, drawStats.interactionLiteFrame);
+  drawStats.fxOverlayApplied = fxOverlay.applied;
+  drawStats.fxOverlayPrimitives = fxOverlay.primitives;
+  drawStats.fxRenderer = state.modelMode === 'sdf'
+    ? 'sdf-shader'
+    : drawStats.nativeFxApplied
+      ? drawStats.nativeFxRenderer
+      : fxOverlay.renderer;
   metrics.renderCount++;
   metrics.lastDrawStats = drawStats;
   metrics.lastRenderAllFrame = projectedAllFrame;
   metrics.lastRenderFrameSource = state.modelMode === 'e8_2d' ? 'projected-points' : state.modelMode;
   metrics.renderFrameReuseCount++;
-  metrics.lastProjectionSource = state.modelMode === 'e8_2d' ? 'direct-point-fields' : 'model-projection';
+  metrics.lastProjectionSource = state.modelMode === 'e8_2d'
+    ? 'direct-point-fields'
+    : state.modelMode === 'bloom'
+      ? 'bloom-depth-points'
+      : state.modelMode === 'sdf'
+        ? (drawStats.sdfRenderer === 'webgl-raymarch' ? 'sdf-webgl-raymarch' : 'sdf-raster-fallback')
+        : 'model-projection';
   metrics.lastProjectionCount = drawStats.projectedPoints || drawStats.modelProjectedVertices || 0;
   metrics.lastAllFrameWithinView = !!projectedAllFrame?.withinView;
   metrics.lastModelMode = state.modelMode;
@@ -4283,8 +6090,13 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.modelProjectedVertices = drawStats.modelProjectedVertices || 0;
   metrics.modelEdgeStrokes = drawStats.modelEdgeStrokes || 0;
   metrics.modelFaceFills = drawStats.modelFaceFills || 0;
+  metrics.modelVertexFills = drawStats.modelVertexFills || 0;
   if (state.modelMode !== 'e8_2d') metrics.modelRenderCount++;
-  if (state.modelMode === 'e8_3d') metrics.e8Projection3DCount++;
+  if (state.modelMode === 'bloom') {
+    metrics.e8Projection3DCount++;
+    metrics.bloomDrawCount++;
+  }
+  if (state.modelMode === 'sdf') metrics.sdfDrawCount++;
   if (state.modelMode === 'platonic') metrics.platonicDrawCount++;
   if (state.modelMode === 'poly4d') metrics.polytope4DDrawCount++;
   if (state.modelMode === 'dynkin') metrics.dynkinDrawCount++;
@@ -4310,20 +6122,54 @@ function projectPointsIntoCache(layout, drawStats) {
   const originY = layout.cy + state.panY;
   const scale = layout.scale;
   const pointScale = state.pointScale;
+  const extrude = state.e8MorphT;
   for (const p of points) {
     const x = p.x * cos - p.y * sin;
     const y = p.x * sin + p.y * cos;
-    p.sx = originX + x * scale;
-    p.sy = originY + y * scale;
-    p.size = p.baseSize * pointScale;
+    const flatX = originX + x * scale;
+    const flatY = originY + y * scale;
+    let depthSize = 1;
+    if (extrude > 0.0001) {
+      // Match the desktop Coxeter extrusion: outer rings travel farther in Z,
+      // then blend continuously from the canonical flat projection into the
+      // orbitable 3D field. Keeping the flat endpoint explicit avoids a jump
+      // when the slider or its Auto oscillator first leaves zero.
+      const projected = projectModelPoint(p.x, p.y, p.norm * 0.62, layout, 1, false);
+      p.sx = flatX + (projected.x - flatX) * extrude;
+      p.sy = flatY + (projected.y - flatY) * extrude;
+      p.depth = projected.z * extrude;
+      depthSize = 0.84 + projected.perspective * 0.16;
+      drawStats.projectionObjectAllocs++;
+    } else {
+      p.sx = flatX;
+      p.sy = flatY;
+      p.depth = 0;
+    }
+    const rippleScale = ripplePointScale(p.r);
+    p.size = p.baseSize * pointScale * depthSize * rippleScale;
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
+    drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
+    drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.baseSizeCacheHits++;
   }
+  drawStats.e8Extrude = extrude;
+  drawStats.e8ExtrudedPoints = extrude > 0.0001 ? points.length : 0;
 }
 
-function projectModelPoint(x, y, z, layout, modelScale = 1) {
+function projectModelPoint(x, y, z, layout, modelScale = 1, scaleExtrudeDepth = true) {
   const yaw = state.rotation;
-  const pitch = 0.68;
+  const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+  const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+  const pathZoom = state.cameraPath === 'dive' && state.autoRotate
+    ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+    : 1;
+  if (scaleExtrudeDepth) z *= 1 + state.e8MorphT * 0.75;
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   const cp = Math.cos(pitch);
@@ -4334,7 +6180,7 @@ function projectModelPoint(x, y, z, layout, modelScale = 1) {
   const rz2 = y * sp + rz * cp;
   const depth = rz2;
   const perspective = 4.2 / Math.max(1.8, 4.2 + depth);
-  const scale = layout.scale * modelScale * perspective;
+  const scale = layout.scale * modelScale * perspective * pathZoom;
   return {
     x: layout.cx + state.panX + rx * scale,
     y: layout.cy + state.panY + ry * scale,
@@ -4343,35 +6189,118 @@ function projectModelPoint(x, y, z, layout, modelScale = 1) {
   };
 }
 
-function e8ModelVector(index) {
-  const p = points[index];
-  const root = data.e8.roots8d?.[index] || [];
-  const z = (
-    (root[0] || 0) - (root[1] || 0) +
-    (root[2] || 0) - (root[3] || 0) +
-    (root[4] || 0) * 0.6 - (root[5] || 0) * 0.6 +
-    (root[6] || 0) * 0.35 - (root[7] || 0) * 0.35
-  ) / 2.4;
-  return { x: (p?.x || 0) * 0.92, y: (p?.y || 0) * 0.92, z };
-}
+function projectBloomIntoCache(layout, drawStats) {
+  const sourceName = data.platonic?.[state.shape] ? state.shape : 'icosahedron';
+  const sourceShape = data.platonic?.[sourceName] || data.platonic?.icosahedron;
+  const sourceVerts = normalizedPlatonicVerts(sourceShape);
+  const cell600 = polytope4DGeometry['600cell'];
+  const cellVerts = normalizedPolytope4DVerts(cell600);
+  const nSrc = sourceVerts.length;
+  const amount = clamp(state.bloomAmount, 0, 1);
+  const phaseMorph = Math.min(1, amount / 0.5);
+  const phaseGrow = clamp((amount - 0.1) / 0.4, 0, 1);
+  const phaseTwin = clamp((amount - 0.5) / 0.25, 0, 1);
+  const phase2D = clamp((amount - 0.75) / 0.25, 0, 1);
+  const n600ToShow = Math.floor(120 * phaseGrow);
+  const visibleIndices = [];
+  const modelScale = 1.07;
 
-function projectE83DIntoCache(layout, drawStats) {
-  const pointScale = state.pointScale;
   for (const p of points) {
-    const v = e8ModelVector(p.idx);
-    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.92);
+    p.bloomVisible = false;
+    p.bloomAlpha = 0;
+    p.bloomLayer = p.idx < 120 ? 0 : 1;
+  }
+
+  function place(index, x, y, z, baseSize, alpha = 1) {
+    const p = points[index];
+    if (!p) return;
+    p.bloomX = x;
+    p.bloomY = y;
+    p.bloomZ = z;
+    p.bloomBaseSize = baseSize;
+    p.bloomVisible = true;
+    p.bloomAlpha = alpha;
+    visibleIndices.push(index);
+  }
+
+  for (let index = 0; index < nSrc; index++) {
+    const src = sourceVerts[index];
+    const dst = cellVerts[bloomOrder600[index] ?? 0] || [0, 0, 0, 0];
+    place(
+      index,
+      src[0] * (1 - phaseMorph) + dst[0] * phaseMorph,
+      src[1] * (1 - phaseMorph) + dst[1] * phaseMorph,
+      src[2] * (1 - phaseMorph) + dst[2] * phaseMorph,
+      2.5,
+    );
+  }
+
+  for (let index = nSrc; index < n600ToShow && index < 120; index++) {
+    const v = cellVerts[bloomOrder600[index] ?? 0] || [0, 0, 0, 0];
+    place(index, v[0], v[1], v[2], 2.05);
+  }
+
+  if (phaseTwin > 0) {
+    const angle = Math.PI * 0.5 * phaseTwin;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const yShift = -((1 + Math.sqrt(5)) / 2) * 0.25 * phaseTwin;
+    for (let index = 0; index < 120; index++) {
+      const v = cellVerts[index] || [0, 0, 0, 0];
+      const y = v[1] * cos - v[2] * sin + yShift;
+      const z = v[1] * sin + v[2] * cos;
+      place(120 + index, v[0], y, z, 1.85 + phaseTwin * 0.25, 0.2 + phaseTwin * 0.8);
+    }
+  }
+
+  if (phase2D > 0) {
+    for (const index of visibleIndices) {
+      const p = points[index];
+      const target = data.e8.proj2d?.[index];
+      if (!target) continue;
+      p.bloomX = p.bloomX * (1 - phase2D) + target.x * 1.05 * phase2D;
+      p.bloomY = p.bloomY * (1 - phase2D) + target.y * 1.05 * phase2D;
+      p.bloomZ *= 1 - phase2D;
+      p.bloomBaseSize = p.bloomBaseSize * (1 - phase2D) + 2.35 * phase2D;
+    }
+  }
+
+  for (const index of visibleIndices) {
+    const p = points[index];
+    const projected = projectModelPoint(p.bloomX, p.bloomY, p.bloomZ, layout, modelScale);
     p.sx = projected.x;
     p.sy = projected.y;
     p.depth = projected.z;
-    p.size = Math.max(2.3, p.baseSize * pointScale * (0.72 + projected.perspective * 0.38));
+    const rippleScale = ripplePointScale(Math.hypot(p.bloomX, p.bloomY));
+    p.size = Math.max(1.35, p.bloomBaseSize * state.pointScale * (0.75 + projected.perspective * 0.34) * rippleScale);
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
+    drawStats.minPointRadius = drawStats.minPointRadius == null ? p.size : Math.min(drawStats.minPointRadius, p.size);
+    drawStats.maxPointRadius = drawStats.maxPointRadius == null ? p.size : Math.max(drawStats.maxPointRadius, p.size);
     drawStats.projectedPoints++;
     drawStats.modelProjectedVertices++;
     drawStats.baseSizeCacheHits++;
   }
+
+  drawStats.bloomAmount = amount;
+  drawStats.bloomPhase = bloomPhaseLabel(amount);
+  drawStats.bloomSource = sourceName;
+  drawStats.bloomSourceVertices = nSrc;
+  drawStats.bloomFirstCellPoints = visibleIndices.filter(index => index < 120).length;
+  drawStats.bloomTwinPoints = visibleIndices.filter(index => index >= 120).length;
+  drawStats.bloomVisiblePoints = visibleIndices.length;
+  drawStats.bloomPhaseMorph = phaseMorph;
+  drawStats.bloomPhaseTwin = phaseTwin;
+  drawStats.bloomPhase2D = phase2D;
+  return visibleIndices;
 }
 
-function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
-  if (visibleContext && !interactionLiteFrame) {
+function drawBloomModel(layout, paletteSet, subset, visibleContext, drawStats, interactionLiteFrame) {
+  if (visibleContext && state.bloomAmount >= 0.95 && !interactionLiteFrame) {
     const rayStats = drawNeighborRays(visibleContext, paletteSet);
     drawStats.rays = rayStats.rays;
     drawStats.rayStrokes = rayStats.strokes;
@@ -4380,7 +6309,72 @@ function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactio
   else if (visibleContext) {
     drawStats.raysSkippedForInteraction = visibleContext.neighborCount;
   }
-  const ordered = [...points].sort((a, b) => (a.depth || 0) - (b.depth || 0));
+
+  const sourceName = data.platonic?.[state.shape] ? state.shape : 'icosahedron';
+  const sourceShape = data.platonic?.[sourceName] || data.platonic?.icosahedron;
+  const phaseMorph = Math.min(1, state.bloomAmount / 0.5);
+  const phaseTwin = clamp((state.bloomAmount - 0.5) / 0.25, 0, 1);
+  const sourceEdgeAlpha = Math.max(0, 1 - phaseMorph * 1.2) * 0.82;
+  const trailAlpha = Math.sin(phaseTwin * Math.PI) * 0.32;
+  let sourceEdges = 0;
+  let sourceEdgeStrokes = 0;
+  let twinTrails = 0;
+
+  if (sourceEdgeAlpha > 0.005) {
+    const visibleSourceEdges = (sourceShape?.edges || []).filter(edge => points[edge[0]]?.bloomVisible && points[edge[1]]?.bloomVisible);
+    sourceEdges = visibleSourceEdges.length;
+    if (state.fxMode === 'ripple') {
+      const edgeStats = drawPaletteEdgeField(points, visibleSourceEdges, layout, paletteSet, {
+        baseAlpha: sourceEdgeAlpha,
+        baseWidth: interactionLiteFrame ? 1.35 : 2.05,
+        shadowBlur: interactionLiteFrame ? 0 : 2.2,
+        composite: 'lighter',
+      });
+      sourceEdgeStrokes = edgeStats.strokes;
+      recordRippleEdgeStats(drawStats, edgeStats);
+    } else {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = sourceEdgeAlpha;
+      ctx.strokeStyle = paletteSet.colors[0];
+      ctx.lineWidth = interactionLiteFrame ? 1.35 : 2.05;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const edge of visibleSourceEdges) {
+        const a = points[edge[0]];
+        const b = points[edge[1]];
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+      }
+      ctx.stroke();
+      ctx.restore();
+      sourceEdgeStrokes = visibleSourceEdges.length ? 1 : 0;
+    }
+  }
+
+  if (trailAlpha > 0.005 && !interactionLiteFrame) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = trailAlpha;
+    ctx.strokeStyle = state.bloomTwinH4 ? '#6affe8' : (paletteSet.colors[1] || paletteSet.colors[0]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let index = 0; index < 12; index++) {
+      const a = points[index];
+      const b = points[120 + index];
+      if (!a?.bloomVisible || !b?.bloomVisible) continue;
+      ctx.moveTo(a.sx, a.sy);
+      ctx.lineTo(b.sx, b.sy);
+      twinTrails++;
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  const ordered = points.filter(point => point.bloomVisible).sort((a, b) => (a.depth || 0) - (b.depth || 0));
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
   for (const p of ordered) {
     const mask =
       (state.highlightSubset && subset.has(p.idx) ? DRAW_SUBSET : 0) |
@@ -4397,15 +6391,754 @@ function drawE83DModel(paletteSet, subset, visibleContext, drawStats, interactio
     if (mask & DRAW_ANTIPODE) drawStats.antipodePoints++;
     if (mask & DRAW_PETRIE) drawStats.petriePoints++;
     if (mask) drawStats.glowPoints++;
-    if (mask && !interactionLiteFrame) {
+    if (!interactionLiteFrame) {
       drawStats.glowFills++;
       drawStats.alphaColorCacheHits++;
+      ctx.globalAlpha = (mask ? 0.18 : 0.09) * state.fxStrength * p.bloomAlpha;
+      ctx.fillStyle = p.bloomLayer && state.bloomTwinH4 ? '#6affe8' : (paletteSet.colors[1] || paletteSet.colors[0]);
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, p.size + (mask ? 5 : 3.2), 0, TAU);
+      ctx.fill();
     }
     drawStats.directPoints++;
     if (interactionLiteFrame && mask) drawStats.glowsSkippedForInteraction++;
-    drawStats.directPointFills += drawPoint(p, paletteSet, mask, interactionLiteFrame);
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + p.idx * 0.17) * 0.08 * state.fxStrength : 1;
+    ctx.globalAlpha = (mask ? 1 : Math.max(0.72, state.pointOpacity)) * p.bloomAlpha;
+    ctx.fillStyle = p.bloomLayer && state.bloomTwinH4
+      ? '#6affe8'
+      : (state.bloomTwinH4 ? (paletteSet.colors[1] || '#f4d27a') : paletteSet.colors[p.baseFillSlot % paletteSet.colors.length]);
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, Math.max(0.85, p.size * pulse), 0, TAU);
+    ctx.fill();
+    drawStats.directPointFills++;
   }
+  ctx.restore();
+  drawStats.modelVertices = ordered.length;
+  drawStats.modelEdges = sourceEdges + twinTrails;
+  drawStats.modelEdgeStrokes = sourceEdgeStrokes + (twinTrails ? 1 : 0);
+  drawStats.bloomSourceEdges = sourceEdges;
+  drawStats.bloomTwinTrails = twinTrails;
+}
+
+const SDF_ROOT_SCALE = 1.55;
+const SDF_FOV_RADIANS = 50 * Math.PI / 180;
+const SDF_BASE_CAMERA_DISTANCE = 11.0;
+
+const SDF_VERTEX_SHADER = `
+attribute vec2 aPosition;
+void main() {
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}`;
+
+const SDF_FRAGMENT_TEMPLATE = `
+precision highp float;
+
+#define MARCH_STEPS __MARCH_STEPS__
+#define ROOT_NEIGHBOR_SPAN __ROOT_NEIGHBOR_SPAN__
+#define SHADOW_STEPS __SHADOW_STEPS__
+#define AO_STEPS __AO_STEPS__
+#define MAX_DIST 22.0
+#define SURF_DIST 0.0012
+
+uniform vec2 uResolution;
+uniform vec2 uScreenOffset;
+uniform float uTime;
+uniform vec3 uCameraPos;
+uniform mat3 uCameraBasis;
+uniform float uFov;
+uniform vec4 uRings[8];
+uniform float uSphereR;
+uniform float uBlend;
+uniform float uBloom;
+uniform float uAniso;
+uniform float uFxStrength;
+uniform float uFxMode;
+uniform float uMotionPulse;
+uniform float uRippleTime;
+uniform vec3 uPalette0;
+uniform vec3 uPalette1;
+uniform vec3 uPalette2;
+uniform vec3 uPalette3;
+uniform vec3 uPalette4;
+
+float gNearestRing = 0.0;
+
+float smin(float a, float b, float k) {
+  if (k < 0.00001) return min(a, b);
+  float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+  return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+float sdf(vec3 p) {
+  float d = 1000.0;
+  float nearestDistance = 1000.0;
+  float nearestRing = 0.0;
+  float sphereRadius = uSphereR * (1.0 + uMotionPulse * 0.025 * sin(uTime * 2.1));
+  float pointAngle = atan(p.y, p.x);
+  for (int ringIndex = 0; ringIndex < 8; ringIndex++) {
+    vec4 ring = uRings[ringIndex];
+    float nearestSlot = floor((pointAngle - ring.y) / ring.z + 0.5);
+    float nearestAngle = ring.y + nearestSlot * ring.z;
+    // Sample the same symmetric neighbourhood on both sides of a root. A
+    // one-sided shortcut makes the chosen neighbour flip at each root centre,
+    // producing the 30 radial normal seams that resemble cel shading.
+    for (int offset = -ROOT_NEIGHBOR_SPAN; offset <= ROOT_NEIGHBOR_SPAN; offset++) {
+      float rootAngle = nearestAngle + float(offset) * ring.z;
+      vec3 root = vec3(ring.x * cos(rootAngle), ring.x * sin(rootAngle), ring.w);
+      float currentSphereRadius = sphereRadius;
+      if (uFxMode > 5.5 && uFxMode < 6.5) {
+        currentSphereRadius *= 1.0 + uFxStrength * 0.09 * sin(ring.x * 8.0 - uRippleTime);
+      }
+      float rootDistance = length(p - root) - currentSphereRadius;
+      if (rootDistance < nearestDistance) {
+        nearestDistance = rootDistance;
+        nearestRing = float(ringIndex) / 7.0;
+      }
+      d = smin(d, rootDistance, uBlend);
+    }
+  }
+  gNearestRing = nearestRing;
+  return d;
+}
+
+vec3 surfaceNormal(vec3 p) {
+  // A phone raster covers a larger world-space footprint than the desktop
+  // renderer. Sampling the normal over that footprint prevents sub-pixel
+  // sphere junctions from turning into radial bands when magnified.
+  const float e = 0.006;
+  const vec2 h = vec2(1.0, -1.0) * 0.5773;
+  return normalize(
+    h.xyy * sdf(p + h.xyy * e) +
+    h.yyx * sdf(p + h.yyx * e) +
+    h.yxy * sdf(p + h.yxy * e) +
+    h.xxx * sdf(p + h.xxx * e)
+  );
+}
+
+float softShadow(vec3 ro, vec3 rd) {
+  float result = 1.0;
+  float t = 0.025;
+  for (int i = 0; i < SHADOW_STEPS; i++) {
+    float h = sdf(ro + rd * t);
+    if (h < 0.001) return 0.0;
+    result = min(result, 15.0 * h / t);
+    t += clamp(h, 0.025, 0.32);
+  }
+  return clamp(result, 0.0, 1.0);
+}
+
+float ambientOcclusion(vec3 p, vec3 n) {
+  float occ = 0.0;
+  float weight = 1.0;
+  for (int i = 0; i < AO_STEPS; i++) {
+    float distance = 0.035 + 0.13 * float(i);
+    occ += (distance - sdf(p + n * distance)) * weight;
+    weight *= 0.7;
+  }
+  return clamp(1.0 - 2.4 * occ, 0.0, 1.0);
+}
+
+vec3 fxSpectrum(float value) {
+  return 0.55 + 0.45 * cos(6.2831853 * (value + vec3(0.0, 0.33, 0.67)));
+}
+
+vec3 paletteGradient(float value) {
+  float scaled = clamp(value, 0.0, 1.0) * 4.0;
+  if (scaled < 1.0) return mix(uPalette0, uPalette1, scaled);
+  if (scaled < 2.0) return mix(uPalette1, uPalette2, scaled - 1.0);
+  if (scaled < 3.0) return mix(uPalette2, uPalette3, scaled - 2.0);
+  return mix(uPalette3, uPalette4, scaled - 3.0);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution * 2.0 - 1.0;
+  uv.x *= uResolution.x / uResolution.y;
+  uv -= uScreenOffset;
+  float focalLength = 1.0 / tan(uFov * 0.5);
+  vec3 rayOrigin = uCameraPos;
+  vec3 rayDirection = normalize(
+    uCameraBasis[0] * uv.x +
+    uCameraBasis[1] * uv.y +
+    uCameraBasis[2] * focalLength
+  );
+
+  float t = 0.0;
+  float rayEnd = 0.0;
+  bool hit = false;
+  const float boundRadius = 2.55;
+  float boundB = dot(rayOrigin, rayDirection);
+  float boundC = dot(rayOrigin, rayOrigin) - boundRadius * boundRadius;
+  float discriminant = boundB * boundB - boundC;
+  if (discriminant >= 0.0) {
+    float boundRoot = sqrt(discriminant);
+    t = max(0.0, -boundB - boundRoot);
+    rayEnd = min(MAX_DIST, -boundB + boundRoot);
+    for (int stepIndex = 0; stepIndex < MARCH_STEPS; stepIndex++) {
+      float distance = sdf(rayOrigin + rayDirection * t);
+      if (distance < SURF_DIST) {
+        hit = true;
+        break;
+      }
+      t += distance * 0.9;
+      if (t > rayEnd) break;
+    }
+  }
+
+  if (!hit) {
+    gl_FragColor = vec4(0.0);
+    return;
+  }
+
+  vec3 p = rayOrigin + rayDirection * t;
+  sdf(p);
+  // Nearest-ring colouring changes abruptly where two root fields meet. On a
+  // blended surface those Voronoi boundaries look like flat cell-shaded tiles.
+  // A radial gradient preserves the inner-to-outer palette progression while
+  // remaining continuous across every sphere union.
+  float ringMix = smoothstep(0.18, 1.92, length(p.xy));
+  vec3 n = surfaceNormal(p);
+  vec3 keyDirection = normalize(vec3(0.58, 0.72, 0.46));
+  vec3 fillDirection = normalize(vec3(-0.45, 0.18, -0.28));
+  float softKey = 0.5 + 0.5 * dot(n, keyDirection);
+  float softFill = 0.5 + 0.5 * dot(n, fillDirection);
+  float viewFacing = max(dot(n, -rayDirection), 0.0);
+  float fresnel = pow(1.0 - viewFacing, 2.4);
+  float shadow = softShadow(p + n * 0.006, keyDirection);
+  float ao = ambientOcclusion(p, n);
+  vec3 baseColor = paletteGradient(ringMix);
+  float hemisphere = 0.5 + 0.5 * n.y;
+  // Start from a bright, continuous material response instead of a dark
+  // Lambert base. The old low ambient at grazing angles drew a black ring
+  // around every sphere and made the smooth unions resemble cel shading.
+  vec3 color = baseColor * (0.58 + softKey * shadow * 0.22 + softFill * 0.1 + hemisphere * 0.06) * ao;
+  color += mix(vec3(0.95, 0.97, 1.0), baseColor, 0.25) * fresnel * (0.62 + uBloom * 0.16);
+
+  vec3 halfVector = normalize(keyDirection - rayDirection);
+  float standardSpec = pow(max(dot(n, halfVector), 0.0), 26.0);
+  vec3 tangent = normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(0.001));
+  vec3 bitangent = normalize(cross(n, tangent));
+  float anisoSpec = pow(abs(dot(tangent, halfVector)), 36.0) * 0.58
+    + pow(abs(dot(bitangent, halfVector)), 82.0) * 0.42;
+  color += vec3(1.0) * standardSpec * shadow * 0.18;
+  color += vec3(1.0, 0.94, 0.82) * anisoSpec * uAniso * shadow * 0.12;
+  float fxMix = clamp(uFxStrength * 0.58, 0.0, 0.92);
+  float angle = atan(p.y, p.x);
+  float radius = length(p.xy);
+  if (uFxMode > 0.5 && uFxMode < 1.5) {
+    color += mix(vec3(1.0), baseColor, 0.4) * fresnel * fxMix * 0.85;
+  } else if (uFxMode < 2.5 && uFxMode > 1.5) {
+    color *= 0.9 + 0.18 * fxMix * sin(uTime * 2.2);
+  } else if (uFxMode < 3.5 && uFxMode > 2.5) {
+    color = mix(color, vec3(color.b, color.r, color.g), fxMix * 0.28);
+  } else if (uFxMode < 4.5 && uFxMode > 3.5) {
+    color = mix(color, vec3(color.r * 1.18, color.g, color.b * 1.2), fxMix * (0.35 + 0.35 * n.x));
+  } else if (uFxMode < 5.5 && uFxMode > 4.5) {
+    float band = 0.55 + 0.45 * abs(cos(angle * 6.0));
+    color = mix(color, fxSpectrum(angle / 6.2831853) * band, fxMix * 0.46);
+  } else if (uFxMode < 6.5 && uFxMode > 5.5) {
+    float wave = sin(radius * 8.0 - uRippleTime);
+    color *= clamp(1.0 + uFxStrength * 0.7 * wave, 0.24, 1.7);
+    color += baseColor * max(wave, 0.0) * fxMix * 0.16;
+  } else if (uFxMode < 7.5 && uFxMode > 6.5) {
+    float band = 0.5 + 0.5 * sin(angle * 8.0 + radius * 15.0 - uTime);
+    color = mix(color, vec3(1.0, 0.62, 0.18) * (0.6 + band * 0.6), fxMix * 0.36);
+  } else if (uFxMode < 8.5 && uFxMode > 7.5) {
+    float haze = smoothstep(3.0, 8.0, t);
+    color = mix(color, vec3(0.52, 0.6, 0.72), haze * fxMix * 0.58);
+  } else if (uFxMode < 9.5 && uFxMode > 8.5) {
+    float energy = clamp(dot(color, vec3(0.3, 0.58, 0.12)), 0.0, 1.0);
+    color = mix(color, mix(vec3(0.58, 0.02, 0.0), vec3(1.0, 0.88, 0.16), energy), fxMix * 0.68);
+  } else if (uFxMode < 10.5 && uFxMode > 9.5) {
+    color = mix(color * 0.58, vec3(0.55, 0.95, 1.0), fresnel * fxMix);
+  } else if (uFxMode < 11.5 && uFxMode > 10.5) {
+    color += mix(vec3(0.18, 0.82, 1.0), vec3(0.68, 0.24, 1.0), ringMix) * fresnel * fxMix * 0.72;
+  } else if (uFxMode < 12.5 && uFxMode > 11.5) {
+    float cells = abs(sin(p.x * 8.0) * sin(p.y * 8.0) * sin(p.z * 8.0));
+    color = mix(color * (0.62 + cells * 0.5), fxSpectrum(cells), fxMix * 0.34);
+  } else if (uFxMode < 13.5 && uFxMode > 12.5) {
+    float bands = pow(0.5 + 0.5 * sin(p.x * 9.0 + sin(p.y * 7.0 - uTime) * 2.4), 4.0);
+    color += vec3(0.22, 0.86, 1.0) * bands * fxMix * 0.72;
+  } else if (uFxMode < 14.5 && uFxMode > 13.5) {
+    color = mix(color, fxSpectrum(fresnel * 1.8 + angle / 6.2831853), fxMix * (0.28 + fresnel * 0.58));
+  } else if (uFxMode < 15.5 && uFxMode > 14.5) {
+    float flow = 0.5 + 0.5 * sin(dot(p, vec3(5.0, 8.0, 3.0)) - uTime * 1.2);
+    color = mix(color, vec3(0.12, 0.92, 0.82) * (0.5 + flow * 0.7), fxMix * 0.38);
+  } else if (uFxMode < 16.5 && uFxMode > 15.5) {
+    float plasma = sin(p.x * 6.0 + uTime) + sin(p.y * 7.0 - uTime * 0.7) + sin(p.z * 8.0);
+    color = mix(color, fxSpectrum(plasma * 0.14), fxMix * 0.62);
+  } else if (uFxMode < 17.5 && uFxMode > 16.5) {
+    float symmetry = 0.5 + 0.5 * cos(angle * 6.0);
+    color = mix(color, fxSpectrum(symmetry + ringMix * 0.25), fxMix * 0.48);
+  } else if (uFxMode < 18.5 && uFxMode > 17.5) {
+    float focus = 1.0 - smoothstep(4.0, 8.5, t);
+    color *= mix(0.68, 1.08, mix(1.0, focus, fxMix));
+  } else if (uFxMode < 19.5 && uFxMode > 18.5) {
+    float cloud = 0.5 + 0.5 * sin(dot(p, vec3(3.7, 5.1, 4.3)) + sin(p.x * 6.0));
+    color = mix(color, mix(vec3(0.28, 0.08, 0.55), vec3(0.16, 0.78, 0.92), cloud), fxMix * 0.46);
+  } else if (uFxMode < 20.5 && uFxMode > 19.5) {
+    color = color * (0.42 + fresnel * 0.5) + vec3(0.22, 0.86, 0.94) * fresnel * fxMix;
+  } else if (uFxMode < 21.5 && uFxMode > 20.5) {
+    float scan = step(0.48, fract(gl_FragCoord.y * 0.24 + uTime * 0.5));
+    color = mix(color, vec3(0.1, 0.94, 0.86) * (0.64 + scan * 0.36), fxMix * 0.54);
+  } else if (uFxMode < 22.5 && uFxMode > 21.5) {
+    color = mix(color * 0.16, vec3(0.38, 0.9, 1.0) * (0.2 + fresnel * 1.25), fxMix);
+  } else if (uFxMode < 23.5 && uFxMode > 22.5) {
+    float facet = floor((n.x + n.y * 1.7 + n.z * 2.3 + 3.0) * 3.0) / 3.0;
+    color = mix(color, fxSpectrum(facet * 0.17 + fresnel), fxMix * 0.5);
+    color += vec3(0.86, 0.95, 1.0) * pow(standardSpec, 0.45) * fxMix * 0.42;
+  }
+  vec3 bright = max(color - vec3(0.64), vec3(0.0));
+  color += bright * uBloom * 0.72;
+  // A trace of deterministic dither prevents 8-bit mobile gradients from
+  // resolving into visible lighting bands when the view is magnified.
+  float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  color += dither / 255.0;
+  color = color / (color + vec3(0.46));
+  color = pow(clamp(color, 0.0, 1.0), vec3(0.96));
+  gl_FragColor = vec4(color, 1.0);
+}`;
+
+const MOBILE_SDF_QUALITY = {
+  // Moving frames still need the symmetric root neighbourhood. Compiling it
+  // out brought back the angular normal seams that the settled shader removes.
+  interactive: { scale: 0.72, marchSteps: 30, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  motion: { scale: 1.0, marchSteps: 38, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  smooth: { scale: 1.0, marchSteps: 42, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  balanced: { scale: 1.0, marchSteps: 48, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+  sharp: { scale: 1.25, marchSteps: 60, neighborSpan: 1, shadowSteps: 0, aoSteps: 0 },
+};
+
+function sdfShaderSource(profile) {
+  return SDF_FRAGMENT_TEMPLATE
+    .replaceAll('__MARCH_STEPS__', String(profile.marchSteps))
+    .replaceAll('__ROOT_NEIGHBOR_SPAN__', String(profile.neighborSpan))
+    .replaceAll('__SHADOW_STEPS__', String(profile.shadowSteps))
+    .replaceAll('__AO_STEPS__', String(profile.aoSteps));
+}
+
+function compileSdfShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'SDF shader compilation failed';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function createSdfProgram(profileKey) {
+  const gl = sdfGl;
+  const profile = MOBILE_SDF_QUALITY[profileKey] || MOBILE_SDF_QUALITY.smooth;
+  const vertex = compileSdfShader(gl, gl.VERTEX_SHADER, SDF_VERTEX_SHADER);
+  const fragment = compileSdfShader(gl, gl.FRAGMENT_SHADER, sdfShaderSource(profile));
+  const program = gl.createProgram();
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program) || 'SDF shader linking failed';
+    gl.deleteProgram(program);
+    throw new Error(message);
+  }
+  const uniformNames = [
+    'uResolution', 'uScreenOffset', 'uTime', 'uCameraPos', 'uCameraBasis', 'uFov', 'uRings',
+    'uSphereR', 'uBlend', 'uBloom', 'uAniso', 'uFxStrength', 'uFxMode', 'uMotionPulse', 'uRippleTime',
+    'uPalette0', 'uPalette1', 'uPalette2', 'uPalette3', 'uPalette4',
+  ];
+  const uniforms = Object.fromEntries(uniformNames.map(name => [name, gl.getUniformLocation(program, name)]));
+  const position = gl.getAttribLocation(program, 'aPosition');
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  return { program, profile, uniforms, position, buffer };
+}
+
+function ensureSdfWebgl() {
+  if (!sdfCanvas || sdfWebglUnavailable) return false;
+  if (sdfGl) return true;
+  try {
+    sdfGl = sdfCanvas.getContext('webgl', {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      // The SDF canvas is downsampled by the WebView compositor. Premultiplied
+      // alpha keeps transparent miss pixels from bleeding black into the
+      // opaque silhouette during that filtering step.
+      premultipliedAlpha: true,
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    if (!sdfGl) {
+      sdfWebglUnavailable = true;
+      return false;
+    }
+    sdfCanvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      sdfGl = null;
+      sdfPrograms.clear();
+    });
+    sdfCanvas.addEventListener('webglcontextrestored', () => {
+      sdfGl = null;
+      sdfWebglUnavailable = false;
+      sdfPrograms.clear();
+      requestRender('sdf-context-restored');
+    });
+    return true;
+  } catch (error) {
+    sdfWebglUnavailable = true;
+    recordError(error);
+    return false;
+  }
+}
+
+function sdfProgramFor(profileKey) {
+  if (sdfPrograms.has(profileKey)) return sdfPrograms.get(profileKey);
+  const record = createSdfProgram(profileKey);
+  sdfPrograms.set(profileKey, record);
+  return record;
+}
+
+function normalizeVector3(x, y, z) {
+  const length = Math.hypot(x, y, z) || 1;
+  return [x / length, y / length, z / length];
+}
+
+function setSdfCanvasActive(active) {
+  if (!sdfCanvas) return false;
+  sdfCanvas.classList.toggle('active', !!active);
+  sdfCanvas.setAttribute('aria-hidden', active ? 'false' : 'true');
+  return !!active;
+}
+
+function updateSdfRingUniforms() {
+  const scale = SDF_ROOT_SCALE;
+  const byRing = Array.from({ length: 8 }, () => []);
+  for (const point of points) byRing[clamp(Number(point.ring) || 0, 0, 7)].push(point);
+  for (let ringIndex = 0; ringIndex < 8; ringIndex++) {
+    const ringPoints = byRing[ringIndex];
+    const count = Math.max(1, ringPoints.length);
+    const radius = ringPoints.reduce((sum, point) => sum + Math.hypot(point.x, point.y), 0) / count;
+    const first = ringPoints[0] || { x: 1, y: 0 };
+    const offset = ringIndex * 4;
+    sdfRingUniformData[offset] = radius * scale;
+    sdfRingUniformData[offset + 1] = Math.atan2(first.y, first.x);
+    sdfRingUniformData[offset + 2] = TAU / count;
+    sdfRingUniformData[offset + 3] = (ringIndex / 7 - 0.5) * 0.8 * scale * state.e8MorphT;
+  }
+  return scale;
+}
+
+function sdfWorldBoundsRadius() {
+  let radius = 0;
+  const surfacePadding = (state.sdfSphereR + state.sdfBlend * 0.3) * SDF_ROOT_SCALE;
+  for (const point of points) {
+    const planarRadius = Math.hypot(point.x, point.y) * SDF_ROOT_SCALE;
+    const z = Math.abs((point.ring / 7 - 0.5) * 0.8 * SDF_ROOT_SCALE * state.e8MorphT);
+    radius = Math.max(radius, Math.hypot(planarRadius, z) + surfacePadding);
+  }
+  return Math.max(0.25, radius);
+}
+
+function sdfCameraDiveScale() {
+  return state.cameraPath === 'dive' && state.autoRotate
+    ? 0.82 + 0.22 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+    : 1;
+}
+
+function sdfCameraDistance() {
+  return (SDF_BASE_CAMERA_DISTANCE / Math.sqrt(state.zoom)) * sdfCameraDiveScale();
+}
+
+function sdfProjectedFrameMetrics(layout, distance = sdfCameraDistance()) {
+  const view = usableViewBounds();
+  const worldRadius = sdfWorldBoundsRadius();
+  const focalPixels = window.innerHeight / (2 * Math.tan(SDF_FOV_RADIANS * 0.5));
+  const safeDistance = Math.max(worldRadius + 0.01, distance);
+  const projectedRadius = focalPixels * worldRadius /
+    Math.sqrt(Math.max(0.0001, safeDistance * safeDistance - worldRadius * worldRadius));
+  const centerX = window.innerWidth * 0.5 + state.panX;
+  const centerY = layout.cy + state.panY;
+  const minX = centerX - projectedRadius;
+  const maxX = centerX + projectedRadius;
+  const minY = centerY - projectedRadius;
+  const maxY = centerY + projectedRadius;
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: projectedRadius * 2,
+    height: projectedRadius * 2,
+    withinView: minX >= view.left - 0.5 && maxX <= view.right + 0.5 && minY >= view.top - 0.5 && maxY <= view.bottom + 0.5,
+    view,
+  };
+}
+
+function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  if (!ensureSdfWebgl()) return null;
+  try {
+    const profileKey = interactionLiteFrame ? 'interactive' : hasRuntimeAnimation() ? 'motion' : state.quality;
+    const record = sdfProgramFor(profileKey);
+    const { program, profile, uniforms, position, buffer } = record;
+    const gl = sdfGl;
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const isStaticFrame = !interactionLiteFrame && !hasRuntimeAnimation();
+    const selectedMotionBoost = { smooth: 1, balanced: 1.08, sharp: 1.18 }[state.quality] || 1;
+    const motionPixelBoost = profileKey === 'motion' ? selectedMotionBoost : 1;
+    let pixelBoost = isStaticFrame ? Math.min(devicePixelRatio, 1.75) : motionPixelBoost;
+    let rasterScale = profile.scale * pixelBoost;
+    // Sharp is the inspection tier: render at the display's native pixel grid
+    // so WebView scaling cannot manufacture a dark filtered contour.
+    if (isStaticFrame && profileKey === 'sharp') rasterScale = Math.max(rasterScale, devicePixelRatio);
+    pixelBoost = rasterScale / profile.scale;
+    const width = Math.max(1, Math.round(window.innerWidth * rasterScale));
+    const height = Math.max(1, Math.round(window.innerHeight * rasterScale));
+    if (sdfCanvas.width !== width || sdfCanvas.height !== height) {
+      sdfCanvas.width = width;
+      sdfCanvas.height = height;
+    }
+    sdfCanvas.style.width = `${window.innerWidth}px`;
+    sdfCanvas.style.height = `${window.innerHeight}px`;
+    gl.viewport(0, 0, width, height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+    const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
+    const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+    const distance = sdfCameraDistance();
+    const cosPitch = Math.cos(pitch);
+    const camera = [
+      Math.sin(state.rotation) * cosPitch * distance,
+      Math.sin(pitch) * distance,
+      Math.cos(state.rotation) * cosPitch * distance,
+    ];
+    const forward = normalizeVector3(-camera[0], -camera[1], -camera[2]);
+    const right = normalizeVector3(-forward[2], 0, forward[0]);
+    const up = normalizeVector3(
+      right[1] * forward[2] - right[2] * forward[1],
+      right[2] * forward[0] - right[0] * forward[2],
+      right[0] * forward[1] - right[1] * forward[0]
+    );
+    const cameraBasis = new Float32Array([
+      right[0], right[1], right[2],
+      up[0], up[1], up[2],
+      forward[0], forward[1], forward[2],
+    ]);
+    const rootScale = updateSdfRingUniforms();
+    for (let paletteIndex = 0; paletteIndex < 5; paletteIndex++) {
+      const channels = paletteChannelsAt(paletteSet, paletteIndex / 4);
+      const offset = paletteIndex * 3;
+      sdfPaletteUniformData[offset] = channels[0] / 255;
+      sdfPaletteUniformData[offset + 1] = channels[1] / 255;
+      sdfPaletteUniformData[offset + 2] = channels[2] / 255;
+    }
+    const targetX = window.innerWidth * 0.5 + state.panX;
+    const targetY = layout.cy + state.panY;
+    const screenOffset = [
+      2 * (targetX - window.innerWidth * 0.5) / Math.max(1, window.innerHeight),
+      (window.innerHeight - 2 * targetY) / Math.max(1, window.innerHeight),
+    ];
+
+    gl.uniform2f(uniforms.uResolution, width, height);
+    gl.uniform2f(uniforms.uScreenOffset, screenOffset[0], screenOffset[1]);
+    gl.uniform1f(uniforms.uTime, stylePhase + motionPhase);
+    gl.uniform3f(uniforms.uCameraPos, camera[0], camera[1], camera[2]);
+    gl.uniformMatrix3fv(uniforms.uCameraBasis, false, cameraBasis);
+    gl.uniform1f(uniforms.uFov, SDF_FOV_RADIANS);
+    gl.uniform4fv(uniforms.uRings, sdfRingUniformData);
+    gl.uniform1f(uniforms.uSphereR, state.sdfSphereR * rootScale);
+    gl.uniform1f(uniforms.uBlend, state.sdfBlend * rootScale);
+    gl.uniform1f(uniforms.uBloom, state.sdfBloom);
+    gl.uniform1f(uniforms.uAniso, state.sdfAniso);
+    gl.uniform1f(uniforms.uFxStrength, state.fxStrength);
+    gl.uniform1f(uniforms.uFxMode, MOBILE_FX_MODE_INDEX[state.fxMode] || 0);
+    gl.uniform1f(uniforms.uMotionPulse, state.softFx ? state.fxStrength : 0);
+    gl.uniform1f(uniforms.uRippleTime, ripplePhaseAngle());
+    gl.uniform3f(uniforms.uPalette0, sdfPaletteUniformData[0], sdfPaletteUniformData[1], sdfPaletteUniformData[2]);
+    gl.uniform3f(uniforms.uPalette1, sdfPaletteUniformData[3], sdfPaletteUniformData[4], sdfPaletteUniformData[5]);
+    gl.uniform3f(uniforms.uPalette2, sdfPaletteUniformData[6], sdfPaletteUniformData[7], sdfPaletteUniformData[8]);
+    gl.uniform3f(uniforms.uPalette3, sdfPaletteUniformData[9], sdfPaletteUniformData[10], sdfPaletteUniformData[11]);
+    gl.uniform3f(uniforms.uPalette4, sdfPaletteUniformData[12], sdfPaletteUniformData[13], sdfPaletteUniformData[14]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    drawStats.modelVertices = points.length;
+    drawStats.modelFaces = 1;
+    drawStats.modelFaceFills = 1;
+    drawStats.sdfRenderer = 'webgl-raymarch';
+    drawStats.sdfQuality = profileKey;
+    drawStats.sdfRasterScale = rasterScale;
+    drawStats.sdfStaticPixelBoost = isStaticFrame ? pixelBoost : 1;
+    drawStats.sdfMotionPixelBoost = profileKey === 'motion' ? pixelBoost : 1;
+    drawStats.sdfRasterSize = Math.min(width, height);
+    drawStats.sdfPixels = width * height;
+    drawStats.sdfSpheres = points.length;
+    drawStats.sdfMarchSteps = profile.marchSteps;
+    drawStats.sdfNeighborSpan = profile.neighborSpan;
+    drawStats.sdfShadowSteps = profile.shadowSteps;
+    drawStats.sdfAoSteps = profile.aoSteps;
+    return sdfProjectedFrameMetrics(layout, distance);
+  } catch (error) {
+    recordError(error);
+    sdfWebglUnavailable = true;
+    setSdfCanvasActive(false);
+    return null;
+  }
+}
+
+function ensureSdfRaster(size) {
+  if (!sdfRasterCanvas) {
+    sdfRasterCanvas = document.createElement('canvas');
+    sdfRasterContext = sdfRasterCanvas.getContext('2d', { alpha: true });
+  }
+  if (sdfRasterCanvas.width !== size || sdfRasterCanvas.height !== size || !sdfRasterImageData) {
+    sdfRasterCanvas.width = size;
+    sdfRasterCanvas.height = size;
+    sdfRasterImageData = sdfRasterContext.createImageData(size, size);
+    sdfHeightField = new Float32Array(size * size);
+    sdfCoverageField = new Float32Array(size * size);
+    sdfRingField = new Uint8Array(size * size);
+  }
+  return !!sdfRasterContext;
+}
+
+function colorChannels(hex) {
+  const value = String(hex || '#ffffff').replace('#', '').padEnd(6, 'f');
+  return [0, 2, 4].map(offset => parseInt(value.slice(offset, offset + 2), 16));
+}
+
+function drawSdfFallbackModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  const qualitySize = state.quality === 'sharp' ? 512 : state.quality === 'balanced' ? 400 : 320;
+  const rasterSize = interactionLiteFrame ? Math.min(192, qualitySize) : qualitySize;
+  if (!ensureSdfRaster(rasterSize)) return null;
+
+  const pixels = sdfRasterImageData.data;
+  sdfHeightField.fill(0);
+  sdfCoverageField.fill(0);
+  sdfRingField.fill(0);
+
+  // The desktop raymarcher is a smooth union of the 240 root spheres, not a
+  // generic decorative blob. Build the same Coxeter-plane surface as a small
+  // reusable height field: each root contributes a shaded spherical cap and
+  // nearby caps blend at their intersections. This keeps the view faithful
+  // while avoiding a costly 240-sphere raymarch in a phone WebView.
+  const phase = state.rotation + stylePhase * 0.015;
+  const cos = Math.cos(phase);
+  const sin = Math.sin(phase);
+  const half = rasterSize * 0.5;
+  const rootScale = rasterSize * 0.338;
+  const sphereRadius = rasterSize * 0.047;
+  const sphereRadius2 = sphereRadius * sphereRadius;
+  const smoothK = Math.max(0.8, sphereRadius * 0.22);
+  for (const point of points) {
+    const rotatedX = point.x * cos - point.y * sin;
+    const rotatedY = point.x * sin + point.y * cos;
+    const cx = half + rotatedX * rootScale;
+    const cy = half + rotatedY * rootScale;
+    const minX = Math.max(0, Math.floor(cx - sphereRadius - 1));
+    const maxX = Math.min(rasterSize - 1, Math.ceil(cx + sphereRadius + 1));
+    const minY = Math.max(0, Math.floor(cy - sphereRadius - 1));
+    const maxY = Math.min(rasterSize - 1, Math.ceil(cy + sphereRadius + 1));
+    for (let py = minY; py <= maxY; py++) {
+      const dy = py + 0.5 - cy;
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px + 0.5 - cx;
+        const distance2 = dx * dx + dy * dy;
+        if (distance2 > sphereRadius2) continue;
+        const offset = py * rasterSize + px;
+        const height = Math.sqrt(Math.max(0, sphereRadius2 - distance2));
+        const previous = sdfHeightField[offset];
+        if (previous <= 0) sdfHeightField[offset] = height;
+        else {
+          const difference = Math.abs(previous - height);
+          const blend = Math.max(0, smoothK - difference);
+          sdfHeightField[offset] = Math.max(previous, height) + blend * blend / (4 * smoothK);
+        }
+        const edgeDistance = sphereRadius - Math.sqrt(distance2);
+        sdfCoverageField[offset] = Math.max(sdfCoverageField[offset], clamp(edgeDistance * 1.7, 0, 1));
+        if (height >= previous) sdfRingField[offset] = point.ring;
+      }
+    }
+  }
+
+  const low = colorChannels(paletteSet.colors[0]);
+  const high = colorChannels(paletteSet.colors[Math.min(2, paletteSet.colors.length - 1)]);
+  let filledPixels = 0;
+  for (let py = 0; py < rasterSize; py++) {
+    for (let px = 0; px < rasterSize; px++) {
+      const offset = (py * rasterSize + px) * 4;
+      const fieldOffset = py * rasterSize + px;
+      const coverage = sdfCoverageField[fieldOffset];
+      if (coverage <= 0) {
+        pixels[offset] = 0;
+        pixels[offset + 1] = 0;
+        pixels[offset + 2] = 0;
+        pixels[offset + 3] = 0;
+        continue;
+      }
+      const leftHeight = sdfHeightField[py * rasterSize + Math.max(0, px - 1)];
+      const rightHeight = sdfHeightField[py * rasterSize + Math.min(rasterSize - 1, px + 1)];
+      const topHeight = sdfHeightField[Math.max(0, py - 1) * rasterSize + px];
+      const bottomHeight = sdfHeightField[Math.min(rasterSize - 1, py + 1) * rasterSize + px];
+      const normalX = clamp(leftHeight - rightHeight, -4.5, 4.5);
+      const normalY = clamp(topHeight - bottomHeight, -4.5, 4.5);
+      const normalZ = 2.4;
+      const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
+      const nx = normalX / normalLength;
+      const ny = normalY / normalLength;
+      const nz = normalZ / normalLength;
+      const diffuse = clamp(nx * -0.42 + ny * -0.58 + nz * 0.7, 0, 1);
+      const rim = clamp(1 - nz, 0, 1);
+      const contour = clamp(1 - coverage, 0, 1);
+      const paletteMix = clamp((sdfRingField[fieldOffset] / 7) * 0.78 + nx * 0.14 + 0.08, 0, 1);
+      const light = 0.24 + diffuse * 0.72 + rim * 0.24;
+      for (let channel = 0; channel < 3; channel++) {
+        const base = low[channel] + (high[channel] - low[channel]) * paletteMix;
+        pixels[offset + channel] = clamp(Math.round(base * light + 255 * contour * 0.22), 0, 255);
+      }
+      pixels[offset + 3] = Math.round(coverage * 255);
+      filledPixels++;
+    }
+  }
+  sdfRasterContext.putImageData(sdfRasterImageData, 0, 0);
+
+  const diameter = layout.scale * 2.42;
+  const left = layout.cx + state.panX - diameter * 0.5;
+  const top = layout.cy + state.panY - diameter * 0.5;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(sdfRasterCanvas, left, top, diameter, diameter);
+  ctx.restore();
+
   drawStats.modelVertices = points.length;
+  drawStats.modelFaces = 1;
+  drawStats.modelFaceFills = 1;
+  drawStats.sdfRasterSize = rasterSize;
+  drawStats.sdfPixels = filledPixels;
+  drawStats.sdfSpheres = points.length;
+  drawStats.sdfRenderer = 'canvas-fallback';
+  return projectedModelFrameMetrics([
+    { x: left, y: top },
+    { x: left + diameter, y: top + diameter },
+  ]);
+}
+
+function drawSdfModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  setSdfCanvasActive(true);
+  const webglFrame = drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame);
+  if (webglFrame) return webglFrame;
+  setSdfCanvasActive(false);
+  return drawSdfFallbackModel(layout, paletteSet, drawStats, interactionLiteFrame);
 }
 
 function normalizedPlatonicVerts(shape) {
@@ -4416,12 +7149,400 @@ function normalizedPlatonicVerts(shape) {
   return verts.map(v => [v[0] / denom, v[1] / denom, v[2] / denom]);
 }
 
+// The baked dodecahedron and icosahedron triangle lists are unsuitable for
+// mobile painter-style rendering: they expose their triangulation and can read
+// as diagonals through the solid. Recover the actual convex face polygons from
+// the vertices, matching the desktop view's hull-first geometry policy.
+function convexHullPolygons(verts) {
+  const count = verts.length;
+  if (count < 4) return [];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  let maxR = 0;
+  for (const v of verts) maxR = Math.max(maxR, Math.hypot(v[0], v[1], v[2]));
+  const epsilon = 1e-4 * (maxR || 1);
+  const planes = new Map();
+
+  for (let i = 0; i < count; i++) {
+    for (let j = i + 1; j < count; j++) {
+      for (let k = j + 1; k < count; k++) {
+        let normal = cross(sub(verts[j], verts[i]), sub(verts[k], verts[i]));
+        const length = Math.hypot(normal[0], normal[1], normal[2]);
+        if (length < epsilon) continue;
+        normal = [normal[0] / length, normal[1] / length, normal[2] / length];
+        let distance = dot(normal, verts[i]);
+        let positive = 0;
+        let negative = 0;
+        for (let m = 0; m < count; m++) {
+          const side = dot(normal, verts[m]) - distance;
+          if (side > epsilon) positive++;
+          else if (side < -epsilon) negative++;
+        }
+        if (positive && negative) continue;
+        if (distance < 0) {
+          normal = [-normal[0], -normal[1], -normal[2]];
+          distance = -distance;
+        }
+        const key = [normal[0], normal[1], normal[2], distance]
+          .map(value => Math.round(value / epsilon))
+          .join(',');
+        if (!planes.has(key)) planes.set(key, { normal, distance });
+      }
+    }
+  }
+
+  const polygons = [];
+  for (const { normal, distance } of planes.values()) {
+    const indices = [];
+    for (let i = 0; i < count; i++) {
+      if (Math.abs(dot(normal, verts[i]) - distance) < epsilon * 10) indices.push(i);
+    }
+    if (indices.length < 3) continue;
+    let axis = Math.abs(normal[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    const projection = dot(axis, normal);
+    axis = [
+      axis[0] - projection * normal[0],
+      axis[1] - projection * normal[1],
+      axis[2] - projection * normal[2],
+    ];
+    const axisLength = Math.hypot(axis[0], axis[1], axis[2]);
+    axis = [axis[0] / axisLength, axis[1] / axisLength, axis[2] / axisLength];
+    const tangent = cross(normal, axis);
+    const center = [0, 0, 0];
+    for (const index of indices) {
+      center[0] += verts[index][0];
+      center[1] += verts[index][1];
+      center[2] += verts[index][2];
+    }
+    center[0] /= indices.length;
+    center[1] /= indices.length;
+    center[2] /= indices.length;
+    indices.sort((a, b) => {
+      const pointA = sub(verts[a], center);
+      const pointB = sub(verts[b], center);
+      return Math.atan2(dot(pointA, tangent), dot(pointA, axis))
+        - Math.atan2(dot(pointB, tangent), dot(pointB, axis));
+    });
+    polygons.push(indices);
+  }
+  return polygons;
+}
+
 function platonicFaces(shapeName, shape) {
   if (!shape) return [];
   if (platonicFaceCache.has(shapeName)) return platonicFaceCache.get(shapeName);
-  const faces = Array.isArray(shape.faces) ? shape.faces.filter(face => Array.isArray(face) && face.length >= 3) : [];
+  const faces = STAR_SHAPES.has(shapeName)
+    ? (Array.isArray(shape.faces) ? shape.faces.filter(face => Array.isArray(face) && face.length >= 3) : [])
+    : convexHullPolygons(shape.verts || []);
   platonicFaceCache.set(shapeName, faces);
   return faces;
+}
+
+function projectedPolygonArea(face, projected) {
+  let area = 0;
+  for (let i = 0; i < face.length; i++) {
+    const a = projected[face[i]];
+    const b = projected[face[(i + 1) % face.length]];
+    if (a && b) area += a.x * b.y - b.x * a.y;
+  }
+  return area * 0.5;
+}
+
+function paletteChannelsAt(paletteSet, value) {
+  const colors = paletteSet?.colors?.length ? paletteSet.colors : RENDER_PALETTES.gold.colors;
+  if (colors.length === 1) return colorChannels(colors[0]);
+  const scaled = clamp(value, 0, 1) * (colors.length - 1);
+  const lowerIndex = Math.min(colors.length - 1, Math.floor(scaled));
+  const upperIndex = Math.min(colors.length - 1, lowerIndex + 1);
+  const amount = scaled - lowerIndex;
+  const lower = colorChannels(colors[lowerIndex]);
+  const upper = colorChannels(colors[upperIndex]);
+  return lower.map((channel, index) => Math.round(channel + (upper[index] - channel) * amount));
+}
+
+function paletteColorAt(paletteSet, value) {
+  const channels = paletteChannelsAt(paletteSet, value);
+  return `rgb(${channels[0]},${channels[1]},${channels[2]})`;
+}
+
+function e8ChordZoomProgress() {
+  if (state.modelMode !== 'e8_2d') return 0;
+  const zoom = clamp(Number(state.zoom) || 1, 1, E8_COXETER_ZOOM_MAX);
+  return clamp(Math.log(zoom) / Math.log(E8_COXETER_ZOOM_MAX), 0, 1);
+}
+
+function e8ChordAlphaBoost() {
+  const fxBoost = state.fxMode === 'none' ? 0 : 0.45;
+  return 1 + e8ChordZoomProgress() * 1.55 + fxBoost;
+}
+
+function e8ChordColorLift() {
+  const fxLift = state.fxMode === 'none' ? 0 : 0.05;
+  return clamp(0.02 + e8ChordZoomProgress() * 0.12 + fxLift, 0, 0.2);
+}
+
+function e8ChordFxColorMix() {
+  const modeIndex = MOBILE_FX_MODE_INDEX[state.fxMode] || 0;
+  if (!modeIndex) return 0;
+  if (state.fxMode === 'ripple') return 1;
+  const baseMix = E8_CHORD_FX_COLOR_MIX[modeIndex] || 0.6;
+  const fullFieldMix = 0.72 + baseMix * 0.28;
+  return clamp(fullFieldMix * (0.78 + clamp(state.fxStrength, 0.25, 1.5) * 0.22), 0, 0.98);
+}
+
+function e8ChordPaletteColorAt(paletteSet, value) {
+  const channels = paletteChannelsAt(paletteSet, value);
+  const lift = e8ChordColorLift();
+  const lifted = channels.map(channel => Math.round(channel + (255 - channel) * lift));
+  return `rgb(${lifted[0]},${lifted[1]},${lifted[2]})`;
+}
+
+function ripplePhaseAngle() {
+  // stylePhase advances at a battery-friendly mobile rate. This multiplier
+  // restores the roughly four-radians-per-second wave travel used on desktop.
+  return stylePhase * TAU * 2.4;
+}
+
+function rippleWaveForRadius(radius) {
+  return Math.sin(Math.max(0, radius) * 8 - ripplePhaseAngle());
+}
+
+function ripplePointScale(radius) {
+  if (state.fxMode !== 'ripple') return 1;
+  return clamp(1 + state.fxStrength * 0.4 * rippleWaveForRadius(radius), 0.42, 1.62);
+}
+
+function projectedRadius(point, layout) {
+  const x = Number.isFinite(point?.sx) ? point.sx : point?.x;
+  const y = Number.isFinite(point?.sy) ? point.sy : point?.y;
+  const originX = layout.cx + state.panX;
+  const originY = layout.cy + state.panY;
+  return Math.hypot((x || 0) - originX, (y || 0) - originY) / Math.max(1, layout.scale);
+}
+
+function drawDesktopE8ChordField(projected, chordClasses, layout, paletteSet) {
+  const populated = Array.isArray(chordClasses)
+    ? chordClasses.map((edges, chordClass) => ({ chordClass, edges })).filter(entry => entry.edges?.length)
+    : [];
+  const classCounts = Array.from(
+    { length: MOBILE_E8_CHORD_VALUES.length },
+    (_, index) => chordClasses?.[index]?.length || 0,
+  );
+  if (!populated.length) {
+    return {
+      segments: 0,
+      strokes: 0,
+      classes: 0,
+      classCounts,
+      colorBands: 0,
+      brightnessBands: 0,
+      ripple: false,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
+    };
+  }
+
+  // Ripple needs per-chord radial buckets. All other treatments use the
+  // desktop's chord classes directly, which renders 21,840 segments in only
+  // two Canvas strokes for the canonical E8 data.
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, e8ChordEdges, layout, paletteSet, {
+      baseAlpha: 0.06 * e8ChordAlphaBoost(),
+      baseWidth: 0.58,
+      shadowBlur: 0.55,
+      alwaysPalette: true,
+      composite: 'source-over',
+    });
+    return {
+      ...edgeStats,
+      classes: populated.length,
+      classCounts,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
+    };
+  }
+
+  // WebGL context loss is rare, but FX should not fall back to the old two
+  // class colors when it happens. Twelve topology buckets preserve the same
+  // full-palette chord field without a per-edge stroke cost.
+  if (state.fxMode !== 'none') {
+    const edgeStats = drawPaletteEdgeField(projected, e8ChordEdges, layout, paletteSet, {
+      baseAlpha: 0.045 * e8ChordAlphaBoost(),
+      baseWidth: 0.62,
+      shadowBlur: 0.45,
+      alwaysPalette: true,
+      composite: 'source-over',
+    });
+    return {
+      ...edgeStats,
+      classes: populated.length,
+      classCounts,
+      alphaBoost: e8ChordAlphaBoost(),
+      colorLift: e8ChordColorLift(),
+      fxColorMix: e8ChordFxColorMix(),
+    };
+  }
+
+  let segments = 0;
+  let strokes = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.62;
+  for (const { chordClass, edges } of populated) {
+    const color = e8ChordPaletteColorAt(paletteSet, chordClass / Math.max(1, MOBILE_E8_CHORD_VALUES.length - 1));
+    ctx.globalAlpha = clamp(
+      DESKTOP_E8_CHORD_OPACITY[chordClass] * MOBILE_E8_CHORD_ALPHA_SCALE * e8ChordAlphaBoost(),
+      0,
+      0.56,
+    );
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 0.45;
+    ctx.beginPath();
+    let classSegments = 0;
+    for (const edge of edges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+      const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+      const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+      const by = Number.isFinite(b.sy) ? b.sy : b.y;
+      if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      classSegments++;
+    }
+    if (!classSegments) continue;
+    ctx.stroke();
+    segments += classSegments;
+    strokes++;
+  }
+  ctx.restore();
+  return {
+    segments,
+    strokes,
+    classes: populated.length,
+    classCounts,
+    colorBands: populated.length,
+    brightnessBands: 1,
+    ripple: false,
+    alphaBoost: e8ChordAlphaBoost(),
+    colorLift: e8ChordColorLift(),
+    fxColorMix: e8ChordFxColorMix(),
+  };
+}
+
+function drawPaletteEdgeField(projected, edges, layout, paletteSet, options = {}) {
+  if (!Array.isArray(edges) || !edges.length) {
+    return { segments: 0, strokes: 0, colorBands: 0, brightnessBands: 0, ripple: false };
+  }
+  const ripple = state.fxMode === 'ripple';
+  const colorBandCount = Math.max(1, Number(options.colorBands) || RIPPLE_COLOR_BANDS);
+  const brightnessBandCount = ripple ? RIPPLE_BRIGHTNESS_BANDS : 1;
+  const buckets = Array.from({ length: colorBandCount * brightnessBandCount }, () => []);
+  const usedColors = new Set();
+  const usedBrightness = new Set();
+  const colorOffset = Number(options.colorOffset) || 0;
+  let segments = 0;
+
+  for (const edge of edges) {
+    const a = projected[edge[0]];
+    const b = projected[edge[1]];
+    if (!a || !b) continue;
+    const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+    const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+    const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+    const by = Number.isFinite(b.sy) ? b.sy : b.y;
+    if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+    const midpointX = (ax + bx) * 0.5;
+    const midpointY = (ay + by) * 0.5;
+    const radius = Math.hypot(
+      midpointX - layout.cx - state.panX,
+      midpointY - layout.cy - state.panY,
+    ) / Math.max(1, layout.scale);
+    const wave = rippleWaveForRadius(radius);
+    const wave01 = ripple ? clamp(0.5 + wave * 0.5, 0, 1) : 0.5;
+    const brightnessBand = ripple
+      ? Math.min(brightnessBandCount - 1, Math.floor(wave01 * brightnessBandCount))
+      : 0;
+    const angleT = (Math.atan2(midpointY - layout.cy - state.panY, midpointX - layout.cx - state.panX) + Math.PI) / TAU;
+    const topologyT = ((edge[0] * 37 + edge[1] * 17) % 97) / 96;
+    const colorT = ((angleT * 0.46 + topologyT * 0.54 + colorOffset) % 1 + 1) % 1;
+    const colorBand = Math.min(colorBandCount - 1, Math.floor(colorT * colorBandCount));
+    buckets[brightnessBand * colorBandCount + colorBand].push(edge);
+    usedColors.add(colorBand);
+    usedBrightness.add(brightnessBand);
+    segments++;
+  }
+
+  const baseAlpha = clamp(Number(options.baseAlpha) || 0.72, 0.02, 1);
+  const baseWidth = Math.max(0.35, Number(options.baseWidth) || 1.2);
+  let strokes = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = options.composite || 'source-over';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let brightnessBand = 0; brightnessBand < brightnessBandCount; brightnessBand++) {
+    const wave01 = brightnessBandCount === 1 ? 0.5 : brightnessBand / (brightnessBandCount - 1);
+    const brightness = ripple ? 0.28 + wave01 * 1.22 : 1;
+    for (let colorBand = 0; colorBand < colorBandCount; colorBand++) {
+      const bucket = buckets[brightnessBand * colorBandCount + colorBand];
+      if (!bucket.length) continue;
+      const color = paletteColorAt(paletteSet, colorBandCount === 1 ? 0 : colorBand / (colorBandCount - 1));
+      ctx.globalAlpha = clamp(baseAlpha * brightness, 0.03, 1);
+      ctx.lineWidth = baseWidth * (ripple ? 0.8 + wave01 * 0.38 : 1);
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = options.shadowBlur ? Number(options.shadowBlur) * (ripple ? 0.45 + wave01 * 0.8 : 1) : 0;
+      ctx.beginPath();
+      for (const edge of bucket) {
+        const a = projected[edge[0]];
+        const b = projected[edge[1]];
+        const ax = Number.isFinite(a.sx) ? a.sx : a.x;
+        const ay = Number.isFinite(a.sy) ? a.sy : a.y;
+        const bx = Number.isFinite(b.sx) ? b.sx : b.x;
+        const by = Number.isFinite(b.sy) ? b.sy : b.y;
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      }
+      ctx.stroke();
+      strokes++;
+    }
+  }
+  ctx.restore();
+  return {
+    segments,
+    strokes,
+    colorBands: usedColors.size,
+    brightnessBands: usedBrightness.size,
+    ripple,
+  };
+}
+
+function recordRippleEdgeStats(drawStats, edgeStats) {
+  if (state.fxMode !== 'ripple' || !edgeStats?.segments) return false;
+  drawStats.rippleEdgeSegments += edgeStats.segments;
+  drawStats.rippleEdgeStrokes += edgeStats.strokes;
+  drawStats.rippleColorBands = Math.max(drawStats.rippleColorBands, edgeStats.colorBands);
+  drawStats.rippleBrightnessBands = Math.max(drawStats.rippleBrightnessBands, edgeStats.brightnessBands);
+  drawStats.nativeFxApplied = true;
+  drawStats.nativeFxPrimitives += edgeStats.segments;
+  drawStats.nativeFxRenderer = 'geometry-ripple';
+  return true;
+}
+
+function modelEdgeKey(a, b) {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
 function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) {
@@ -4430,27 +7551,68 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   if (!shape) return null;
   const verts = normalizedPlatonicVerts(shape);
   const projected = verts.map(v => projectModelPoint(v[0], v[1], v[2], layout, 1.04));
+  const faces = platonicFaces(shapeName, shape);
+  const edges = shape.edges || [];
+  const isStar = STAR_SHAPES.has(shapeName);
   drawStats.modelVertices = verts.length;
   drawStats.modelProjectedVertices = projected.length;
-  drawStats.modelEdges = shape.edges?.length || 0;
-  drawStats.modelFaces = shape.faces?.length || 0;
+  drawStats.modelEdges = edges.length;
+  drawStats.modelFaces = faces.length;
+  drawStats.modelFacePolygons = faces.length;
   const frame = projectedModelFrameMetrics(projected);
 
+  let visibleEdges = edges;
   if (!interactionLiteFrame) {
-    const faces = platonicFaces(shapeName, shape)
+    const entries = faces
       .map(face => ({
         face,
         depth: face.reduce((total, idx) => total + (projected[idx]?.z || 0), 0) / face.length,
+        front: isStar || projectedPolygonArea(face, projected) < 0,
       }))
-      .sort((a, b) => a.depth - b.depth);
+      .sort((a, b) => b.depth - a.depth);
+    const frontEdgeKeys = new Set();
+    if (!isStar) {
+      for (const entry of entries) {
+        if (!entry.front) continue;
+        for (let i = 0; i < entry.face.length; i++) {
+          frontEdgeKeys.add(modelEdgeKey(entry.face[i], entry.face[(i + 1) % entry.face.length]));
+        }
+      }
+      visibleEdges = edges.filter(edge => frontEdgeKeys.has(modelEdgeKey(edge[0], edge[1])));
+    }
+
+    // Rear structure is drawn first, then covered by the solid faces. This
+    // preserves a little depth context without putting every hidden edge on top.
     ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = paletteSet.glowSubset;
-    ctx.strokeStyle = colorWithAlpha(paletteSet.colors[2], 0.18);
-    ctx.lineWidth = 1;
-    for (const entry of faces) {
+    ctx.globalAlpha = isStar ? 0.26 : 0.12;
+    ctx.strokeStyle = paletteSet.colors[2] || paletteSet.colors[0];
+    ctx.lineWidth = 1.1;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const edge of edges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    const depths = entries.map(entry => entry.depth);
+    const minDepth = depths.length ? Math.min(...depths) : 0;
+    const maxDepth = depths.length ? Math.max(...depths) : 1;
+    const depthSpan = maxDepth - minDepth || 1;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (const entry of entries) {
       const first = projected[entry.face[0]];
       if (!first) continue;
+      const depthT = clamp((entry.depth - minDepth) / depthSpan, 0, 1);
+      const colorIndex = Math.min(paletteSet.colors.length - 1, Math.floor(depthT * paletteSet.colors.length));
+      ctx.globalAlpha = isStar ? 0.22 : (entry.front ? 0.72 : 0.2);
+      ctx.fillStyle = paletteSet.colors[colorIndex] || paletteSet.colors[0];
       ctx.beginPath();
       ctx.moveTo(first.x, first.y);
       for (let i = 1; i < entry.face.length; i++) {
@@ -4462,38 +7624,76 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
       drawStats.modelFaceFills++;
     }
     ctx.restore();
+    drawStats.modelFrontFaces = entries.filter(entry => entry.front).length;
+    drawStats.modelBackFaces = entries.length - drawStats.modelFrontFaces;
+    drawStats.modelFaceAlpha = isStar ? 0.22 : 0.72;
+    drawStats.modelHiddenEdgeAlpha = isStar ? 0.26 : 0.12;
   }
 
-  ctx.save();
-  ctx.lineWidth = interactionLiteFrame ? 1.2 : 1.6;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = paletteSet.petrieStroke;
-  ctx.beginPath();
-  for (const edge of shape.edges || []) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-  }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = shape.edges?.length ? 1 : 0;
-  ctx.restore();
-
-  const ordered = projected
-    .map((point, idx) => ({ point, idx }))
-    .sort((a, b) => a.point.z - b.point.z);
-  ctx.save();
-  for (const entry of ordered) {
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.07 : 1;
-    const radius = Math.max(3.2, 5.8 * (0.8 + entry.point.perspective * 0.3) * state.pointScale * pulse);
+  const edgeWidth = interactionLiteFrame ? 1.5 : 2.2;
+  const edgeAlpha = interactionLiteFrame ? 0.82 : 0.96;
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, visibleEdges, layout, paletteSet, {
+      baseAlpha: edgeAlpha,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : 3,
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes + (interactionLiteFrame ? 0 : 1);
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = edgeAlpha;
+    ctx.strokeStyle = paletteSet.colors[0];
+    ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+    ctx.shadowBlur = interactionLiteFrame ? 0 : 3;
     ctx.beginPath();
-    ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
-    ctx.fillStyle = paletteSet.colors[entry.idx % paletteSet.colors.length];
-    ctx.fill();
+    for (const edge of visibleEdges) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = edges.length ? (interactionLiteFrame ? 1 : 2) : 0;
   }
-  ctx.restore();
+  drawStats.modelVisibleEdges = visibleEdges.length;
+  drawStats.modelHiddenEdges = Math.max(0, edges.length - visibleEdges.length);
+  drawStats.modelEdgeWidth = edgeWidth;
+  drawStats.modelEdgeAlpha = edgeAlpha;
+  drawStats.modelEdgeColor = paletteSet.colors[0];
+
+  if (state.showVertices) {
+    const ordered = projected
+      .map((point, idx) => ({ point, idx }))
+      .sort((a, b) => a.point.z - b.point.z);
+    ctx.save();
+    ctx.globalAlpha = state.pointOpacity;
+    for (const entry of ordered) {
+      const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
+      const rippleScale = ripplePointScale(projectedRadius(entry.point, layout));
+      const radius = Math.max(2.4, 4.2 * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse * rippleScale);
+      if (state.fxMode === 'ripple') {
+        drawStats.ripplePointCount++;
+        drawStats.nativeFxApplied = true;
+        drawStats.nativeFxPrimitives++;
+        drawStats.nativeFxRenderer = 'geometry-ripple';
+      }
+      ctx.beginPath();
+      ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
+      ctx.fillStyle = paletteSet.colors[entry.idx % paletteSet.colors.length];
+      ctx.fill();
+      drawStats.directPoints++;
+      drawStats.directPointFills++;
+      drawStats.modelVertexFills++;
+    }
+    ctx.restore();
+  }
+
   return frame;
 }
 
@@ -4535,7 +7735,8 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   const projected = verts4.map(v => {
     const rotated = rotate4DVector(v, state.rotation);
     const [x, y, z] = project4DTo3D(rotated);
-    const point = projectModelPoint(x, y, z, layout, polyName === '600cell' ? 1.22 : 1.16);
+    const dense = polyName === '600cell' || polyName === '120cell';
+    const point = projectModelPoint(x, y, z, layout, dense ? 1.22 : 1.16);
     point.w = rotated[3];
     return point;
   });
@@ -4547,42 +7748,72 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   drawStats.polytope4dLabel = POLYTOPE4D_LABELS[polyName] || polyName;
   const frame = projectedModelFrameMetrics(projected);
 
-  ctx.save();
-  ctx.lineWidth = polyName === '600cell' ? (interactionLiteFrame ? 0.55 : 0.72) : (interactionLiteFrame ? 1 : 1.35);
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.globalAlpha = polyName === '600cell' ? 0.48 : 0.66;
-  ctx.strokeStyle = paletteSet.petrieStroke;
-  ctx.beginPath();
-  for (const edge of poly.edges || []) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-  }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
-  ctx.restore();
-
-  const classes = Array.isArray(poly.conjugacy_classes) ? poly.conjugacy_classes : null;
-  const ordered = projected
-    .map((point, idx) => ({ point, idx }))
-    .sort((a, b) => a.point.z - b.point.z);
-  ctx.save();
-  for (const entry of ordered) {
-    const cls = classes ? classes[entry.idx] || 0 : entry.idx;
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 : 1;
-    const baseRadius = polyName === '600cell' ? 3.1 : 4.8;
-    const radius = Math.max(2.4, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse);
+  const dense = polyName === '600cell' || polyName === '120cell';
+  const edgeWidth = dense ? (interactionLiteFrame ? 0.72 : 1.05) : (interactionLiteFrame ? 1.25 : 1.9);
+  const edgeAlpha = dense ? (interactionLiteFrame ? 0.58 : 0.74) : (interactionLiteFrame ? 0.82 : 0.96);
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, poly.edges || [], layout, paletteSet, {
+      baseAlpha: dense ? edgeAlpha * 0.62 : edgeAlpha * 0.84,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : (dense ? 0.8 : 2.2),
+      composite: 'source-over',
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes;
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = edgeAlpha;
+    ctx.strokeStyle = paletteSet.colors[0];
+    ctx.shadowColor = paletteSet.colors[1] || paletteSet.colors[0];
+    ctx.shadowBlur = interactionLiteFrame ? 0 : (dense ? 1.5 : 3);
     ctx.beginPath();
-    ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
-    ctx.fillStyle = paletteSet.colors[cls % paletteSet.colors.length];
-    ctx.fill();
-    drawStats.directPoints++;
-    drawStats.directPointFills++;
+    for (const edge of poly.edges || []) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = poly.edges?.length ? 1 : 0;
   }
-  ctx.restore();
+  drawStats.modelEdgeWidth = edgeWidth;
+  drawStats.modelEdgeAlpha = edgeAlpha;
+  drawStats.modelEdgeColor = paletteSet.colors[0];
+
+  if (state.showVertices) {
+    const classes = Array.isArray(poly.conjugacy_classes) ? poly.conjugacy_classes : null;
+    const ordered = projected
+      .map((point, idx) => ({ point, idx }))
+      .sort((a, b) => a.point.z - b.point.z);
+    ctx.save();
+    ctx.globalAlpha = state.pointOpacity;
+    for (const entry of ordered) {
+      const cls = classes ? classes[entry.idx] || 0 : entry.idx;
+      const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + entry.idx * 0.17) * 0.06 * state.fxStrength : 1;
+      const baseRadius = dense ? 2.7 : 4.2;
+      const rippleScale = ripplePointScale(projectedRadius(entry.point, layout));
+      const radius = Math.max(2, baseRadius * (0.76 + entry.point.perspective * 0.32) * state.pointScale * pulse * rippleScale);
+      if (state.fxMode === 'ripple') {
+        drawStats.ripplePointCount++;
+        drawStats.nativeFxApplied = true;
+        drawStats.nativeFxPrimitives++;
+        drawStats.nativeFxRenderer = 'geometry-ripple';
+      }
+      ctx.beginPath();
+      ctx.arc(entry.point.x, entry.point.y, radius, 0, TAU);
+      ctx.fillStyle = paletteSet.colors[cls % paletteSet.colors.length];
+      ctx.fill();
+      drawStats.directPoints++;
+      drawStats.directPointFills++;
+      drawStats.modelVertexFills++;
+    }
+    ctx.restore();
+  }
   return frame;
 }
 
@@ -4642,22 +7873,33 @@ function drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   drawStats.dynkinSelectedNode = dynkinSelectedNodeIndex();
   const frame = projectedModelFrameMetrics(projected);
 
-  ctx.save();
-  ctx.lineWidth = interactionLiteFrame ? 2 : 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = paletteSet.petrieStroke;
-  ctx.beginPath();
-  for (const edge of diagram.edges || []) {
-    const a = projected[edge[0]];
-    const b = projected[edge[1]];
-    if (!a || !b) continue;
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+  const edgeWidth = interactionLiteFrame ? 2 : 2.5;
+  if (state.fxMode === 'ripple') {
+    const edgeStats = drawPaletteEdgeField(projected, diagram.edges || [], layout, paletteSet, {
+      baseAlpha: 0.88,
+      baseWidth: edgeWidth,
+      shadowBlur: interactionLiteFrame ? 0 : 2,
+    });
+    drawStats.modelEdgeStrokes = edgeStats.strokes;
+    recordRippleEdgeStats(drawStats, edgeStats);
+  } else {
+    ctx.save();
+    ctx.lineWidth = edgeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = paletteSet.petrieStroke;
+    ctx.beginPath();
+    for (const edge of diagram.edges || []) {
+      const a = projected[edge[0]];
+      const b = projected[edge[1]];
+      if (!a || !b) continue;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+    drawStats.modelEdgeStrokes = diagram.edges?.length ? 1 : 0;
   }
-  ctx.stroke();
-  drawStats.modelEdgeStrokes = diagram.edges?.length ? 1 : 0;
-  ctx.restore();
 
   const selectedNode = drawStats.dynkinSelectedNode;
   ctx.save();
@@ -4666,8 +7908,15 @@ function drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   ctx.font = '700 13px system-ui, sans-serif';
   for (const point of projected) {
     const isSelected = point.index === selectedNode;
-    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.5) * 0.06 : 1;
-    const radius = (isSelected ? 17 : 14) * state.pointScale * pulse;
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.5) * 0.06 * state.fxStrength : 1;
+    const rippleScale = ripplePointScale(projectedRadius(point, layout));
+    const radius = (isSelected ? 17 : 14) * state.pointScale * pulse * rippleScale;
+    if (state.fxMode === 'ripple') {
+      drawStats.ripplePointCount++;
+      drawStats.nativeFxApplied = true;
+      drawStats.nativeFxPrimitives++;
+      drawStats.nativeFxRenderer = 'geometry-ripple';
+    }
     if (isSelected && !interactionLiteFrame) {
       ctx.beginPath();
       ctx.arc(point.x, point.y, radius + 10, 0, TAU);
@@ -4837,7 +8086,7 @@ function drawPetrieCycle(paletteSet) {
 function drawBasePointBatches(palette) {
   const stats = { points: 0, fills: 0, buckets: 0 };
   ctx.save();
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = state.pointOpacity;
   for (let slot = 0; slot < basePointBuckets.length; slot++) {
     const batch = basePointBuckets[slot];
     if (!batch.length) continue;
@@ -4847,7 +8096,7 @@ function drawBasePointBatches(palette) {
       ctx.arc(p.sx, p.sy, p.size, 0, TAU);
       stats.points++;
     }
-    ctx.fillStyle = palette[slot] || palette[0];
+    ctx.fillStyle = palette[slot % palette.length] || palette[0];
     ctx.fill();
     stats.fills++;
     stats.buckets++;
@@ -4857,7 +8106,7 @@ function drawBasePointBatches(palette) {
 }
 
 function basePointFill(p, palette) {
-  return palette[p.baseFillSlot] || palette[0];
+  return palette[p.baseFillSlot % palette.length] || palette[0];
 }
 
 function drawPoint(p, paletteSet, mask, skipGlow = false) {
@@ -4868,20 +8117,22 @@ function drawPoint(p, paletteSet, mask, skipGlow = false) {
   const antipode = !!(mask & DRAW_ANTIPODE);
   const inPetrie = !!(mask & DRAW_PETRIE);
   const fill = selected || neighbor ? palette[2] : antipode ? palette[1] : inSubset || inPetrie ? palette[2] : basePointFill(p, palette);
-  const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.06 : 1;
+  const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU) * 0.06 * state.fxStrength : 1;
   const radius = (selected ? p.size + 5 : neighbor ? p.size + 2.5 : inSubset ? p.size + 2 : antipode ? p.size + 1.5 : inPetrie ? p.size + 1 : p.size) * pulse;
   let fills = 0;
   if (!skipGlow && (inSubset || selected || neighbor || antipode || inPetrie)) {
     ctx.beginPath();
     ctx.arc(p.sx, p.sy, radius + 5, 0, TAU);
     ctx.fillStyle = selected ? paletteSet.glowSelected : neighbor ? paletteSet.glowNeighbor : antipode ? paletteSet.glowAntipode : inSubset ? paletteSet.glowSubset : paletteSet.glowPetrie;
+    ctx.globalAlpha = Math.min(1, state.fxStrength);
     ctx.fill();
+    ctx.globalAlpha = 1;
     fills++;
   }
   ctx.beginPath();
   ctx.arc(p.sx, p.sy, radius, 0, TAU);
   ctx.fillStyle = fill;
-  ctx.globalAlpha = selected ? 1 : neighbor ? 0.96 : inSubset ? 0.92 : antipode ? 0.88 : inPetrie ? 0.9 : 0.72;
+  ctx.globalAlpha = selected ? 1 : neighbor ? 0.96 : inSubset ? 0.92 : antipode ? 0.88 : inPetrie ? 0.9 : state.pointOpacity;
   ctx.fill();
   fills++;
   ctx.globalAlpha = 1;
@@ -4894,6 +8145,328 @@ function colorWithAlpha(hex, alpha) {
   const g = parseInt(c.slice(2, 4), 16);
   const b = parseInt(c.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function scaleHexColor(hex, factor) {
+  const c = String(hex || '#000000').replace('#', '');
+  const channels = [0, 2, 4].map(offset => clamp(Math.round(parseInt(c.slice(offset, offset + 2), 16) * factor), 0, 255));
+  return `rgb(${channels[0]},${channels[1]},${channels[2]})`;
+}
+
+function backgroundHash(index, seed = 0) {
+  const value = Math.sin(index * 127.1 + seed * 311.7) * 43758.5453123;
+  return value - Math.floor(value);
+}
+
+function backgroundAlpha(value) {
+  return clamp(value * state.backgroundBrightness, 0, 1);
+}
+
+function fillBackgroundBase(width, height, color) {
+  // Keep the foundation flat and dark. The previous full-screen radial
+  // gradient brightened every scene center and made foreground geometry look
+  // fogged even when the selected background was supposed to be empty.
+  const factor = 0.72 + state.backgroundBrightness * 0.4;
+  ctx.fillStyle = scaleHexColor(color, factor);
+  ctx.fillRect(0, 0, width, height);
+}
+
+function drawStarfieldBackground(width, height, density = 1) {
+  const count = Math.max(44, Math.round((width * height) / 5600 * density));
+  ctx.save();
+  ctx.fillStyle = `rgba(185, 218, 255, ${backgroundAlpha(0.42)})`;
+  ctx.beginPath();
+  for (let index = 0; index < count; index++) {
+    const x = backgroundHash(index, 1.3) * width;
+    const y = backgroundHash(index, 7.1) * height;
+    const radius = 0.35 + backgroundHash(index, 4.7) * 0.85;
+    ctx.moveTo(x + radius, y);
+    ctx.arc(x, y, radius, 0, TAU);
+  }
+  ctx.fill();
+  ctx.fillStyle = `rgba(255, 242, 190, ${backgroundAlpha(0.68)})`;
+  ctx.beginPath();
+  for (let index = 0; index < count; index += 11) {
+    const x = backgroundHash(index, 9.2) * width;
+    const y = backgroundHash(index, 2.8) * height;
+    const radius = 0.8 + backgroundHash(index, 5.5) * 0.9;
+    ctx.moveTo(x + radius, y);
+    ctx.arc(x, y, radius, 0, TAU);
+  }
+  ctx.fill();
+  ctx.restore();
+  return count + Math.ceil(count / 11);
+}
+
+function drawGridBackground(width, height) {
+  const horizon = height * 0.54;
+  ctx.save();
+  ctx.strokeStyle = `rgba(88, 221, 255, ${backgroundAlpha(0.22)})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let index = -8; index <= 8; index++) {
+    ctx.moveTo(width * 0.5, horizon);
+    ctx.lineTo(width * 0.5 + index * width * 0.12, height);
+  }
+  for (let index = 1; index <= 14; index++) {
+    const t = index / 14;
+    const y = horizon + (height - horizon) * t * t;
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(221, 178, 255, ${backgroundAlpha(0.34)})`;
+  ctx.beginPath();
+  ctx.moveTo(0, horizon);
+  ctx.lineTo(width, horizon);
+  ctx.stroke();
+  ctx.restore();
+  return 32;
+}
+
+function drawAuroraBackground(width, height) {
+  const colors = ['85, 255, 171', '111, 210, 255', '190, 99, 255'];
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let index = 0; index < colors.length; index++) {
+    const y = height * (0.2 + index * 0.075);
+    const gradient = ctx.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, `rgba(${colors[index]}, 0)`);
+    gradient.addColorStop(0.22, `rgba(${colors[index]}, ${backgroundAlpha(0.12)})`);
+    gradient.addColorStop(0.62, `rgba(${colors[index]}, ${backgroundAlpha(0.24)})`);
+    gradient.addColorStop(1, `rgba(${colors[index]}, 0)`);
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 16 + index * 7;
+    ctx.beginPath();
+    ctx.moveTo(-30, y + 30);
+    ctx.bezierCurveTo(width * 0.2, y - 55, width * 0.58, y + 70, width + 30, y - 25);
+    ctx.stroke();
+  }
+  ctx.restore();
+  return colors.length;
+}
+
+function drawCosmosBackground(width, height) {
+  const pockets = [
+    [0.22, 0.28, 0.32, '255, 120, 54'],
+    [0.76, 0.62, 0.4, '71, 132, 255'],
+    [0.42, 0.82, 0.24, '168, 79, 255'],
+  ];
+  ctx.save();
+  for (const [x, y, radius, color] of pockets) {
+    const gradient = ctx.createRadialGradient(width * x, height * y, 0, width * x, height * y, Math.max(width, height) * radius);
+    gradient.addColorStop(0, `rgba(${color}, ${backgroundAlpha(0.11)})`);
+    gradient.addColorStop(0.52, `rgba(${color}, ${backgroundAlpha(0.045)})`);
+    gradient.addColorStop(1, `rgba(${color}, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  }
+  ctx.restore();
+  return pockets.length + drawStarfieldBackground(width, height, 0.74);
+}
+
+function drawMandalaBackground(width, height) {
+  const cx = width * 0.5;
+  const cy = height * 0.48;
+  const radius = Math.min(width, height) * 0.43;
+  ctx.save();
+  ctx.strokeStyle = `rgba(164, 115, 255, ${backgroundAlpha(0.2)})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let ring = 1; ring <= 8; ring++) {
+    const ringRadius = radius * ring / 8;
+    ctx.moveTo(cx + ringRadius, cy);
+    ctx.arc(cx, cy, ringRadius, 0, TAU);
+  }
+  for (let spoke = 0; spoke < 24; spoke++) {
+    const angle = spoke / 24 * TAU + stylePhase * 0.1;
+    ctx.moveTo(cx + Math.cos(angle) * radius * 0.12, cy + Math.sin(angle) * radius * 0.12);
+    ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(77, 221, 255, ${backgroundAlpha(0.14)})`;
+  ctx.beginPath();
+  for (let spoke = 0; spoke < 12; spoke++) {
+    const angle = spoke / 12 * TAU;
+    for (let ring = 1; ring < 8; ring++) {
+      const r = radius * ring / 8;
+      const nextR = radius * (ring + 1) / 8;
+      ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+      ctx.lineTo(cx + Math.cos(angle + Math.PI / 6) * nextR, cy + Math.sin(angle + Math.PI / 6) * nextR);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+  return 8 + 24 + 84;
+}
+
+function drawPlasmaBackground(width, height) {
+  const colors = ['255, 72, 154', '101, 123, 255', '80, 234, 218'];
+  ctx.save();
+  ctx.lineWidth = 1.25;
+  for (let band = 0; band < 18; band++) {
+    ctx.strokeStyle = `rgba(${colors[band % colors.length]}, ${backgroundAlpha(0.1 + (band % 3) * 0.025)})`;
+    ctx.beginPath();
+    for (let x = 0; x <= width; x += 8) {
+      const y = height * (band + 1) / 19
+        + Math.sin(x * 0.025 + band * 0.71 + stylePhase * TAU) * (10 + band % 4 * 4)
+        + Math.sin(x * 0.009 - band) * 13;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 18;
+}
+
+function drawVortexBackground(width, height) {
+  const cx = width * 0.5;
+  const cy = height * 0.49;
+  const maxRadius = Math.min(width, height) * 0.48;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let arm = 0; arm < 4; arm++) {
+    ctx.strokeStyle = arm % 2
+      ? `rgba(117, 92, 255, ${backgroundAlpha(0.16)})`
+      : `rgba(255, 199, 121, ${backgroundAlpha(0.12)})`;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let step = 0; step <= 110; step++) {
+      const t = step / 110;
+      const angle = arm / 4 * TAU + t * TAU * 2.15 + stylePhase * 0.12;
+      const radius = 5 + t * maxRadius;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius * 0.72;
+      if (step === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  return 4;
+}
+
+function drawQuantumBackground(width, height) {
+  const nodes = Array.from({ length: 26 }, (_, index) => ({
+    x: backgroundHash(index, 6.2) * width,
+    y: backgroundHash(index, 3.4) * height,
+  }));
+  let lines = 0;
+  const maxDistance = Math.min(width, height) * 0.26;
+  ctx.save();
+  ctx.strokeStyle = `rgba(68, 155, 224, ${backgroundAlpha(0.16)})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let a = 0; a < nodes.length; a++) {
+    for (let b = a + 1; b < nodes.length; b++) {
+      if (Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y) > maxDistance) continue;
+      ctx.moveTo(nodes[a].x, nodes[a].y);
+      ctx.lineTo(nodes[b].x, nodes[b].y);
+      lines++;
+    }
+  }
+  ctx.stroke();
+  ctx.fillStyle = `rgba(91, 255, 211, ${backgroundAlpha(0.48)})`;
+  ctx.beginPath();
+  for (const node of nodes) {
+    ctx.moveTo(node.x + 1.6, node.y);
+    ctx.arc(node.x, node.y, 1.6, 0, TAU);
+  }
+  ctx.fill();
+  ctx.restore();
+  return lines + nodes.length;
+}
+
+function drawEclipseBackground(width, height) {
+  const cx = width * 0.5;
+  const cy = height * 0.43;
+  const radius = Math.min(width, height) * 0.24;
+  ctx.save();
+  const corona = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.55);
+  corona.addColorStop(0, `rgba(255, 174, 70, ${backgroundAlpha(0.52)})`);
+  corona.addColorStop(0.4, `rgba(255, 83, 24, ${backgroundAlpha(0.15)})`);
+  corona.addColorStop(1, 'rgba(255, 50, 10, 0)');
+  ctx.fillStyle = corona;
+  ctx.fillRect(cx - radius * 1.7, cy - radius * 1.7, radius * 3.4, radius * 3.4);
+  ctx.fillStyle = '#010103';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 196, 103, ${backgroundAlpha(0.62)})`;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+  return 3;
+}
+
+function drawSynthwaveBackground(width, height) {
+  const horizon = height * 0.56;
+  const sunRadius = Math.min(width, height) * 0.18;
+  ctx.save();
+  const sun = ctx.createLinearGradient(0, horizon - sunRadius, 0, horizon + sunRadius);
+  sun.addColorStop(0, `rgba(255, 199, 87, ${backgroundAlpha(0.7)})`);
+  sun.addColorStop(1, `rgba(255, 52, 118, ${backgroundAlpha(0.48)})`);
+  ctx.fillStyle = sun;
+  ctx.beginPath();
+  ctx.arc(width * 0.5, horizon, sunRadius, Math.PI, TAU);
+  ctx.fill();
+  for (let stripe = 1; stripe <= 5; stripe++) {
+    const y = horizon - sunRadius + stripe * sunRadius * 0.3;
+    ctx.fillStyle = scaleHexColor('#0d0412', 0.9);
+    ctx.fillRect(width * 0.5 - sunRadius, y, sunRadius * 2, 3 + stripe);
+  }
+  ctx.restore();
+  return 7 + drawGridBackground(width, height);
+}
+
+function drawPrismBackground(width, height) {
+  const cx = width * 0.5;
+  const cy = height * 0.5;
+  const size = Math.min(width, height) * 0.27;
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = `rgba(213, 222, 255, ${backgroundAlpha(0.5)})`;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size);
+  ctx.lineTo(cx - size * 0.9, cy + size * 0.75);
+  ctx.lineTo(cx + size * 0.9, cy + size * 0.75);
+  ctx.closePath();
+  ctx.stroke();
+  const rays = ['255, 80, 92', '255, 193, 75', '88, 255, 175', '79, 196, 255', '177, 93, 255'];
+  for (let index = 0; index < rays.length; index++) {
+    const y = cy - size * 0.12 + index * size * 0.09;
+    ctx.strokeStyle = `rgba(${rays[index]}, ${backgroundAlpha(0.36)})`;
+    ctx.beginPath();
+    ctx.moveTo(cx + size * 0.15, y);
+    ctx.lineTo(width, y + (index - 2) * size * 0.34);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = `rgba(226, 236, 255, ${backgroundAlpha(0.42)})`;
+  ctx.beginPath();
+  ctx.moveTo(0, cy - size * 0.16);
+  ctx.lineTo(cx - size * 0.12, cy - size * 0.06);
+  ctx.stroke();
+  ctx.restore();
+  return rays.length + 2;
+}
+
+function drawMobileBackground(width, height) {
+  const preset = BACKGROUNDS[state.background] || BACKGROUNDS[DEFAULT_STATE.background];
+  fillBackgroundBase(width, height, preset.color);
+  let primitives = 1;
+  if (preset.renderer === 'stars') primitives += drawStarfieldBackground(width, height);
+  else if (preset.renderer === 'grid') primitives += drawGridBackground(width, height);
+  else if (preset.renderer === 'aurora') primitives += drawAuroraBackground(width, height);
+  else if (preset.renderer === 'cosmos') primitives += drawCosmosBackground(width, height);
+  else if (preset.renderer === 'mandala') primitives += drawMandalaBackground(width, height);
+  else if (preset.renderer === 'plasma') primitives += drawPlasmaBackground(width, height);
+  else if (preset.renderer === 'vortex') primitives += drawVortexBackground(width, height);
+  else if (preset.renderer === 'quantum') primitives += drawQuantumBackground(width, height);
+  else if (preset.renderer === 'eclipse') primitives += drawEclipseBackground(width, height);
+  else if (preset.renderer === 'synthwave') primitives += drawSynthwaveBackground(width, height);
+  else if (preset.renderer === 'prism') primitives += drawPrismBackground(width, height);
+  return { mode: state.background, renderer: preset.renderer, primitives };
 }
 
 function requestRender(reason = 'render') {
@@ -5030,12 +8603,38 @@ function advanceAutoModel() {
 }
 
 function syncMotionLoop() {
+  metrics.motionFrameTargetMs = mobileMotionFrameIntervalMs();
   if (hasRuntimeAnimation() && !document.hidden && !isSettingsOpen() && !hasActiveInput()) startMotion();
   else stopMotion();
 }
 
+function mobileMotionFrameIntervalMs() {
+  const denseCanvasFx = state.modelMode === 'e8_2d' && state.showEdges && (
+    !e8ChordGl || (state.fxMode !== 'none' && state.fxMode !== 'ripple')
+  );
+  return denseCanvasFx ? DENSE_E8_MOTION_FRAME_INTERVAL_MS : MOTION_FRAME_INTERVAL_MS;
+}
+
+function syncAutoMotionPhase(kind) {
+  const isZoom = kind === 'zoom';
+  const min = isZoom ? autoZoomMinForModel(state.modelMode) : 0;
+  const max = isZoom ? autoZoomMaxForModel(state.modelMode) : 1;
+  const value = isZoom ? state.zoom : state.e8MorphT;
+  const normalized = clamp((value - min) / (max - min), 0, 1);
+  const offset = Math.asin(clamp(normalized * 2 - 1, -1, 1)) - motionPhase * AUTO_MOTION_RATE;
+  if (isZoom) autoZoomPhaseOffset = offset;
+  else autoExtrudePhaseOffset = offset;
+  return offset;
+}
+
+function autoMotionValue(min, max, phaseOffset) {
+  const wave = 0.5 + 0.5 * Math.sin(motionPhase * AUTO_MOTION_RATE + phaseOffset);
+  return min + (max - min) * wave;
+}
+
 function hasRuntimeAnimation() {
-  return !!(state.autoRotate || state.autoModel || state.autoColor || state.softFx);
+  const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
 }
 
 function startMotion() {
@@ -5047,7 +8646,9 @@ function startMotion() {
       return;
     }
     const elapsed = now - last;
-    if (elapsed < MOTION_FRAME_INTERVAL_MS) {
+    const targetFrameMs = mobileMotionFrameIntervalMs();
+    metrics.motionFrameTargetMs = targetFrameMs;
+    if (elapsed < targetFrameMs) {
       metrics.motionFrameSkipCount++;
       metrics.lastMotionFrameSkipMs = now;
       motionRafId = requestAnimationFrame(tick);
@@ -5055,7 +8656,30 @@ function startMotion() {
     }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (state.autoRotate) state.rotation += dt * state.rotationSpeed * 0.55;
+    if (state.autoRotate || state.autoZoom || state.autoExtrude) {
+      motionPhase = (motionPhase + dt * state.rotationSpeed) % 4096;
+    }
+    if (state.autoRotate) {
+      const pathRate = state.cameraPath === 'dive' ? 0.30 : state.cameraPath === 'spiral' ? 0.62 : 0.48;
+      state.rotation += dt * state.rotationSpeed * pathRate;
+    }
+    if (state.autoZoom) {
+      state.zoom = autoMotionValue(
+        autoZoomMinForModel(state.modelMode),
+        autoZoomMaxForModel(state.modelMode),
+        autoZoomPhaseOffset
+      );
+      metrics.autoZoomFrameCount++;
+    }
+    if (state.autoExtrude) {
+      state.e8MorphT = autoMotionValue(0, 1, autoExtrudePhaseOffset);
+      metrics.autoExtrudeFrameCount++;
+    }
+    if (state.modelMode === 'bloom' && state.bloomAuto) {
+      state.bloomAmount = (state.bloomAmount + dt * state.bloomSpeed) % 1;
+      metrics.bloomAutoFrameCount++;
+      syncBloomRuntimeReadout();
+    }
     if (state.autoModel) {
       autoModelElapsed += dt;
       metrics.autoModelFrameCount++;
@@ -5064,8 +8688,18 @@ function startMotion() {
         advanceAutoModel();
       }
     }
-    if (state.autoColor || state.softFx) {
-      stylePhase = (stylePhase + dt * (state.autoColor ? 0.72 : 0.42)) % 4096;
+    if (state.autoFx) {
+      fxShiftElapsed += dt * state.colorSpeed;
+      metrics.autoFxFrameCount++;
+      if (fxShiftElapsed >= FX_SHIFT_INTERVAL_S) {
+        fxShiftElapsed %= FX_SHIFT_INTERVAL_S;
+        advanceFxShift();
+      }
+    }
+    const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
+    if (state.autoColor || state.autoFx || state.softFx || nativeFxAnimation) {
+      const styleRate = state.autoColor || state.autoFx ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
+      stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
       if (state.softFx) metrics.softFxFrameCount++;
     }
@@ -5105,6 +8739,12 @@ function syncChromeFade(reason = 'input') {
   return true;
 }
 
+function touchDragMode() {
+  if (TOUCH_ORBIT_MODEL_MODES.has(state.modelMode)) return 'orbit';
+  if (state.modelMode === 'e8_2d' && state.e8MorphT > 0.0001) return 'orbit';
+  return 'pan';
+}
+
 function onPointerDown(event) {
   if (mobileTourActive) stopMobileTour({ interactionType: 'touch-stop-tour' });
   try {
@@ -5128,6 +8768,9 @@ function onPointerDown(event) {
     y: event.clientY,
     panX: state.panX,
     panY: state.panY,
+    rotation: state.rotation,
+    cameraTilt: state.cameraTilt,
+    mode: touchDragMode(),
     moved: false,
   };
 }
@@ -5152,14 +8795,23 @@ function onPointerMove(event) {
     return;
   }
   drag.moved = true;
-  markInteraction('pan');
-  state.panX = drag.panX + dx;
-  state.panY = drag.panY + dy;
+  if (drag.mode === 'orbit') {
+    markInteraction('orbit-drag');
+    state.rotation = drag.rotation + dx * 0.008;
+    state.cameraTilt = clamp(drag.cameraTilt - dy * 0.006, -Math.PI / 3, Math.PI / 3);
+    state.cameraPath = 'manual';
+    state.autoRotate = false;
+  } else {
+    markInteraction('pan');
+    state.panX = drag.panX + dx;
+    state.panY = drag.panY + dy;
+  }
   requestRender();
 }
 
 function onPointerUp(event) {
   const wasTap = drag && drag.id === event.pointerId && !drag.moved && !gesture;
+  const dragMode = drag?.mode || 'pan';
   activePointers.delete(event.pointerId);
   try {
     if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -5186,7 +8838,8 @@ function onPointerUp(event) {
     return;
   }
   drag = null;
-  syncChromeFade(wasTap ? 'tap-end' : 'pan-end');
+  const dragEndReason = `${dragMode}-end`;
+  syncChromeFade(wasTap ? 'tap-end' : dragEndReason);
   if (wasTap) {
     if (consumeDoubleTap(event.clientX, event.clientY)) {
       fitAllRoots('double-tap-fit-all', { clearSelection: true });
@@ -5198,12 +8851,21 @@ function onPointerUp(event) {
     selectNearest(event.clientX, event.clientY);
   }
   else {
-    markInteraction('pan-end');
+    markInteraction(dragEndReason);
     syncControls();
     saveState();
-    requestSettledRenderAfterInput('pan-end');
+    requestSettledRenderAfterInput(dragEndReason);
   }
   syncMotionLoop();
+}
+
+function onPointerCancel() {
+  // Android may cancel a pointer when system chrome, accessibility gestures,
+  // or another native surface takes ownership.  A cancellation is never a tap
+  // and must not participate in double-tap fitting or root selection.
+  clearTapMemory();
+  const hadInput = resetInputState('pointer-cancel');
+  if (hadInput) requestSettledRenderAfterInput('pointer-cancel');
 }
 
 function resetInputState(reason = null) {
@@ -5247,6 +8909,7 @@ function consumeDoubleTap(x, y) {
 function beginGesture() {
   const snap = gestureSnapshot();
   if (!snap || snap.distance < 4) return;
+  const layout = layoutForCanvas(state.zoom);
   gesture = {
     distance: snap.distance,
     centerX: snap.centerX,
@@ -5254,6 +8917,8 @@ function beginGesture() {
     zoom: state.zoom,
     panX: state.panX,
     panY: state.panY,
+    originX: layout.cx,
+    originY: layout.cy,
     moved: false,
   };
   markInteraction('pinch-start');
@@ -5275,9 +8940,17 @@ function updateGesture() {
     return;
   }
   gesture.moved = true;
-  state.zoom = clamp(gesture.zoom * (snap.distance / gesture.distance), 0.55, 3.2);
-  state.panX = gesture.panX + (snap.centerX - gesture.centerX);
-  state.panY = gesture.panY + (snap.centerY - gesture.centerY);
+  state.autoZoom = false;
+  state.zoom = clamp(
+    gesture.zoom * (snap.distance / gesture.distance),
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
+  const zoomRatio = state.zoom / Math.max(0.001, gesture.zoom);
+  const anchorX = gesture.centerX - gesture.originX - gesture.panX;
+  const anchorY = gesture.centerY - gesture.originY - gesture.panY;
+  state.panX = snap.centerX - gesture.originX - anchorX * zoomRatio;
+  state.panY = snap.centerY - gesture.originY - anchorY * zoomRatio;
   markInteraction('pinch');
   requestRender();
 }
@@ -5295,17 +8968,23 @@ function gestureSnapshot() {
 
 function onWheel(event) {
   event.preventDefault();
-  const next = clamp(state.zoom * (event.deltaY > 0 ? 0.92 : 1.08), 0.55, 3.2);
+  const next = clamp(
+    state.zoom * (event.deltaY > 0 ? 0.92 : 1.08),
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   markInteraction('wheel-zoom');
   setZoom(next);
 }
 
 function setZoom(value) {
-  state.zoom = clamp(Number(value) || 1, 0.55, 3.2);
+  state.autoZoom = false;
+  state.zoom = clamp(Number(value) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(state.modelMode));
   markInteraction('zoom-control');
   saveState();
   syncControls();
   requestRender();
+  syncMotionLoop();
   return state.zoom;
 }
 
@@ -5353,7 +9032,7 @@ function selectNearest(x, y) {
     selectDynkinNode(x, y);
     return;
   }
-  if (state.modelMode === 'platonic' || state.modelMode === 'poly4d') {
+  if (state.modelMode === 'sdf' || state.modelMode === 'platonic' || state.modelMode === 'poly4d') {
     clearSelection();
     return;
   }
@@ -5454,33 +9133,103 @@ function fitAllRoots(interactionType = 'fit-all', options = {}) {
     state.selectedRoot = null;
     updateSelectionUI();
   }
-  const fitted = framePointList(allRootList, interactionType, options);
+  const fitted = state.modelMode === 'sdf'
+    ? frameSdfModel(interactionType, options)
+    : state.modelMode === 'e8_2d'
+      ? framePointList(allRootList, interactionType, options)
+      : frameProjectedModel(interactionType, options);
   if (fitted && !options.silentStatus) showStatus('View fitted');
   return fitted;
+}
+
+function frameSdfModel(interactionType, options = {}) {
+  const layout = layoutForCanvas(1);
+  const view = usableViewBounds();
+  const targetX = (view.left + view.right) * 0.5;
+  const targetY = (view.top + view.bottom) * 0.5;
+  const fitRadius = Math.max(48, Math.min(
+    targetX - view.left,
+    view.right - targetX,
+    targetY - view.top,
+    view.bottom - targetY
+  ) * 0.96);
+  const worldRadius = sdfWorldBoundsRadius();
+  const focalPixels = window.innerHeight / (2 * Math.tan(SDF_FOV_RADIANS * 0.5));
+  const requiredDistance = worldRadius * Math.sqrt(1 + (focalPixels / fitRadius) ** 2) + 0.02;
+  const nextZoom = clamp(
+    (SDF_BASE_CAMERA_DISTANCE / requiredDistance) ** 2,
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
+  motionPhase = 0;
+  setState({
+    cameraPath: 'manual',
+    autoRotate: false,
+    autoZoom: false,
+    zoom: nextZoom,
+    panX: targetX - window.innerWidth * 0.5,
+    panY: targetY - layout.cy,
+  }, {
+    interactionType,
+    save: options.save,
+    renderReason: interactionType,
+  });
+  return true;
 }
 
 function framePointList(list, interactionType, options = {}) {
   const modelBounds = pointModelBounds(list);
   if (!modelBounds) return false;
+  return frameModelBounds(modelBounds, interactionType, options);
+}
+
+function frameProjectedModel(interactionType, options = {}) {
+  // A model may have been selected while Settings was open, in which case its
+  // normal render is deliberately deferred.  Fit is an explicit visual action,
+  // so render once to obtain bounds for the active model rather than reusing
+  // the previous model's Coxeter-root frame.
+  render();
+  const frame = metrics.lastRenderAllFrame;
+  if (!frame || metrics.lastModelMode !== state.modelMode) return false;
+  const currentLayout = layoutForCanvas(state.zoom);
+  const scale = Math.max(0.001, currentLayout.scale);
+  const modelBounds = {
+    minX: (frame.minX - currentLayout.cx - state.panX) / scale,
+    maxX: (frame.maxX - currentLayout.cx - state.panX) / scale,
+    minY: (frame.minY - currentLayout.cy - state.panY) / scale,
+    maxY: (frame.maxY - currentLayout.cy - state.panY) / scale,
+  };
+  return frameModelBounds(modelBounds, interactionType, options);
+}
+
+function frameModelBounds(modelBounds, interactionType, options = {}) {
   const layout = layoutForCanvas(1);
   const view = usableViewBounds();
   const modelW = Math.max(0.001, modelBounds.maxX - modelBounds.minX);
   const modelH = Math.max(0.001, modelBounds.maxY - modelBounds.minY);
   const fitW = Math.max(120, view.right - view.left);
   const fitH = Math.max(120, view.bottom - view.top);
-  const nextZoom = clamp(Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)), 0.55, 3.2);
+  // Leave a small visual and floating-point margin. An exact edge-to-edge fit
+  // can be reported outside the view by sub-pixel rounding and feels cramped.
+  const nextZoom = clamp(
+    Math.min(fitW / (modelW * layout.baseScale), fitH / (modelH * layout.baseScale)) * 0.96,
+    MANUAL_ZOOM_MIN,
+    zoomMaxForModel(state.modelMode)
+  );
   const nextLayout = layoutForCanvas(nextZoom);
   const targetX = (view.left + view.right) / 2;
   const targetY = (view.top + view.bottom) / 2;
   const modelCenterX = (modelBounds.minX + modelBounds.maxX) / 2;
   const modelCenterY = (modelBounds.minY + modelBounds.maxY) / 2;
   markInteraction(interactionType);
+  state.autoZoom = false;
   state.zoom = nextZoom;
   state.panX = targetX - nextLayout.cx - modelCenterX * nextLayout.scale;
   state.panY = targetY - nextLayout.cy - modelCenterY * nextLayout.scale;
   syncControls();
   if (options.save !== false) saveState();
   requestRender();
+  syncMotionLoop();
   return true;
 }
 
@@ -5728,12 +9477,10 @@ function screenPointFor(point, layout = layoutForCanvas()) {
       };
     }
   }
-  if (state.modelMode === 'e8_3d') {
-    const v = e8ModelVector(point.idx);
-    const projected = projectModelPoint(v.x, v.y, v.z, layout, 0.92);
+  if (state.modelMode === 'bloom') {
     return {
-      x: projected.x,
-      y: projected.y,
+      x: point.bloomVisible ? point.sx : layout.cx + state.panX,
+      y: point.bloomVisible ? point.sy : layout.cy + state.panY,
     };
   }
   const cos = Math.cos(state.rotation);
@@ -5819,8 +9566,11 @@ function modelInfoHtml() {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     return `<strong>${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin diagram</strong><small>${diagram?.nodes?.length || 0} simple roots | ${diagram?.edges?.length || 0} Cartan edges</small><small>Tap an E8 node to select its simple root context.</small>`;
   }
-  if (state.modelMode === 'e8_3d') {
-    return '<strong>E8 3D roots</strong><small>240 roots | depth projection from the E8 vectors</small><small>Tap a root to inspect McKay, Cartan, and neighbor context.</small>';
+  if (state.modelMode === 'bloom') {
+    return `<strong>Designed Bloom</strong><small>${escapeHtml(bloomPhaseLabel())} phase | time ${state.bloomAmount.toFixed(2)}</small><small>Source solid -&gt; 600-cell -&gt; twin H4 -&gt; E8 Coxeter plane. Open View to scrub or animate it.</small>`;
+  }
+  if (state.modelMode === 'sdf') {
+    return '<strong>E8 SDF</strong><small>240 smoothly joined root spheres</small><small>A lightweight mobile counterpart to the desktop raymarcher.</small>';
   }
   return 'No root selected.';
 }
@@ -5913,6 +9663,10 @@ function getMetrics() {
   const relation = selectedRootRelation();
   return {
     ...metrics,
+    autoZoomRange: {
+      min: autoZoomMinForModel(state.modelMode),
+      max: autoZoomMaxForModel(state.modelMode),
+    },
     canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
     viewport: { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1 },
     settingsOpen: isSettingsOpen(),
@@ -5947,7 +9701,7 @@ function getMetrics() {
     subsetSize: rootSubset().size,
     subsetIndex: subsetIndex(),
     subsetFrame: subsetFrameMetrics(),
-    allFrame: allFrameMetrics(),
+    allFrame: state.modelMode === 'e8_2d' ? allFrameMetrics() : metrics.lastRenderAllFrame,
     selectedRootFrame: selectedRootFrameMetrics(),
     selectedContext: selectedContext ? {
       neighborCount: selectedContext.neighborCount,
@@ -5998,21 +9752,35 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function zoomMaxForModel(modelMode) {
+  return modelMode === 'e8_2d' ? E8_COXETER_ZOOM_MAX : STANDARD_ZOOM_MAX;
+}
+
+function autoZoomMinForModel(modelMode) {
+  return modelMode === 'e8_2d' ? MANUAL_ZOOM_MIN : AUTO_ZOOM_MIN;
+}
+
+function autoZoomMaxForModel(modelMode) {
+  return modelMode === 'e8_2d' ? E8_COXETER_ZOOM_MAX : AUTO_ZOOM_MAX;
+}
+
 async function init() {
   cacheElements();
-  renderScenePresetButtons();
   renderModelShortcuts();
   renderPaletteSwatches();
   renderSubsetChips();
   renderRootJumps();
   renderMotionSpeedPresets();
   renderFxPresets();
+  renderFxModes();
   renderMotionPresets();
   bindEvents();
   data = await loadData();
   installMobileCurriculum(data.curriculum);
   state.learnTopic = LEGACY_LEARN_TOPIC_MAP[state.learnTopic] || state.learnTopic;
   state = normalizeState(state);
+  syncAutoMotionPhase('zoom');
+  syncAutoMotionPhase('extrude');
   renderLearnTopics();
   preparePoints();
   renderCartanMatrix();
@@ -6036,9 +9804,12 @@ async function init() {
     fitAllRoots,
     stepScene,
     setScenePreset,
-    selectScenePreset,
     selectModelShortcut,
     selectFxPreset,
+    selectFxMode,
+    setFxShiftEnabled,
+    advanceFxShift,
+    togglePaletteExpanded,
     selectMotionPreset,
     selectLearnTopic,
     nextLearnTopic,

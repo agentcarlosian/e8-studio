@@ -24,9 +24,10 @@ JS_FILES    = [
     # module it imports from.
     ROOT / 'src' / 'state' / 'persistence.js',
     ROOT / 'src' / 'state' / 'progress.js',
+    ROOT / 'src' / 'state' / 'selection-policy.js',
+    ROOT / 'src' / 'state' / 'view-transition.js',
     ROOT / 'src' / 'state' / 'presets.js',
     ROOT / 'src' / 'state' / 'gallery.js',
-    ROOT / 'src' / 'state' / 'view-transition.js',
     ROOT / 'src' / 'state' / 'camera.js',
     ROOT / 'src' / 'platform' / 'resource-scope.js',
     ROOT / 'src' / 'platform' / 'frame-health.js',
@@ -118,6 +119,17 @@ def parse_named_imports(import_string):
             pairs.append((part, part))
     return pairs
 
+
+def imported_symbol_pattern(symbol):
+    """Match a bare imported symbol without rewriting member properties.
+
+    A spread call such as ``...createBaseline()`` is still a bare reference:
+    the dot immediately before the name belongs to the spread operator, not a
+    member access.  The old single negative-lookbehind missed that case and
+    left block-scoped imports unresolved in the concatenated build.
+    """
+    return r'(?:(?<![.\w])|(?<=\.\.\.))' + re.escape(symbol) + r'\b'
+
 def main():
     validate_js_file_list()
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -152,21 +164,21 @@ def main():
                 if local_name and local_name != '*':
                     # Replace whole-word occurrences that are NOT preceded by '.' or 'window.'
                     # Pattern: not preceded by '.' or 'window.' — use negative lookbehind
-                    pattern = r'(?<![.\w])' + re.escape(local_name) + r'\b'
+                    pattern = imported_symbol_pattern(local_name)
                     body = re.sub(pattern, f'window.__modules[{exported_name!r}]', body)
         # Find namespace imports: import * as FOO from '...'
         # Skip names that already start with window.
         ns_imports = re.findall(r"^import\s*\*\s*as\s+(\w+)\s*from\s*['\"]([^'\"]+)['\"];?", body, re.M)
         for sym, _from in ns_imports:
             # Replace whole-word occurrences that are NOT preceded by '.' or word chars
-            pattern = r'(?<![.\w])' + re.escape(sym) + r'\b'
+            pattern = imported_symbol_pattern(sym)
             body = re.sub(pattern, f'window.__modules[{sym!r}]', body)
         # Find default imports: import foo from '...'
         default_imports = re.findall(r"^import\s+(\w+)\s+from\s*['\"]([^'\"]+)['\"];?", body, re.M)
         for sym, _from in default_imports:
             # Skip if already handled by destructured/namespace patterns
             if not any(local == sym for imp_str, _ in imports for _, local in parse_named_imports(imp_str)):
-                pattern = r'(?<![.\w])' + re.escape(sym) + r'\b'
+                pattern = imported_symbol_pattern(sym)
                 body = re.sub(pattern, f'window.__modules[{sym!r}]', body)
         # Strip named imports as complete statements first. Some modules format
         # long capability imports across several lines; removing only the first

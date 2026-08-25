@@ -99,6 +99,7 @@ def main() -> int:
         check_docs_contract()
         run([sys.executable, "scripts/verify.py"])
         check_verify_artifacts()
+        run([sys.executable, "scripts/test_robustness.py"])
         run([sys.executable, "scripts/build_release_artifacts.py"])
         check_release_artifacts()
         run([sys.executable, "scripts/test_share_artifacts.py"])

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build dist/ for the Android-first Mobile V2 shell.
 
-The desktop Studio keeps using index.html/src/main.js. Native Android now ships
-a small Canvas 2D mobile entrypoint so the phone UX is fast, minimal, and fully
-local. This build inlines Mobile V2 CSS/JS plus the E8 data it needs into
+The desktop Studio keeps using index.html/src/main.js. Native Android ships a
+small hybrid mobile entrypoint: Canvas 2D handles the lightweight scenes and a
+raw WebGL raymarcher handles E8 SDF. This build inlines Mobile V2 CSS/JS plus the E8 data it needs into
 dist/index.html and removes stale browser/PWA artifacts from previous builds.
 Shareable standalone files in dist/ are preserved so Android/mobile builds do
 not erase files intended for manual sharing.
@@ -44,6 +44,7 @@ def inline_mobile_data() -> str:
         "e8_math": json.loads((ROOT / "data" / "e8_math.json").read_text(encoding="utf-8")),
         "mckay_subsets": json.loads((ROOT / "data" / "mckay_subsets.json").read_text(encoding="utf-8")),
         "platonic": json.loads((ROOT / "data" / "platonic.json").read_text(encoding="utf-8")),
+        "stellations": json.loads((ROOT / "data" / "stellations.json").read_text(encoding="utf-8")),
         "polytopes4d": json.loads((ROOT / "data" / "polytopes4d.json").read_text(encoding="utf-8")),
         "dynkin": json.loads((ROOT / "data" / "dynkin.json").read_text(encoding="utf-8")),
         "mckay": json.loads((ROOT / "data" / "mckay.json").read_text(encoding="utf-8")),
@@ -108,7 +109,7 @@ def main() -> int:
     html = re.sub(r"\s*frame-ancestors[^;]*;", "", html)
     DIST_INDEX.write_text(html, encoding="utf-8", newline="\n")
     print(f"Mobile V2 dist written: {DIST_INDEX.relative_to(ROOT)} ({DIST_INDEX.stat().st_size:,} bytes)")
-    print("Mobile bundle uses Canvas 2D, inlined E8 data, and no PWA service worker.")
+    print("Mobile bundle uses Canvas 2D + raw WebGL E8 chords/SDF, inlined E8 data, and no PWA service worker.")
     return 0
 
 

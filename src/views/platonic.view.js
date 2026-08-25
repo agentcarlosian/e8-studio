@@ -1,12 +1,11 @@
 // platonic.view.js — Render a single Platonic solid in 3D
 //
-// Wireframe edges + vertex dots, with optional translucent face fill.
+// Wireframe edges with translucent face fill.
 // Drag-rotate comes from the global orbit camera; view adds optional
 // per-shape slow auto-rotation.
 
 import * as THREE from 'three';
 import { colorAt } from '../ui/palettes.js';
-import { VERTEX_FX_BRANCHES, FRAGMENT_FX_BRANCHES } from '../fx/fx-branches.js';
 import { FX_MODE_MAP } from '../fx/fx-shader.js';
 import { getStellation, STELLATION_NAMES } from '../math/stellations.js';
 import { deformPlatonicVert } from '../math/morph.js';
@@ -17,6 +16,15 @@ import { LineFXMaterial } from '../fx/fx-line-shader.js';
 // format). Instead we derive verts/edges at runtime from the same φ-based
 // coordinates as the icosahedron/dodecahedron. See math/stellations.js.
 const STELLATION_SET = new Set(STELLATION_NAMES);
+
+// Self-intersecting star faces contain coplanar overlapping triangles. If
+// those transparent triangles write depth, tiny precision changes while the
+// model rotates decide which overlap wins and the flat regions visibly flash.
+// Convex solids still benefit from normal depth writes; stars must blend their
+// overlaps without modifying the depth buffer.
+export function shouldWritePlatonicFaceDepth(shapeName) {
+  return !STELLATION_SET.has(shapeName);
+}
 
 // ── Convex-hull face triangulation ─────────────────────────────────────────
 // The five convex Platonic solids are centred on the origin. Rather than trust
@@ -104,7 +112,7 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
 
   // Resolve current shape via the shared runtime params.
   // Helper: build a single Platonic solid (or star stellation) at the given
-  // world scale. Returns { mat: ShaderMaterial } for FX-uniform updating.
+  // world scale. Returns its FX-aware edge material for uniform updating.
   function buildSolid(shapeName, worldScale, colorT, spread = 0.7) {
     const blendMode = runtimeParams().blendMode || 'spectrum';
     // Star polyhedra: pull derived geometry from the stellations module.
@@ -127,7 +135,7 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
     const verts = shape.verts;
     const edges = shape.edges;
     // Captured for in-place morph deformation (see refillSolid / deformVert).
-    let faceGeo = null, lineGeo = null;
+    let faceGeo = null, lineGeo = null, lineMaterial = null;
 
     const positions = new Float32Array(verts.length * 3);
     for (let i = 0; i < verts.length; i++) {
@@ -181,7 +189,8 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
         transparent: true,
         opacity: 0.7,  // high enough that each face is clearly distinct
         side: THREE.DoubleSide,
-        depthWrite: true,  // write to depth so back-faces don't bleed through
+        depthWrite: shouldWritePlatonicFaceDepth(shapeName),
+        depthTest: true,
       });
       group.add(new THREE.Mesh(faceGeo, faceMat));
     }
@@ -197,143 +206,24 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
       }
       lineGeo = new THREE.BufferGeometry();
       lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
-      const lineMat = new LineFXMaterial({
+      lineMaterial = new LineFXMaterial({
         color: new THREE.Color(colorAt(palette, colorT, blendMode)),
         transparent: true,
         opacity: 0.7,
       });
-      group.add(new THREE.LineSegments(lineGeo, lineMat));
+      group.add(new THREE.LineSegments(lineGeo, lineMaterial));
     }
-
-    // Lit vertex spheres — react to scene lights (key, fill, ambient, accent)
-    // Use small instanced spheres at each vertex position for proper PBR lighting
-    const SPHERE_GEO = new THREE.SphereGeometry(0.045, 12, 10);
-    const sphereMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,                          // multiplied by per-instance colour
-      emissiveIntensity: 0.6,
-      metalness: 0.3,
-      roughness: 0.4,
-    });
-    const sphereInst = new THREE.InstancedMesh(SPHERE_GEO, sphereMat, verts.length);
-    const m4 = new THREE.Matrix4();
-    for (let i = 0; i < verts.length; i++) {
-      m4.makeTranslation(positions[i*3], positions[i*3+1], positions[i*3+2]);
-      sphereInst.setMatrixAt(i, m4);
-      sphereInst.setColorAt(i, vertColor[i]);   // per-vertex palette spread
-    }
-    sphereInst.instanceMatrix.needsUpdate = true;
-    if (sphereInst.instanceColor) sphereInst.instanceColor.needsUpdate = true;
-    group.add(sphereInst);
-
-    // Original small points (kept for FX-aware visualization like glow)
-    const vGeo = new THREE.BufferGeometry();
-    vGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const vColors = new Float32Array(positions.length);
-    for (let i = 0; i < positions.length / 3; i++) {
-      const c = vertColor[i] || vertColor[0];
-      vColors[i*3]     = c.r;
-      vColors[i*3 + 1] = c.g;
-      vColors[i*3 + 2] = c.b;
-    }
-    vGeo.setAttribute('color', new THREE.BufferAttribute(vColors, 3));
-    const vMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uPixelRatio: { value: window.devicePixelRatio || 1 },
-        uBaseSize: { value: 0.08 * worldScale },
-        uOpacity: { value: 0.95 },
-        uTime: { value: 0 },
-        uFXMode: { value: 0 },
-        uFXIntensity: { value: 0.5 },
-      },
-      vertexShader: `
-        attribute vec3 color;
-        varying vec3 vColor;
-        varying vec3 vWorldPos;
-        uniform float uPixelRatio;
-        uniform float uBaseSize;
-        uniform int uFXMode;
-        uniform float uFXIntensity;
-        uniform float uTime;
-        void main() {
-          vColor = color;
-          vWorldPos = position;
-          float scale = 1.0;
-          if (uFXMode == 4) {
-            float r = length(position.xy);
-            scale *= 1.0 + uFXIntensity * 0.4 * sin(r * 8.0 - uTime * 4.0);
-          }
-          if (uFXMode == 5) {
-            float a = atan(position.y, position.x);
-            scale *= 1.0 + uFXIntensity * 0.5 * sin(a * 6.0 + uTime * 2.0);
-          }
-          if (uFXMode == 6) {
-            // Pulse: breathing scale 0.7..1.3 over 2s
-            float p = sin(uTime * 3.14159) * 0.5 + 0.5;
-            scale *= 0.7 + 0.6 * p * uFXIntensity;
-          }
-          ${VERTEX_FX_BRANCHES}
-          gl_PointSize = uBaseSize * scale * fxS * uPixelRatio * (720.0 / max(0.001, -(modelViewMatrix * vec4(position + fxO, 1.0)).z));
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position + fxO, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        varying vec3 vWorldPos;
-        uniform float uOpacity;
-        uniform int uFXMode;
-        uniform float uFXIntensity;
-        uniform float uTime;
-        void main() {
-          vec2 c = gl_PointCoord - vec2(0.5);
-          float d = length(c);
-          if (d > 0.5) discard;
-          float a = smoothstep(0.5, 0.1, d);
-          vec3 col = vColor;
-          if (uFXMode == 1) {
-            // Glow: extra outer halo
-            float g = smoothstep(0.5, 0.05, d) * uFXIntensity * 0.8;
-            col += vColor * g * 2.5;
-          }
-          if (uFXMode == 3) {
-            // Kaleidoscope: position-based hue shift
-            float h = sin(vWorldPos.x * 5.0 + vWorldPos.y * 3.0 + uTime) * uFXIntensity * 0.6;
-            col.r *= (1.0 + h);
-            col.g *= (1.0 + h * 0.4);
-            col.b *= (1.0 - h * 0.4);
-          }
-          if (uFXMode == 7) {
-            // Chromatic: RGB prism split
-            float ca = uFXIntensity * 0.5;
-            float ang = atan(c.y, c.x);
-            col += vec3(
-              sin(ang * 4.0 + uTime * 2.0) * ca,
-              sin(ang * 4.0 + uTime * 2.0 + 2.094) * ca,
-              sin(ang * 4.0 + uTime * 2.0 + 4.188) * ca
-            );
-          }
-          if (uFXMode == 8) {
-            // Fog: alpha fades with depth (approximate via world-space radius)
-            float depth = length(vWorldPos) * 2.0 + 4.0;
-            a *= 1.0 - smoothstep(4.0, 14.0, depth) * uFXIntensity;
-          }
-          ${FRAGMENT_FX_BRANCHES}
-          a *= fxA;
-          gl_FragColor = vec4(col, a * uOpacity);
-        }
-      `,
-    });
-    group.add(new THREE.Points(vGeo, vMat));
 
     // Record everything the morph deformer needs to rewrite the buffers in place
     // (no object churn → no fxRuntime leak, smooth live morphing + auto-animate).
-    group.userData.solids.push({ verts, worldScale, faces, edges, faceGeo, lineGeo, sphereInst, vGeo });
-    return vMat;
+    group.userData.solids.push({ verts, worldScale, faces, edges, faceGeo, lineGeo });
+    return lineMaterial;
   }
 
-  // Rewrite one solid's face/edge/sphere/point buffers from its base verts + morph.
+  // Rewrite one solid's face and edge buffers from its base verts + morph.
   // The deformation lives in math/morph.js so the SVG/OBJ export deforms identically.
   function refillSolid(rec, m) {
-    const { verts, worldScale, faces, edges, faceGeo, lineGeo, sphereInst, vGeo } = rec;
+    const { verts, worldScale, faces, edges, faceGeo, lineGeo } = rec;
     const n = verts.length;
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -359,15 +249,6 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
         la[k++]=pos[b*3]; la[k++]=pos[b*3+1]; la[k++]=pos[b*3+2];
       }
       lineGeo.attributes.position.needsUpdate = true;
-    }
-    if (sphereInst) {
-      const m4 = new THREE.Matrix4();
-      for (let i = 0; i < n; i++) { m4.makeTranslation(pos[i*3], pos[i*3+1], pos[i*3+2]); sphereInst.setMatrixAt(i, m4); }
-      sphereInst.instanceMatrix.needsUpdate = true;
-    }
-    if (vGeo) {
-      vGeo.attributes.position.array.set(pos);
-      vGeo.attributes.position.needsUpdate = true;
     }
   }
 

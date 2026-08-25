@@ -130,6 +130,7 @@ def main() -> int:
             # The input snaps to its step (0.05), so compare params against the
             # value the element actually holds, not the raw string we assigned.
             slid = pg.evaluate("""() => {
+              window.__app.setPanelMode('style');
               const el = document.querySelector("input[type=range][data-param='fxIntensity']");
               if (!el) return null;
               el.value = '0.75'; el.dispatchEvent(new Event('input', {bubbles:true}));
@@ -147,6 +148,7 @@ def main() -> int:
             check("Platonic stack mode removed from UI", stack_absent)
 
             pg.evaluate("""() => {
+              window.__app.setPanelMode('scene');
               window.__app.switchView('polytope');
               window.__app.setParam('morph4d', 0);
               window.__app.setPoly4d('tesseract');
@@ -217,6 +219,7 @@ def main() -> int:
                   str(camera_runtime))
 
             zoom_slider = pg.evaluate("""() => {
+              window.__app.setPanelMode('scene');
               window.__app.switchView('platonic');
               window.__app.setParam('autoSliders', ['cameraDistance']);
               const el = document.querySelector('input[data-param="cameraDistance"]');
@@ -260,12 +263,12 @@ def main() -> int:
               window.__app.switchView('raymarched');
               return { cleared, sdfAutos: window.__app.params.autoSliders.slice() };
             }""")
-            check("view switches clear incompatible motion without losing E8-to-SDF flux",
+            check("view switches replace all selection-owned motion and modifiers",
                   transition_state["cleared"] == {
                     "poly": False, "rotate": False, "orbit": False,
                     "path": "manual", "zoom": False, "autos": []
                   }
-                  and transition_state["sdfAutos"] == ["e8MorphT"],
+                  and transition_state["sdfAutos"] == [],
                   str(transition_state))
 
             poly_motion = pg.evaluate("""() => {
@@ -333,7 +336,7 @@ def main() -> int:
             sdf_extrude = pg.evaluate("""() => {
               const view = window.__app.currentView;
               const rings = view.object3d.material.uniforms.uRings.value;
-              window.__app.toggleSliderAuto('e8MorphT');
+              const autoClearedOnSwitch = !window.__app.params.autoSliders.includes('e8MorphT');
               window.__app.setParam('e8MorphT', 1);
               view.update(0.016, 1, window.__app.params);
               const expandedMax = Math.max(...rings.map(ring => Math.abs(ring.w)));
@@ -345,11 +348,13 @@ def main() -> int:
                 expanded, expandedMax, ringCount: rings.length,
                 reset: rings.every(ring => Math.abs(ring.w) < 1e-9),
                 autoStopped: !window.__app.params.autoSliders.includes('e8MorphT'),
+                autoClearedOnSwitch,
               };
             }""")
             check("SDF exposes shared Extrude and resets depth cleanly",
                   sdf_extrude["count"] == 1 and sdf_extrude["expanded"] is True
-                  and sdf_extrude["reset"] is True and sdf_extrude["autoStopped"] is True,
+                  and sdf_extrude["reset"] is True and sdf_extrude["autoStopped"] is True
+                  and sdf_extrude["autoClearedOnSwitch"] is True,
                   str(sdf_extrude))
 
             pg.evaluate("""() => {
@@ -362,13 +367,19 @@ def main() -> int:
               window.__app.setParam('rootDiffusion', false);
               window.__app.setParam('pickedRoot', null);
               window.__app.toggleRootDiffusion();
+              const diffusionStarted = window.__app.params.rootDiffusion;
+              const diffusionOrigin = window.__app.params.pickedRoot;
               window.__app.setParam('showWeylMirrors', false);
               window.__app.setE8Mode('h4');
+              const diffusionCleared = !window.__app.params.rootDiffusion;
+              const selectionCleared = window.__app.params.pickedRoot == null;
               window.__app.toggleWeylMirrors();
               window.__app.currentView.update(0.016, performance.now() / 1000, window.__app.params);
               return {
-                diffusion: window.__app.params.rootDiffusion,
-                picked: window.__app.params.pickedRoot,
+                diffusionStarted,
+                diffusionOrigin,
+                diffusionCleared,
+                selectionCleared,
                 mirrors: window.__app.params.showWeylMirrors,
                 mirrorMode: window.__app.params.e8ViewMode,
               };
@@ -377,7 +388,8 @@ def main() -> int:
             controls["mirrorVisible"] = pg.evaluate("""() =>
               !!window.__app.currentView.object3d.getObjectByName('weyl-mirror-chamber')?.visible""")
             check("Diffusion and Mirrors act immediately",
-                  controls["diffusion"] is True and controls["picked"] == 0
+                  controls["diffusionStarted"] is True and controls["diffusionOrigin"] == 0
+                  and controls["diffusionCleared"] is True and controls["selectionCleared"] is True
                   and controls["mirrors"] is True and controls["mirrorMode"] == "coxeter"
                   and controls["mirrorVisible"] is True, str(controls))
 
@@ -391,6 +403,8 @@ def main() -> int:
               window.__twinBefore = Array.from(points.geometry.attributes.color.array);
               window.__app.toggleE8Twin600();
               window.__app.currentView.update(0.016, performance.now() / 1000, window.__app.params);
+              window.__twinEnabled = window.__app.params.e8Twin600;
+              window.__twinCompareCleared = window.__app.params.compareMode === 'off';
             }""")
             pg.wait_for_timeout(600)
             twin_atlas = pg.evaluate("""() => {
@@ -405,6 +419,8 @@ def main() -> int:
               const result = {
                 twin: window.__app.params.e8Twin600,
                 compareMode: window.__app.params.compareMode,
+                twinEnabled: window.__twinEnabled,
+                twinCompareCleared: window.__twinCompareCleared,
                 recolored: window.__twinBefore.some((v, i) => Math.abs(v - after[i]) > 1e-6),
                 atlas: window.__app.params.e8ProjectionAuto,
                 atlasMode: window.__app.params.e8ViewMode,
@@ -413,7 +429,8 @@ def main() -> int:
               return result;
             }""")
             check("Twin 600 recolors clearly and Atlas advances immediately",
-                  twin_atlas["twin"] is True and twin_atlas["compareMode"] == "off"
+                  twin_atlas["twinEnabled"] is True and twin_atlas["twinCompareCleared"] is True
+                  and twin_atlas["twin"] is False and twin_atlas["compareMode"] == "off"
                   and twin_atlas["recolored"] is True and twin_atlas["atlas"] is True
                   and twin_atlas["atlasMode"] != "coxeter", str(twin_atlas))
 

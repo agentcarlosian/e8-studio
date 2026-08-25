@@ -84,6 +84,7 @@ def load_json(name: str):
 
 def check_data_invariants() -> None:
     run(["node", "scripts/generate_curriculum.mjs"])
+    run(["node", "scripts/generate_stellations.mjs"])
     e8 = load_json("e8")
     if e8.get("count") != 240:
         fail("e8.count must be 240")
@@ -157,6 +158,18 @@ def check_data_invariants() -> None:
         item = polytopes.get(name)
         if not item or len(item.get("verts", [])) != verts or len(item.get("edges", [])) != edges:
             fail(f"4D polytope data mismatch for {name}")
+
+    stellations = load_json("stellations")
+    expected_stellations = {
+        "stellated_dodecahedron": (12, 30, 36),
+        "great_dodecahedron": (12, 30, 36),
+        "great_icosahedron": (12, 30, 20),
+        "great_stellated_dodecahedron": (20, 30, 36),
+    }
+    for name, (verts, edges, faces) in expected_stellations.items():
+        item = stellations.get(name)
+        if not item or (len(item.get("verts", [])), len(item.get("edges", [])), len(item.get("faces", []))) != (verts, edges, faces):
+            fail(f"Star-polyhedron data mismatch for {name}")
 
     dynkin = load_json("dynkin")
     if "E8" not in dynkin or len(dynkin["E8"].get("nodes", [])) != 8:
@@ -300,7 +313,8 @@ def open_checked_page(browser, url: str, *, label: str, viewport: dict[str, int]
         )
     except Exception as exc:
         fail(f"{label} did not become ready: {exc}; page errors={page_errors[:5]} console={console_errors[:5]}")
-    page.evaluate("document.getElementById('welcome-card')?.classList.add('hidden')")
+    if page.locator("#welcome-card").count():
+        fail(f"{label} still contains the blocking first-run welcome card")
     page.wait_for_timeout(250)
     assert_clean_browser_errors(page_errors, console_errors, label)
     assert_canvas_nonblank(page)
@@ -362,6 +376,23 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         if state["view"] != view:
             fail(f"View switch failed for {view}: {state}")
         assert_canvas_nonblank(page)
+
+    # Platonic solids should read as clean faces and edges. A previous renderer
+    # layered InstancedMesh spheres and shader Points over every vertex.
+    page.evaluate("() => window.__app.switchView('platonic')")
+    page.wait_for_timeout(300)
+    platonic_markers = page.evaluate(
+        """() => {
+          const counts = { instancedMeshes: 0, points: 0 };
+          window.__app.currentView?.object3d?.traverse((object) => {
+            if (object.isInstancedMesh) counts.instancedMeshes += 1;
+            if (object.isPoints) counts.points += 1;
+          });
+          return counts;
+        }"""
+    )
+    if platonic_markers != {"instancedMeshes": 0, "points": 0}:
+        fail(f"Platonic vertex markers returned: {platonic_markers}")
 
     # Repeated transitions catch resource/material accumulation and ensure the
     # frame circuit breaker is reset for each newly-created view instance.
@@ -564,24 +595,55 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       window.__app.setFX('glow');
       await frame();
       const material = window.__app.currentView.object3d.material;
-      const createWorkspace = {
+      const sceneWorkspace = {
         tabs: document.querySelectorAll('.ps-mode-tabs button').length,
+        tabLabels: [...document.querySelectorAll('.ps-mode-tabs button')].map(button => button.textContent.trim()),
         viewSections: document.querySelectorAll('[data-section="view"]').length,
+        styleSections: document.querySelectorAll('[data-section="style"]').length,
         learnSections: document.querySelectorAll('[data-section="learn"]').length,
+        searchFields: document.querySelectorAll('#ps-search').length,
+        welcomeCards: document.querySelectorAll('#welcome-card').length,
+        footerActions: [...document.querySelectorAll('.panel-footer [data-act]')]
+          .map(button => button.dataset.act),
+        sdfSurfaceControls: ['sdfBloom', 'sdfAniso', 'sdfEdges']
+          .filter(param => document.querySelector(`[data-param="${param}"]`)).length,
       };
-      window.__app.setPanelMode('learn');
-      const learnWorkspace = {
+      window.__app.setPanelMode('style');
+      const styleSubtitles = [...document.querySelectorAll('[data-section="style"] .ps-subtitle')]
+        .map(title => title.textContent.trim());
+      const styleWorkspace = {
         viewSections: document.querySelectorAll('[data-section="view"]').length,
+        styleSections: document.querySelectorAll('[data-section="style"]').length,
         learnSections: document.querySelectorAll('[data-section="learn"]').length,
+        title: document.querySelector('[data-section="style"] .ps-title')?.textContent.trim(),
+        subtitles: styleSubtitles,
+        paletteSwatches: document.querySelectorAll('[data-section="style"] .swatch[data-act="setPalette"]').length,
+        palettePresetCount: Object.keys(window.PALETTE_PRESETS || {}).length,
+        paletteGroupLabels: document.querySelectorAll('[data-section="style"] .palette-group-label').length,
+        advancedToggles: document.querySelectorAll('[data-act="toggleAdvancedStyle"]').length,
+        environmentHeadings: styleSubtitles.filter(title => title === 'Environment').length,
+        backgroundButtons: document.querySelectorAll('[data-section="style"] [data-act="setBgMode"]').length,
       };
-      window.__app.setPanelMode('create');
       const basicModes = [...document.querySelectorAll('.look-card[data-act="setFX"]')]
         .map(button => button.dataset.arg);
-      window.__app.toggleAdvancedStyle();
       const catalogModes = [...document.querySelectorAll('.fx-catalog-item[data-act="setFX"]')]
         .map(button => button.dataset.arg);
       const catalogDisabled = [...document.querySelectorAll('.fx-catalog-item:disabled')]
         .map(button => button.dataset.arg);
+      window.__app.setPanelMode('learn');
+      const learnWorkspace = {
+        viewSections: document.querySelectorAll('[data-section="view"]').length,
+        styleSections: document.querySelectorAll('[data-section="style"]').length,
+        learnSections: document.querySelectorAll('[data-section="learn"]').length,
+        firstSection: document.getElementById('ps-body')?.firstElementChild?.dataset.section,
+        orientationCards: document.querySelectorAll('[data-learn-orientation]').length,
+        orientationText: document.querySelector('[data-learn-orientation]')?.textContent || '',
+        factCount: document.querySelectorAll('.learn-fact-strip > div').length,
+        pathCount: document.querySelectorAll('[data-learn-paths] .learn-path-card').length,
+        referenceCount: document.querySelectorAll('.learn-reference-grid button').length,
+        disclosureCount: document.querySelectorAll('[data-learn-disclosure]').length,
+      };
+      window.__app.setPanelMode('scene');
 
       // Freeze view uniforms so a pixel delta can only come from changing the
       // selected effect, not camera drift or the SDF's ambient animation.
@@ -623,7 +685,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       }
       window.__app.params.paused = false;
 
-      // Each renderer remembers its own compatible choice.
+      // Renderer switches are replacement selections: an effect must not
+      // resurrect when returning to a view later.
       window.__app.setFX('glow');
       window.__app.switchView('e8coxeter');
       window.__app.setFX('plasma');
@@ -644,7 +707,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         uniformModes,
         restoredSdf,
         restoredPoints,
-        createWorkspace,
+        sceneWorkspace,
+        styleWorkspace,
         learnWorkspace,
       };
     }""")
@@ -658,11 +722,122 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or sdf_effect_contract["catalogModes"] != expected_sdf_modes
             or sdf_effect_contract["catalogDisabled"]):
         fail(f"SDF effect capability/UI contract failed: {sdf_effect_contract}")
-    if (sdf_effect_contract["createWorkspace"] != {"tabs": 2, "viewSections": 1, "learnSections": 0}
-            or sdf_effect_contract["learnWorkspace"] != {"viewSections": 0, "learnSections": 1}):
-        fail(f"Create/Learn workspace contract failed: {sdf_effect_contract}")
-    if sdf_effect_contract["restoredSdf"] != "glow" or sdf_effect_contract["restoredPoints"] != "plasma":
-        fail(f"Per-view effect memory failed: {sdf_effect_contract}")
+    scene_workspace = sdf_effect_contract["sceneWorkspace"]
+    style_workspace = sdf_effect_contract["styleWorkspace"]
+    learn_workspace = sdf_effect_contract["learnWorkspace"]
+    if (scene_workspace["tabs"] != 3
+            or scene_workspace["tabLabels"] != ["View", "Visuals", "Learn"]
+            or scene_workspace["viewSections"] != 1
+            or scene_workspace["styleSections"] != 0
+            or scene_workspace["learnSections"] != 0
+            or scene_workspace["searchFields"] != 0
+            or scene_workspace["welcomeCards"] != 0
+            or scene_workspace["footerActions"] != [
+                "resetConfig", "surprise", "sharePage", "shareSnapshot",
+                "openVideoExport", "togglePresentationMode", "togglePerf",
+                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet"
+            ]
+            or scene_workspace["sdfSurfaceControls"] != 3
+            or style_workspace["viewSections"] != 0
+            or style_workspace["styleSections"] != 1
+            or style_workspace["learnSections"] != 0
+            or style_workspace["title"] != "Visuals"
+            or style_workspace["paletteSwatches"] != style_workspace["palettePresetCount"]
+            or style_workspace["paletteGroupLabels"] != 0
+            or style_workspace["advancedToggles"] != 0
+            or style_workspace["environmentHeadings"] != 0
+            or style_workspace["backgroundButtons"] < 6
+            or learn_workspace["viewSections"] != 0
+            or learn_workspace["styleSections"] != 0
+            or learn_workspace["learnSections"] != 1
+            or learn_workspace["firstSection"] != "learn"
+            or learn_workspace["orientationCards"] != 1
+            or learn_workspace["factCount"] != 3
+            or learn_workspace["pathCount"] != 3
+            or learn_workspace["referenceCount"] != 3
+            or learn_workspace["disclosureCount"] != 2
+            or "240 root vectors" not in learn_workspace["orientationText"]
+            or "eight concentric rings" not in learn_workspace["orientationText"]):
+        fail(f"View/Visuals/Learn workspace contract failed: {sdf_effect_contract}")
+    visual_order = style_workspace["subtitles"]
+    expected_order = ["Palette", "Color shift", "Background", "Effects", "Quick looks", "Interface theme", "Export"]
+    try:
+        positions = [visual_order.index(label) for label in expected_order]
+    except ValueError:
+        fail(f"Visuals hierarchy is missing a required group: {style_workspace}")
+    if positions != sorted(positions):
+        fail(f"Visuals hierarchy has the wrong order: {style_workspace}")
+    workspace_navigation_contract = page.evaluate("""() => {
+      window.__app.switchView('e8coxeter');
+      window.__app.setPanelMode('scene');
+      let body = document.getElementById('ps-body');
+      body.scrollTop = 40;
+      const sceneTop = body.scrollTop;
+      window.__app.setPanelMode('style');
+      body = document.getElementById('ps-body');
+      const styleInitialTop = body.scrollTop;
+      body.scrollTop = 90;
+      const styleTop = body.scrollTop;
+      window.__app.setPanelMode('scene');
+      const restoredSceneTop = document.getElementById('ps-body').scrollTop;
+      window.__app.setPanelMode('style');
+      const restoredStyleTop = document.getElementById('ps-body').scrollTop;
+      window.__app.setPanelMode('scene');
+      const selectedTabs = [...document.querySelectorAll('.ps-mode-tabs [role="tab"]')]
+        .filter(tab => tab.getAttribute('aria-selected') === 'true');
+      const pressedViews = [...document.querySelectorAll('.ps-view-switch button[aria-pressed="true"]')];
+      const viewChildren = [...document.querySelector('[data-section="view"]').children];
+      const viewSwitcherIndex = viewChildren.findIndex(child => child.classList.contains('ps-view-switch'));
+      const galleryIndex = viewChildren.findIndex(child =>
+        child.classList.contains('ps-subtitle') && child.textContent.trim() === 'Gallery');
+      const overlayStructureActions = [...document.querySelectorAll('.overlay-structure-grid .overlay-option')]
+        .map(button => button.dataset.act);
+      const overlayExplorerActions = [...document.querySelectorAll('.overlay-explorer-grid .overlay-option')]
+        .map(button => button.dataset.act);
+      return { sceneTop, styleTop, styleInitialTop, restoredSceneTop, restoredStyleTop,
+        searchCount: document.querySelectorAll('#ps-search').length,
+        selectedTabCount: selectedTabs.length, selectedTab: selectedTabs[0]?.dataset.arg,
+        pressedViewCount: pressedViews.length,
+        galleryDirectlyUnderView: galleryIndex === viewSwitcherIndex + 1,
+        galleryNavCount: document.querySelectorAll('[data-section="view"] .gallery-nav').length,
+        galleryBrowseCount: document.querySelectorAll('[data-section="view"] .gallery-browse').length,
+        overlayResetCount: document.querySelectorAll('[data-act="resetE8Overlays"]').length,
+        overlayStructureActions,
+        overlayExplorerActions };
+    }""")
+    if (workspace_navigation_contract["sceneTop"] <= 0
+            or workspace_navigation_contract["styleTop"] <= 0
+            or workspace_navigation_contract["styleInitialTop"] != 0
+            or workspace_navigation_contract["restoredSceneTop"] != workspace_navigation_contract["sceneTop"]
+            or workspace_navigation_contract["restoredStyleTop"] != workspace_navigation_contract["styleTop"]
+            or workspace_navigation_contract["searchCount"] != 0
+            or workspace_navigation_contract["selectedTabCount"] != 1
+            or workspace_navigation_contract["selectedTab"] != "scene"
+            or workspace_navigation_contract["pressedViewCount"] != 1
+            or not workspace_navigation_contract["galleryDirectlyUnderView"]
+            or workspace_navigation_contract["galleryNavCount"] != 1
+            or workspace_navigation_contract["galleryBrowseCount"] != 1
+            or workspace_navigation_contract["overlayResetCount"] != 1
+            or workspace_navigation_contract["overlayStructureActions"] != ["toggleRings", "toggleEdges", "togglePetrie"]
+            or workspace_navigation_contract["overlayExplorerActions"] != ["toggleRootDiffusion", "toggleWeylMirrors", "toggleE8Twin600", "toggleProjectionAuto"]):
+        fail(f"Workspace navigation state leaked: {workspace_navigation_contract}")
+    page.evaluate("document.querySelector('.overlay-title')?.scrollIntoView({ block: 'start' })")
+    page.wait_for_timeout(150)
+    capture_visual_evidence(page, "overlays-workspace-desktop")
+    page.evaluate("window.__app.setPanelMode('style')")
+    page.wait_for_timeout(150)
+    capture_visual_evidence(page, "visuals-workspace-desktop")
+    page.evaluate("window.__app.setPanelMode('learn')")
+    page.wait_for_timeout(150)
+    capture_visual_evidence(page, "learn-workspace-desktop")
+    progress_disclosure = page.locator('[data-learn-disclosure="progress"]')
+    progress_disclosure.locator("summary").click()
+    if not progress_disclosure.evaluate("element => element.open"):
+        fail("Learn progress disclosure did not open")
+    progress_disclosure.locator("summary").click()
+    page.evaluate("window.__app.setPanelMode('scene')")
+    if sdf_effect_contract["restoredSdf"] != "none" or sdf_effect_contract["restoredPoints"] != "none":
+        fail(f"View switches leaked prior effects: {sdf_effect_contract}")
     for mode, visual in sdf_effect_contract["visualDiffs"].items():
         if visual["meanRgbDelta"] < 0.35 or visual["changed"] < 20:
             fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")

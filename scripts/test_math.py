@@ -115,7 +115,7 @@ def check_geometry_data() -> list[str]:
     # 4D regular polytopes
     poly = json.loads((data / "polytopes4d.json").read_text())
     poly_expect = {"5cell": (5, 10), "tesseract": (16, 32), "16cell": (8, 24),
-                   "24cell": (24, 96), "600cell": (120, 720)}
+                   "24cell": (24, 96), "600cell": (120, 720), "120cell": (600, 1200)}
     for name, (v, e) in poly_expect.items():
         s = poly.get(name, {})
         nv, ne = len(s.get("verts", [])), len(s.get("edges", []))
@@ -125,6 +125,20 @@ def check_geometry_data() -> list[str]:
     cs = poly.get("600cell", {}).get("class_sizes", [])
     if len(cs) != 9 or sum(cs) != 120:
         fails.append(f"600cell conjugacy classes {cs} (want 9 classes summing to 120)")
+
+    # Generated Kepler-Poinsot geometry used by the mobile/offline bundle.
+    stars = json.loads((data / "stellations.json").read_text())
+    star_expect = {
+        "stellated_dodecahedron": (12, 30, 36),
+        "great_dodecahedron": (12, 30, 36),
+        "great_icosahedron": (12, 30, 20),
+        "great_stellated_dodecahedron": (20, 30, 36),
+    }
+    for name, (v, e, f) in star_expect.items():
+        shape = stars.get(name, {})
+        actual = (len(shape.get("verts", [])), len(shape.get("edges", [])), len(shape.get("faces", [])))
+        if actual != (v, e, f):
+            fails.append(f"star {name}: {actual} (want {(v, e, f)})")
 
     # E8 root system: 240 roots
     e8 = json.loads((data / "e8.json").read_text())

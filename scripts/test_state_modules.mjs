@@ -7,6 +7,8 @@ import {
 } from '../src/state/gallery.js';
 import { CameraController } from '../src/state/camera.js';
 import { planViewTransition } from '../src/state/view-transition.js';
+import { activeViewModifiers, createViewModifierReset } from '../src/state/selection-policy.js';
+import { PRESETS, applyPreset } from '../src/state/presets.js';
 import { LearningProgressService } from '../src/state/learning-service.js';
 import { ExportRecordingService, isCapacitorNative } from '../src/services/export-recording.js';
 import { buildSdfRingLayout, sdfQualityProfile } from '../src/views/raymarched-e8.view.js';
@@ -47,9 +49,37 @@ const source = {
 const transition = planViewTransition(source, 'e8coxeter', 'platonic');
 assert.equal(transition.changed, true);
 assert.equal(transition.resetCamera, true);
-assert.deepEqual(transition.patch.autoSliders, ['e8MorphT']);
+assert.deepEqual(transition.patch.autoSliders, []);
 assert.equal(transition.patch.cameraPath, 'manual');
+assert.equal(transition.patch.fxMode, 'none');
+assert.deepEqual(transition.patch.fxByView, {});
 assert.equal(source.cameraPath, 'ringDive'); // policy is pure
+
+// A→B must be identical to fresh→B for every selection-owned field.
+const freshToPlatonic = planViewTransition({ poly4d: '24cell' }, 'e8coxeter', 'platonic').patch;
+const stackedToPlatonic = planViewTransition({
+  ...source,
+  poly4d: '24cell',
+  fxMode: 'plasma',
+  fxByView: { e8coxeter: 'plasma', bloom: 'trail' },
+  rootDiffusion: true,
+  shapeTwist: 2.4,
+  compareMode: 'difference',
+}, 'bloom', 'platonic').patch;
+assert.deepEqual(stackedToPlatonic, freshToPlatonic);
+assert.notEqual(createViewModifierReset('e8coxeter').autoSliders, createViewModifierReset('e8coxeter').autoSliders);
+assert.deepEqual(activeViewModifiers({
+  view: 'e8coxeter', fxMode: 'glow', shiftMode: 'static', rootDiffusion: true,
+}), ['FX: glow', 'diffusion']);
+
+const presetA = PRESETS.find(item => item.id === 'rainbow-flow');
+const presetB = PRESETS.find(item => item.id === 'classic-e8');
+const directPresetB = { view: 'e8coxeter', poly4d: '24cell' };
+const presetAThenB = { view: 'e8coxeter', poly4d: '24cell' };
+applyPreset(presetB, directPresetB);
+applyPreset(presetA, presetAThenB);
+applyPreset(presetB, presetAThenB);
+assert.deepEqual(presetAThenB, directPresetB);
 
 const camera = new CameraController();
 camera.theta = 2;
