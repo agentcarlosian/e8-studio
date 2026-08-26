@@ -1,3 +1,10 @@
+import {
+  RANK2_ROOT_SYSTEM_ORDER,
+  RANK2_ROOT_SYSTEMS,
+  coxeterOrbit,
+  generateRank2RootSystem,
+} from '../math/rank2-roots.js';
+
 const STORAGE_KEY = 'e8_mobile_v2_config';
 const PROGRESS_KEY = 'e8_progress_v1';
 const MOBILE_CONFIG_REVISION = 1;
@@ -9,6 +16,7 @@ const DEFAULT_STATE = {
   shape: 'icosahedron',
   polytope4d: '24cell',
   dynkinDiagram: 'E8',
+  rootSystem: 'A2',
   learnTopic: 'auto',
   palette: 'gold',
   background: 'void',
@@ -20,6 +28,10 @@ const DEFAULT_STATE = {
   showMirrors: false,
   showEdges: true,
   showVertices: false,
+  showRootMirrors: true,
+  showRootChambers: true,
+  showRootSimple: true,
+  showRootOrbit: true,
   highlightSubset: true,
   subset: 'icosahedron',
   pointScale: 1.0,
@@ -219,8 +231,9 @@ const RENDER_PALETTES = Object.fromEntries(
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
-const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'dynkin']);
+const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'rootlab', 'dynkin']);
 const TOUCH_ORBIT_MODEL_MODES = new Set(['bloom', 'sdf', 'platonic', 'poly4d']);
+const TOUCH_PLANE_ROTATE_MODEL_MODES = new Set(['e8_2d', 'rootlab']);
 const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
 const STAR_SHAPES = new Set([
   'stellated_dodecahedron',
@@ -244,6 +257,7 @@ const MODEL_LABELS = {
   sdf: 'SDF',
   platonic: 'Solid',
   poly4d: '4D',
+  rootlab: 'Roots',
   dynkin: 'Dynkin',
 };
 const SHAPE_LABELS = {
@@ -306,6 +320,10 @@ const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
+
+function formatCompactNumber(value) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(1)));
+}
 // Keep these values aligned with e8coxeter.view.js. With the canonical E8 data,
 // classes 3 and 7 are populated (6,720 + 15,120 chords); retaining all eight
 // slots keeps mobile topology and palette classification identical to desktop.
@@ -358,13 +376,7 @@ vec3 fxSpectrum(float value) {
 void main() {
   float yawCos = cos(uRotation);
   float yawSin = sin(uRotation);
-  vec2 flatRoot = vec2(
-    aRoot.x * yawCos - aRoot.y * yawSin,
-    aRoot.x * yawSin + aRoot.y * yawCos
-  );
-  vec2 flatScreen = uOrigin + flatRoot * uScale;
-
-  float depthSource = aRoot.z * 0.62;
+  float depthSource = aRoot.z * 0.62 * uExtrude;
   float rotatedX = aRoot.x * yawCos - depthSource * yawSin;
   float rotatedZ = aRoot.x * yawSin + depthSource * yawCos;
   float pitchCos = cos(uPitch);
@@ -372,8 +384,7 @@ void main() {
   float rotatedY = aRoot.y * pitchCos - rotatedZ * pitchSin;
   float finalDepth = aRoot.y * pitchSin + rotatedZ * pitchCos;
   float perspective = 4.2 / max(1.8, 4.2 + finalDepth);
-  vec2 extrudedScreen = uOrigin + vec2(rotatedX, rotatedY) * uScale * perspective * uPathZoom;
-  vec2 screen = mix(flatScreen, extrudedScreen, uExtrude);
+  vec2 screen = uOrigin + vec2(rotatedX, rotatedY) * uScale * perspective * uPathZoom;
   vec2 clip = vec2(
     screen.x / max(1.0, uResolution.x) * 2.0 - 1.0,
     1.0 - screen.y / max(1.0, uResolution.y) * 2.0
@@ -533,6 +544,14 @@ const MOBILE_TOUR_STEPS = [
     detail: 'The 24-cell is a useful midpoint before the denser 600-cell.',
   },
   {
+    id: 'root-lab',
+    label: 'Roots',
+    target: { modelMode: 'rootlab', rootSystem: 'A2' },
+    title: 'Root system lab',
+    body: 'Two simple roots generate a complete rank-2 root system through repeated reflections.',
+    detail: 'Compare A2, B2, G2, and golden-ratio H2 without leaving the Studio.',
+  },
+  {
     id: 'dynkin-e8',
     label: 'Dynkin',
     target: { modelMode: 'dynkin', dynkinDiagram: 'E8' },
@@ -585,6 +604,16 @@ const MODEL_SHORTCUT_GROUPS = [
     ],
   },
   {
+    id: 'rootlab',
+    label: 'Root systems',
+    items: RANK2_ROOT_SYSTEM_ORDER.map(id => ({
+      id: `root-${id}`,
+      label: RANK2_ROOT_SYSTEMS[id].label,
+      name: `${RANK2_ROOT_SYSTEMS[id].label} root system`,
+      target: { modelMode: 'rootlab', rootSystem: id },
+    })),
+  },
+  {
     id: 'dynkin',
     label: 'Dynkin',
     items: [
@@ -633,6 +662,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'shape',
   'polytope4d',
   'dynkinDiagram',
+  'rootSystem',
   'selectedRoot',
   'bloomAmount',
   'bloomAuto',
@@ -644,6 +674,10 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'softFx',
   'fxMode',
   'showVertices',
+  'showRootMirrors',
+  'showRootChambers',
+  'showRootSimple',
+  'showRootOrbit',
 ];
 
 let metrics = {
@@ -1107,6 +1141,8 @@ let autoModelElapsed = 0;
 let autoModelIndex = 0;
 let drag = null;
 let previousSelectedRoot = null;
+let selectedRootLabIndex = null;
+let rootLabHitTargets = [];
 const activePointers = new Map();
 let gestureReleaseIds = new Set();
 let gesture = null;
@@ -1210,7 +1246,7 @@ function applyMobileExperimentStep(lessonId, stepId) {
   if (!entry?.action) return false;
   const modelByView = {
     bloom: 'bloom', platonic: 'platonic', e8coxeter: 'e8_2d', sixhundred: 'poly4d',
-    polytope: 'poly4d', raymarched: 'sdf', dynkin: 'dynkin',
+    polytope: 'poly4d', raymarched: 'sdf', rootlab: 'rootlab', dynkin: 'dynkin',
   };
   const source = entry.action.params || {};
   const patch = { modelMode: modelByView[entry.action.view || experiment.lesson?.view] || state.modelMode };
@@ -1218,8 +1254,18 @@ function applyMobileExperimentStep(lessonId, stepId) {
   if (SUPPORTED_SHAPES.has(source.shape)) patch.shape = source.shape;
   if (SUPPORTED_POLYTOPES4D.has(source.poly4d)) patch.polytope4d = source.poly4d;
   if (SUPPORTED_DYNKIN_DIAGRAMS.has(source.dynkin)) patch.dynkinDiagram = source.dynkin;
+  if (RANK2_ROOT_SYSTEMS[source.rootSystem]) patch.rootSystem = source.rootSystem;
   for (const key of ['showRings', 'showPetrie', 'showEdges', 'autoRotate', 'bloomAmount', 'bloomAuto', 'sdfSphereR', 'sdfBlend']) {
     if (Object.hasOwn(source, key)) patch[key] = source[key];
+  }
+  const rootParamMap = {
+    rootShowMirrors: 'showRootMirrors',
+    rootShowChambers: 'showRootChambers',
+    rootShowSimple: 'showRootSimple',
+    rootShowOrbit: 'showRootOrbit',
+  };
+  for (const [sourceKey, stateKey] of Object.entries(rootParamMap)) {
+    if (Object.hasOwn(source, sourceKey)) patch[stateKey] = source[sourceKey];
   }
   setManualModelState(patch, `learn-experiment-${lessonId}-${stepId}`);
   syncControls(`learn-experiment-${lessonId}-${stepId}`);
@@ -1294,6 +1340,7 @@ function normalizeState(next) {
   if (!SUPPORTED_SHAPES.has(next.shape)) next.shape = DEFAULT_STATE.shape;
   if (!SUPPORTED_POLYTOPES4D.has(next.polytope4d)) next.polytope4d = DEFAULT_STATE.polytope4d;
   if (!SUPPORTED_DYNKIN_DIAGRAMS.has(next.dynkinDiagram)) next.dynkinDiagram = DEFAULT_STATE.dynkinDiagram;
+  if (!RANK2_ROOT_SYSTEMS[next.rootSystem]) next.rootSystem = DEFAULT_STATE.rootSystem;
   if (LEARN_TOPIC_IDS.size > 1 && !LEARN_TOPIC_IDS.has(next.learnTopic)) next.learnTopic = DEFAULT_STATE.learnTopic;
   if (!SUPPORTED_SUBSETS.has(next.subset)) next.subset = DEFAULT_STATE.subset;
   next.pointScale = clamp(Number(next.pointScale) || 1, 0.7, 1.8);
@@ -1330,6 +1377,10 @@ function normalizeState(next) {
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
   if (typeof next.showEdges !== 'boolean') next.showEdges = DEFAULT_STATE.showEdges;
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
+  if (typeof next.showRootMirrors !== 'boolean') next.showRootMirrors = DEFAULT_STATE.showRootMirrors;
+  if (typeof next.showRootChambers !== 'boolean') next.showRootChambers = DEFAULT_STATE.showRootChambers;
+  if (typeof next.showRootSimple !== 'boolean') next.showRootSimple = DEFAULT_STATE.showRootSimple;
+  if (typeof next.showRootOrbit !== 'boolean') next.showRootOrbit = DEFAULT_STATE.showRootOrbit;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
   if (typeof next.autoZoom !== 'boolean') next.autoZoom = false;
@@ -1341,7 +1392,7 @@ function normalizeState(next) {
   if (typeof next.autoFx !== 'boolean') next.autoFx = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
   if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
-  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d') next.selectedRoot = null;
+  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d' || next.modelMode === 'rootlab') next.selectedRoot = null;
   return next;
 }
 
@@ -1432,6 +1483,17 @@ function cacheElements() {
   els.polytope4DSelect = document.getElementById('polytope4d-select');
   els.dynkinField = document.getElementById('dynkin-field');
   els.dynkinSelect = document.getElementById('dynkin-select');
+  els.rootLabField = document.getElementById('rootlab-field');
+  els.rootSystemOutput = document.getElementById('root-system-output');
+  els.rootFactCount = document.getElementById('root-fact-count');
+  els.rootFactCoxeter = document.getElementById('root-fact-coxeter');
+  els.rootFactChamber = document.getElementById('root-fact-chamber');
+  els.rootFactAngle = document.getElementById('root-fact-angle');
+  els.rootSystemMatrix = document.getElementById('root-system-matrix');
+  els.rootMirrorsToggle = document.getElementById('root-mirrors-toggle');
+  els.rootChambersToggle = document.getElementById('root-chambers-toggle');
+  els.rootSimpleToggle = document.getElementById('root-simple-toggle');
+  els.rootOrbitToggle = document.getElementById('root-orbit-toggle');
   els.sdfField = document.getElementById('sdf-field');
   els.sdfRadius = document.getElementById('sdf-radius');
   els.sdfRadiusOutput = document.getElementById('sdf-radius-output');
@@ -1567,6 +1629,11 @@ function bindEvents() {
       selectModelShortcut(modelShortcut);
       return;
     }
+    const rootSystem = event.target.closest('[data-root-system]')?.dataset.rootSystem;
+    if (rootSystem) {
+      selectRootSystem(rootSystem);
+      return;
+    }
     const bloomAction = event.target.closest('[data-bloom-action]')?.dataset.bloomAction;
     if (bloomAction) {
       handleBloomAction(bloomAction);
@@ -1660,6 +1727,10 @@ function bindEvents() {
   els.mirrorsToggle.addEventListener('change', () => setSettingState({ showMirrors: els.mirrorsToggle.checked }, 'mirrors-toggle'));
   els.edgesToggle.addEventListener('change', () => setSettingState({ showEdges: els.edgesToggle.checked }, 'edges-toggle'));
   els.verticesToggle.addEventListener('change', () => setSettingState({ showVertices: els.verticesToggle.checked }, 'vertices-toggle'));
+  els.rootMirrorsToggle.addEventListener('change', () => setSettingState({ showRootMirrors: els.rootMirrorsToggle.checked }, 'root-mirrors-toggle'));
+  els.rootChambersToggle.addEventListener('change', () => setSettingState({ showRootChambers: els.rootChambersToggle.checked }, 'root-chambers-toggle'));
+  els.rootSimpleToggle.addEventListener('change', () => setSettingState({ showRootSimple: els.rootSimpleToggle.checked }, 'root-simple-toggle'));
+  els.rootOrbitToggle.addEventListener('change', () => setSettingState({ showRootOrbit: els.rootOrbitToggle.checked }, 'root-orbit-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
     autoModel: false,
@@ -1838,7 +1909,7 @@ function handleInfoAction(action) {
 }
 
 function selectedRootForModelMode(modelMode) {
-  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d') return null;
+  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d' || modelMode === 'rootlab') return null;
   if (modelMode === 'dynkin') return simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null;
   return state.selectedRoot;
 }
@@ -2023,6 +2094,7 @@ function activeGeometryRecord() {
       shape: state.shape,
       polytope4d: state.polytope4d,
       dynkinDiagram: state.dynkinDiagram,
+      rootSystem: state.rootSystem,
       selectedRoot: state.selectedRoot,
       palette: state.palette,
       quality: state.quality,
@@ -2080,6 +2152,24 @@ function activeGeometryRecord() {
       nodes: cloneJson(diagram.nodes || []),
       edges: cloneJson(diagram.edges || []),
       selectedSimpleRoot: selectedContext?.simpleRootOrder || null,
+    };
+  }
+
+  if (state.modelMode === 'rootlab') {
+    const system = generateRank2RootSystem(state.rootSystem);
+    return {
+      ...base,
+      kind: 'rank-2-root-system',
+      name: system.id,
+      label: `${system.label} root system`,
+      rank: 2,
+      family: system.family,
+      coxeterNumber: system.coxeterNumber,
+      crystallographic: system.crystallographic,
+      simpleRoots: cloneJson(system.simpleRoots),
+      roots: cloneJson(system.roots.map(root => root.vector)),
+      cartanMatrix: cloneJson(system.cartanMatrix),
+      chamberAngle: system.chamberAngle,
     };
   }
 
@@ -2355,6 +2445,10 @@ function postcardCaption() {
   if (state.modelMode === 'dynkin') {
     const diagram = dynkinGeometry[state.dynkinDiagram] || {};
     return `${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin | ${diagram.nodes?.length || 0} nodes | Cartan graph`;
+  }
+  if (state.modelMode === 'rootlab') {
+    const system = generateRank2RootSystem(state.rootSystem);
+    return `${system.label} root system | ${system.rootCount} roots | ${system.chamberCount} reflection chambers`;
   }
   return scene.topbarLabel;
 }
@@ -3011,7 +3105,14 @@ function setState(patch, options = {}) {
   const previousAutoZoom = state.autoZoom;
   const previousAutoExtrude = state.autoExtrude;
   const previousModelMode = state.modelMode;
+  const previousRootSystem = state.rootSystem;
   state = next;
+  if (state.modelMode !== 'rootlab'
+      || state.modelMode !== previousModelMode
+      || state.rootSystem !== previousRootSystem) {
+    selectedRootLabIndex = null;
+    rootDrawerExpanded = false;
+  }
   if (state.autoZoom && (!previousAutoZoom || state.modelMode !== previousModelMode)) syncAutoMotionPhase('zoom');
   if (state.autoExtrude && !previousAutoExtrude) syncAutoMotionPhase('extrude');
   if (state.autoModel && (!previousAutoModel || patch.modelMode != null || patch.shape != null || patch.polytope4d != null || patch.dynkinDiagram != null)) {
@@ -3140,11 +3241,14 @@ function showResetFeedback(button = els.resetView) {
 function resetView(button = els.resetView) {
   stopMobileTourForManualExplore();
   motionPhase = 0;
+  selectedRootLabIndex = null;
+  rootDrawerExpanded = false;
   const activeSelection = {
     modelMode: state.modelMode,
     shape: state.shape,
     polytope4d: state.polytope4d,
     dynkinDiagram: state.dynkinDiagram,
+    rootSystem: state.rootSystem,
     learnTopic: state.learnTopic,
   };
   setState({
@@ -3166,7 +3270,18 @@ function modelShortcutMatches(shortcut) {
   if (target.modelMode === 'platonic') return target.shape === state.shape;
   if (target.modelMode === 'poly4d') return target.polytope4d === state.polytope4d;
   if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
+  if (target.modelMode === 'rootlab') return target.rootSystem === state.rootSystem;
   return true;
+}
+
+function selectRootSystem(id) {
+  if (!RANK2_ROOT_SYSTEMS[id]) return false;
+  return setManualModelState({
+    modelMode: 'rootlab',
+    rootSystem: id,
+    autoModel: false,
+    selectedRoot: null,
+  }, `root-system-${id}`);
 }
 
 function activeModelShortcut() {
@@ -3883,6 +3998,7 @@ function scenePatchForTarget(target) {
     shape: target.shape || DEFAULT_STATE.shape,
     polytope4d: target.polytope4d || DEFAULT_STATE.polytope4d,
     dynkinDiagram: target.dynkinDiagram || DEFAULT_STATE.dynkinDiagram,
+    rootSystem: target.rootSystem || DEFAULT_STATE.rootSystem,
     showVertices: DEFAULT_STATE.showVertices,
     autoRotate: false,
     autoZoom: false,
@@ -3909,6 +4025,7 @@ function sceneTargetSnapshot(index = currentAutoModelIndex(), target = state) {
     shape: target.shape ?? state.shape,
     polytope4d: target.polytope4d ?? state.polytope4d,
     dynkinDiagram: target.dynkinDiagram ?? state.dynkinDiagram,
+    rootSystem: target.rootSystem ?? state.rootSystem,
   };
 }
 
@@ -3930,6 +4047,7 @@ function setScenePreset(targetOrIndex, options = {}) {
       if (candidate.modelMode === 'platonic') return candidate.shape === target.shape;
       if (candidate.modelMode === 'poly4d') return candidate.polytope4d === target.polytope4d;
       if (candidate.modelMode === 'dynkin') return candidate.dynkinDiagram === target.dynkinDiagram;
+      if (candidate.modelMode === 'rootlab') return candidate.rootSystem === target.rootSystem;
       return true;
     });
   }
@@ -4020,10 +4138,32 @@ function syncControlValues() {
 }
 
 function syncModelControls() {
+  const activeRootSystem = generateRank2RootSystem(state.rootSystem);
   if (els.modelSelect) els.modelSelect.value = state.modelMode;
   if (els.shapeSelect) els.shapeSelect.value = state.shape;
   if (els.polytope4DSelect) els.polytope4DSelect.value = state.polytope4d;
   if (els.dynkinSelect) els.dynkinSelect.value = state.dynkinDiagram;
+  if (els.rootLabField) els.rootLabField.classList.toggle('hidden', state.modelMode !== 'rootlab');
+  if (els.rootSystemOutput) els.rootSystemOutput.textContent = RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem;
+  if (els.rootFactCount) els.rootFactCount.textContent = String(activeRootSystem.rootCount);
+  if (els.rootFactCoxeter) els.rootFactCoxeter.textContent = String(activeRootSystem.coxeterNumber);
+  if (els.rootFactChamber) els.rootFactChamber.textContent = `${formatCompactNumber(activeRootSystem.chamberAngleDegrees)}°`;
+  if (els.rootFactAngle) els.rootFactAngle.textContent = `${formatCompactNumber(activeRootSystem.simpleAngleDegrees)}°`;
+  if (els.rootSystemMatrix) {
+    const matrix = activeRootSystem.cartanMatrix.map(row => `[${row.join(', ')}]`).join(' ');
+    els.rootSystemMatrix.textContent = `${activeRootSystem.crystallographic ? 'Cartan' : 'Reflection'} ${matrix}`;
+  }
+  if (els.rootLabField) {
+    els.rootLabField.querySelectorAll('[data-root-system]').forEach(button => {
+      const active = button.dataset.rootSystem === state.rootSystem;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+  if (els.rootMirrorsToggle) els.rootMirrorsToggle.checked = state.showRootMirrors;
+  if (els.rootChambersToggle) els.rootChambersToggle.checked = state.showRootChambers;
+  if (els.rootSimpleToggle) els.rootSimpleToggle.checked = state.showRootSimple;
+  if (els.rootOrbitToggle) els.rootOrbitToggle.checked = state.showRootOrbit;
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
@@ -4153,6 +4293,17 @@ function activeSceneSummary() {
       infoCopy: `${label} is projected from 4D into a depth view and then drawn with Canvas 2D. Drag to rotate, pinch to zoom, or enable Motion to animate the projection.`,
     };
   }
+  if (state.modelMode === 'rootlab') {
+    const system = generateRank2RootSystem(state.rootSystem);
+    const crystal = system.crystallographic ? 'crystallographic' : 'non-crystallographic';
+    return {
+      chipStrong: MODEL_LABELS.rootlab,
+      chipSmall: `${system.label} / ${system.rootCount} roots`,
+      topbarLabel: `${system.label} rank-2 root system, ${system.rootCount} roots, ${system.chamberCount} reflection chambers`,
+      canvasLabel: `${system.label} rank-2 root system generated from two simple roots with ${system.rootCount} roots and ${system.chamberCount} chambers`,
+      infoCopy: `${system.label} is generated live by reflecting two simple roots until the set closes. It is ${crystal}; the overlays expose its mirrors, fundamental chambers, generators, and a Coxeter orbit. Use one finger to orbit and tilt the diagram; use two fingers to pan or pinch-zoom.`,
+    };
+  }
   if (state.modelMode === 'dynkin') {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     const label = DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram;
@@ -4194,7 +4345,7 @@ function activeSceneSummary() {
     chipSmall: '240 / 8 rings',
     topbarLabel: 'E8 Coxeter, 240 roots, 8 rings',
     canvasLabel: 'E8 Coxeter plane visualization with 240 roots on 8 rings',
-    infoCopy: 'The 240 E8 root vectors are projected onto the Coxeter plane, forming eight concentric rings of 30 roots. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.',
+    infoCopy: 'The 240 E8 root vectors are projected onto the Coxeter plane, forming eight concentric rings of 30 roots. Use one finger to orbit and tilt the plane; use two fingers to pan or pinch-zoom. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.',
   };
 }
 
@@ -4260,7 +4411,7 @@ function syncMckayCard() {
 
 function activeCuriosityKey() {
   const selected = state.selectedRoot == null ? 'none' : 'root';
-  return `${state.modelMode}|${state.shape}|${state.polytope4d}|${state.dynkinDiagram}|${state.subset}|${selected}`;
+  return `${state.modelMode}|${state.shape}|${state.polytope4d}|${state.rootSystem}|${state.dynkinDiagram}|${state.subset}|${selected}`;
 }
 
 function activeCuriosityNotes() {
@@ -4312,6 +4463,13 @@ function activeCuriosityNotes() {
       body: `${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} edges encode Cartan dot -1 relationships.`,
       detail: 'In E8, tapping a node selects the matching simple root.',
     });
+  } else if (state.modelMode === 'rootlab') {
+    const system = generateRank2RootSystem(state.rootSystem);
+    notes.push({
+      title: 'Reflection closure',
+      body: `${system.label} grows from two simple roots into all ${system.rootCount} roots by reflection.`,
+      detail: `${system.chamberCount} chambers meet at angles of ${Math.round(180 / system.coxeterNumber)} degrees. Toggle the overlays to reconstruct the system layer by layer.`,
+    });
   }
   notes.push({
     title: 'McKay lens',
@@ -4359,6 +4517,7 @@ function sceneLearnTopicId() {
   if (state.modelMode === 'sdf') return 'distance-fields';
   if (state.modelMode === 'platonic') return 'why-five-solids';
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
+  if (state.modelMode === 'rootlab') return 'rank-two-reflections';
   if (state.modelMode === 'dynkin') return 'reading-dynkin';
   return 'coxeter-plane';
 }
@@ -4854,8 +5013,8 @@ function handleBackNavigation() {
     return closed;
   }
   if (mobileTourActive) return !!stopMobileTour({ interactionType: 'back-stop-tour' });
-  if (state.selectedRoot != null && rootDrawerExpanded) return setRootDrawerExpanded(false, 'back-collapse-drawer');
-  if (state.selectedRoot != null) return clearSelection('back-clear-selection');
+  if ((state.selectedRoot != null || selectedRootLabIndex != null) && rootDrawerExpanded) return setRootDrawerExpanded(false, 'back-collapse-drawer');
+  if (state.selectedRoot != null || selectedRootLabIndex != null) return clearSelection('back-clear-selection');
   return false;
 }
 
@@ -5196,8 +5355,7 @@ function drawE8ChordWebglField(layout, paletteSet) {
     gl.enableVertexAttribArray(e8ChordAttributes.style);
     gl.vertexAttribPointer(e8ChordAttributes.style, 4, gl.FLOAT, false, stride, 3 * Float32Array.BYTES_PER_ELEMENT);
 
-    const pathPitch = state.cameraPath === 'spiral' && state.autoRotate ? Math.sin(motionPhase * 0.72) * 0.24 : 0;
-    const pitch = clamp(state.cameraTilt + pathPitch, -Math.PI / 3, Math.PI / 3);
+    const pitch = planeCameraPitch();
     const pathZoom = state.cameraPath === 'dive' && state.autoRotate
       ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
       : 1;
@@ -5513,6 +5671,8 @@ function render() {
       polytope4dLabel: POLYTOPE4D_LABELS[state.polytope4d] || state.polytope4d,
       dynkinDiagram: state.dynkinDiagram,
       dynkinLabel: DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram,
+      rootSystem: state.rootSystem,
+      rootSystemLabel: RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem,
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
       autoFx: state.autoFx,
@@ -5569,6 +5729,12 @@ function render() {
 
     if (state.modelMode === 'dynkin') {
       const projectedAllFrame = drawDynkinModel(layout, paletteSet, drawStats, interactionLiteFrame);
+      completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
+      return;
+    }
+
+    if (state.modelMode === 'rootlab') {
+      const projectedAllFrame = drawRootLabModel(layout, paletteSet, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -6168,6 +6334,8 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.lastDynkinDiagram = state.dynkinDiagram;
   metrics.lastDynkinLabel = drawStats.dynkinLabel;
   metrics.lastDynkinSelectedNode = drawStats.dynkinSelectedNode ?? null;
+  metrics.lastRootSystem = drawStats.rootSystem || state.rootSystem;
+  metrics.lastRootSystemLabel = drawStats.rootSystemLabel || RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem;
   metrics.lastRuntimePalette = drawStats.runtimePalette || state.palette;
   metrics.lastStylePhase = stylePhase;
   metrics.lastModelDrawMs = performance.now();
@@ -6183,6 +6351,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   if (state.modelMode === 'sdf') metrics.sdfDrawCount++;
   if (state.modelMode === 'platonic') metrics.platonicDrawCount++;
   if (state.modelMode === 'poly4d') metrics.polytope4DDrawCount++;
+  if (state.modelMode === 'rootlab') metrics.rootLabDrawCount = (metrics.rootLabDrawCount || 0) + 1;
   if (state.modelMode === 'dynkin') metrics.dynkinDrawCount++;
   metrics.lastRenderMs = performance.now() - t0;
   if (metrics.firstRenderMs == null) metrics.firstRenderMs = performance.now() - startedAt;
@@ -6199,36 +6368,66 @@ function resetPointQueues() {
   for (const bucket of basePointBuckets) bucket.length = 0;
 }
 
+function planeCameraPitch() {
+  const pathPitch = state.cameraPath === 'spiral' && state.autoRotate
+    ? Math.sin(motionPhase * 0.72) * 0.24
+    : 0;
+  // Mobile's shared camera starts at a pleasing 3D tilt. Treat that baseline
+  // as straight-on for mathematical planes so Reset preserves the canonical
+  // circles while a vertical drag can still tip them into depth.
+  return clamp(state.cameraTilt - DEFAULT_STATE.cameraTilt + pathPitch, -Math.PI / 2 + 0.08, Math.PI / 2 - 0.08);
+}
+
+function planeCameraPathZoom() {
+  return state.cameraPath === 'dive' && state.autoRotate
+    ? 0.92 + 0.18 * (0.5 + 0.5 * Math.cos(motionPhase * 0.86))
+    : 1;
+}
+
+function projectPlaneCoordinates(x, y, z = 0) {
+  const yaw = state.rotation;
+  const pitch = planeCameraPitch();
+  const yawCos = Math.cos(yaw);
+  const yawSin = Math.sin(yaw);
+  const pitchCos = Math.cos(pitch);
+  const pitchSin = Math.sin(pitch);
+  const rotatedX = x * yawCos - z * yawSin;
+  const rotatedZ = x * yawSin + z * yawCos;
+  const rotatedY = y * pitchCos - rotatedZ * pitchSin;
+  const depth = y * pitchSin + rotatedZ * pitchCos;
+  const perspective = 4.2 / Math.max(1.8, 4.2 + depth);
+  const pathZoom = planeCameraPathZoom();
+  return {
+    x: rotatedX * perspective * pathZoom,
+    y: rotatedY * perspective * pathZoom,
+    z: depth,
+    perspective,
+  };
+}
+
+function projectPlaneScreenPoint(x, y, z, layout, modelScale = 1, invertY = false) {
+  const projected = projectPlaneCoordinates(x, y, z);
+  const scale = layout.scale * modelScale;
+  return {
+    x: layout.cx + state.panX + projected.x * scale,
+    y: layout.cy + state.panY + projected.y * scale * (invertY ? -1 : 1),
+    z: projected.z,
+    perspective: projected.perspective,
+  };
+}
+
 function projectPointsIntoCache(layout, drawStats) {
-  const cos = Math.cos(state.rotation);
-  const sin = Math.sin(state.rotation);
   const originX = layout.cx + state.panX;
   const originY = layout.cy + state.panY;
   const scale = layout.scale;
   const pointScale = state.pointScale;
   const extrude = state.e8MorphT;
   for (const p of points) {
-    const x = p.x * cos - p.y * sin;
-    const y = p.x * sin + p.y * cos;
-    const flatX = originX + x * scale;
-    const flatY = originY + y * scale;
-    let depthSize = 1;
-    if (extrude > 0.0001) {
-      // Match the desktop Coxeter extrusion: outer rings travel farther in Z,
-      // then blend continuously from the canonical flat projection into the
-      // orbitable 3D field. Keeping the flat endpoint explicit avoids a jump
-      // when the slider or its Auto oscillator first leaves zero.
-      const projected = projectModelPoint(p.x, p.y, p.norm * 0.62, layout, 1, false);
-      p.sx = flatX + (projected.x - flatX) * extrude;
-      p.sy = flatY + (projected.y - flatY) * extrude;
-      p.depth = projected.z * extrude;
-      depthSize = 0.84 + projected.perspective * 0.16;
-      drawStats.projectionObjectAllocs++;
-    } else {
-      p.sx = flatX;
-      p.sy = flatY;
-      p.depth = 0;
-    }
+    const projected = projectPlaneCoordinates(p.x, p.y, p.norm * 0.62 * extrude);
+    p.sx = originX + projected.x * scale;
+    p.sy = originY + projected.y * scale;
+    p.depth = projected.z;
+    const depthSize = 0.84 + projected.perspective * 0.16;
     const rippleScale = ripplePointScale(p.r);
     p.size = p.baseSize * pointScale * depthSize * rippleScale;
     if (state.fxMode === 'ripple') {
@@ -6244,6 +6443,7 @@ function projectPointsIntoCache(layout, drawStats) {
   }
   drawStats.e8Extrude = extrude;
   drawStats.e8ExtrudedPoints = extrude > 0.0001 ? points.length : 0;
+  drawStats.e8PlanePitch = planeCameraPitch();
 }
 
 function projectModelPoint(x, y, z, layout, modelScale = 1, scaleExtrudeDepth = true) {
@@ -7901,6 +8101,240 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   return frame;
 }
 
+function drawRootLabModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  const system = generateRank2RootSystem(state.rootSystem);
+  const maxLength = Math.max(...system.roots.map(root => root.length), 1);
+  const centerX = layout.cx + state.panX;
+  const centerY = layout.cy + state.panY;
+  const modelScale = 1.12;
+  const boundaryRadius = 1.08;
+  const projectNormalized = (x, y) => projectPlaneScreenPoint(x, y, 0, layout, modelScale, true);
+  const project = vector => projectNormalized(vector[0] / maxLength, vector[1] / maxLength);
+  const projected = system.roots.map((root, index) => ({ ...project(root.vector), index, root }));
+  rootLabHitTargets = projected.map(point => ({
+    index: point.index,
+    x: point.x,
+    y: point.y,
+    size: (point.root.kind === 'short' ? 5 : 6.5) * state.pointScale,
+  }));
+
+  if (state.showRootChambers && !interactionLiteFrame) {
+    ctx.save();
+    for (let chamber = 0; chamber < system.chamberCount; chamber++) {
+      const a0 = chamber * system.chamberAngle;
+      const a1 = a0 + system.chamberAngle;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      for (let step = 0; step <= 8; step++) {
+        const angle = a0 + (a1 - a0) * step / 8;
+        const edge = projectNormalized(Math.cos(angle) * boundaryRadius, Math.sin(angle) * boundaryRadius);
+        ctx.lineTo(edge.x, edge.y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = colorWithAlpha(
+        paletteSet.colors[chamber % paletteSet.colors.length],
+        chamber === system.chamberCount - 1 ? 0.19 : chamber % 2 ? 0.055 : 0.095,
+      );
+      ctx.fill();
+      drawStats.modelFaceFills++;
+    }
+    ctx.restore();
+  }
+
+  if (!interactionLiteFrame) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (const [kind, alpha, width, paletteIndex] of [
+      ['long', 0.84, 1.8, 0],
+      ['short', 0.7, 1.35, 2],
+    ]) {
+      const polygonRoots = projected.filter(point => point.root.kind === kind);
+      if (polygonRoots.length < 3) continue;
+      ctx.beginPath();
+      polygonRoots.forEach((point, index) => {
+        if (index) ctx.lineTo(point.x, point.y);
+        else ctx.moveTo(point.x, point.y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = colorWithAlpha(paletteSet.colors[paletteIndex % paletteSet.colors.length], alpha);
+      ctx.lineWidth = width;
+      if (state.fxMode !== 'none') {
+        ctx.shadowColor = paletteSet.colors[paletteIndex % paletteSet.colors.length];
+        ctx.shadowBlur = 4 + state.fxStrength * 5;
+      }
+      ctx.stroke();
+      drawStats.rootPolygonEdges = (drawStats.rootPolygonEdges || 0) + polygonRoots.length;
+      drawStats.modelEdgeStrokes++;
+    }
+    ctx.beginPath();
+    for (let step = 0; step <= 96; step++) {
+      const angle = TAU * step / 96;
+      const edge = projectNormalized(
+        Math.cos(angle) * boundaryRadius * 0.97,
+        Math.sin(angle) * boundaryRadius * 0.97
+      );
+      if (step) ctx.lineTo(edge.x, edge.y);
+      else ctx.moveTo(edge.x, edge.y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = colorWithAlpha(paletteSet.colors[1 % paletteSet.colors.length], 0.16);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawStats.rootBoundaryGuides = 1;
+    ctx.restore();
+  }
+
+  if (state.showRootMirrors) {
+    ctx.save();
+    ctx.lineWidth = interactionLiteFrame ? 1 : 1.25;
+    ctx.setLineDash(interactionLiteFrame ? [] : [5, 7]);
+    ctx.strokeStyle = paletteSet.mirrorStroke;
+    for (let mirror = 0; mirror < system.coxeterNumber; mirror++) {
+      const a = Math.PI / 2 + mirror * Math.PI / system.coxeterNumber;
+      const dx = Math.cos(a) * boundaryRadius;
+      const dy = Math.sin(a) * boundaryRadius;
+      const start = projectNormalized(-dx, -dy);
+      const end = projectNormalized(dx, dy);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      drawStats.mirrorLines++;
+      drawStats.mirrorStrokes++;
+    }
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const point of projected) {
+    const colorIndex = (point.root.kind === 'short' ? 1 : point.index) % paletteSet.colors.length;
+    const color = paletteSet.colors[colorIndex];
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(point.x, point.y);
+    ctx.lineWidth = point.root.kind === 'short' ? 1.35 : 1.8;
+    ctx.strokeStyle = colorWithAlpha(color, state.pointOpacity * (interactionLiteFrame ? 0.62 : 0.84));
+    if (!interactionLiteFrame && state.fxMode !== 'none') {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 4 + state.fxStrength * 3;
+    }
+    ctx.stroke();
+    drawStats.modelEdgeStrokes++;
+  }
+  ctx.restore();
+
+  const simpleProjected = system.simpleRoots.map(project);
+  if (state.showRootSimple) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = paletteSet.colors[0];
+    if (!interactionLiteFrame) {
+      ctx.shadowColor = paletteSet.colors[0];
+      ctx.shadowBlur = 8;
+    }
+    for (const point of simpleProjected) {
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (state.showRootOrbit) {
+    const orbit = coxeterOrbit(system.id).map(project);
+    ctx.save();
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = colorWithAlpha(paletteSet.colors[2 % paletteSet.colors.length], 0.78);
+    ctx.beginPath();
+    orbit.forEach((point, index) => {
+      if (index) ctx.lineTo(point.x, point.y);
+      else ctx.moveTo(point.x, point.y);
+    });
+    if (orbit.length) ctx.closePath();
+    ctx.stroke();
+    const markerPhase = orbit.length ? (stylePhase * 1.35) % orbit.length : 0;
+    const markerIndex = Math.floor(markerPhase);
+    const nextIndex = orbit.length ? (markerIndex + 1) % orbit.length : 0;
+    const markerMix = markerPhase - markerIndex;
+    const markerStart = orbit[markerIndex];
+    const markerEnd = orbit[nextIndex];
+    if (markerStart && markerEnd) {
+      const marker = {
+        x: markerStart.x + (markerEnd.x - markerStart.x) * markerMix,
+        y: markerStart.y + (markerEnd.y - markerStart.y) * markerMix,
+      };
+      const angle = Math.atan2(markerEnd.y - markerStart.y, markerEnd.x - markerStart.x);
+      ctx.beginPath();
+      ctx.moveTo(markerStart.x, markerStart.y);
+      ctx.lineTo(marker.x, marker.y);
+      ctx.strokeStyle = colorWithAlpha(paletteSet.colors[3 % paletteSet.colors.length], 0.96);
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(marker.x, marker.y);
+      ctx.rotate(angle);
+      const markerSize = (7 + state.fxStrength * (state.fxMode === 'none' ? 0 : 2)) * state.pointScale;
+      ctx.beginPath();
+      ctx.moveTo(markerSize, 0);
+      ctx.lineTo(-markerSize * 0.72, markerSize * 0.58);
+      ctx.lineTo(-markerSize * 0.38, 0);
+      ctx.lineTo(-markerSize * 0.72, -markerSize * 0.58);
+      ctx.closePath();
+      ctx.fillStyle = paletteSet.colors[3 % paletteSet.colors.length];
+      if (!interactionLiteFrame) {
+        ctx.shadowColor = paletteSet.colors[3 % paletteSet.colors.length];
+        ctx.shadowBlur = 7 + state.fxStrength * 5;
+      }
+      ctx.fill();
+      ctx.restore();
+      drawStats.directPointFills++;
+      drawStats.rootOrbitMarker = 'directional-arrow';
+    }
+    ctx.restore();
+  }
+
+  ctx.save();
+  for (const point of projected) {
+    const pulse = state.softFx ? 1 + Math.sin(stylePhase * TAU + point.index * 0.7) * 0.08 * state.fxStrength : 1;
+    const selected = point.index === selectedRootLabIndex;
+    const pointRadius = (point.root.kind === 'short' ? 5 : 6.5) * state.pointScale * pulse * (selected ? 1.32 : 1);
+    const color = paletteSet.colors[point.index % paletteSet.colors.length];
+    if (!interactionLiteFrame) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = state.fxMode === 'none' ? 4 : 7 + state.fxStrength * 4;
+    }
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, pointRadius, 0, TAU);
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (selected) {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, pointRadius + 4.5, 0, TAU);
+      ctx.strokeStyle = '#fff2a8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      drawStats.rootLabSelectionRings = (drawStats.rootLabSelectionRings || 0) + 1;
+    }
+    drawStats.directPoints++;
+    drawStats.directPointFills++;
+    drawStats.modelVertexFills++;
+  }
+  ctx.restore();
+
+  drawStats.points = projected.length;
+  drawStats.modelVertices = projected.length;
+  drawStats.modelProjectedVertices = projected.length;
+  drawStats.modelEdges = projected.length;
+  drawStats.rootSystem = system.id;
+  drawStats.rootSystemLabel = system.label;
+  drawStats.rootChambers = system.chamberCount;
+  drawStats.rootPlanePitch = planeCameraPitch();
+  return projectedModelFrameMetrics(projected);
+}
+
 function normalizedDynkinNodes(diagram) {
   const nodes = diagram?.nodes || [];
   if (!nodes.length) return [];
@@ -8057,17 +8491,24 @@ function getSelectedContext() {
 function drawRings(layout, paletteSet) {
   const stats = { rings: 0, strokes: 0, scaleFactors: ringRadiusFactors.length, colorCacheHits: 0 };
   if (!ringRadiusFactors.length) return stats;
-  const cx = layout.cx + state.panX;
-  const cy = layout.cy + state.panY;
   ctx.save();
   ctx.lineWidth = 1;
   ctx.strokeStyle = paletteSet.ringStroke;
   stats.colorCacheHits++;
   ctx.beginPath();
   for (const factor of ringRadiusFactors) {
-    const radius = factor * layout.scale;
-    ctx.moveTo(cx + radius, cy);
-    ctx.arc(cx, cy, radius, 0, TAU);
+    for (let step = 0; step <= 72; step++) {
+      const angle = TAU * step / 72;
+      const point = projectPlaneScreenPoint(
+        Math.cos(angle) * factor,
+        Math.sin(angle) * factor,
+        factor * 0.62 * state.e8MorphT,
+        layout
+      );
+      if (step) ctx.lineTo(point.x, point.y);
+      else ctx.moveTo(point.x, point.y);
+    }
+    ctx.closePath();
     stats.rings++;
   }
   if (stats.rings) {
@@ -8104,11 +8545,7 @@ function drawNeighborRays(context, paletteSet) {
 function drawMirrorLines(layout, paletteSet) {
   const stats = { lines: 0, strokes: 0, colorCacheHits: 0 };
   if (!simpleRootIndices.length) return stats;
-  const cos = Math.cos(state.rotation);
-  const sin = Math.sin(state.rotation);
-  const cx = layout.cx + state.panX;
-  const cy = layout.cy + state.panY;
-  const len = layout.scale * 1.85;
+  const len = 1.85;
   ctx.save();
   ctx.lineWidth = 1;
   ctx.lineJoin = 'round';
@@ -8119,13 +8556,13 @@ function drawMirrorLines(layout, paletteSet) {
   for (const idx of simpleRootIndices) {
     const p = points[idx];
     if (!p) continue;
-    const rx = p.x * cos - p.y * sin;
-    const ry = p.x * sin + p.y * cos;
-    const mag = Math.hypot(rx, ry) || 1;
-    const dx = -ry / mag;
-    const dy = rx / mag;
-    ctx.moveTo(cx - dx * len, cy - dy * len);
-    ctx.lineTo(cx + dx * len, cy + dy * len);
+    const mag = Math.hypot(p.x, p.y) || 1;
+    const dx = -p.y / mag;
+    const dy = p.x / mag;
+    const start = projectPlaneScreenPoint(-dx * len, -dy * len, 0, layout);
+    const end = projectPlaneScreenPoint(dx * len, dy * len, 0, layout);
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
     stats.lines++;
   }
   if (stats.lines) {
@@ -8826,8 +9263,9 @@ function syncChromeFade(reason = 'input') {
 }
 
 function touchDragMode() {
-  if (TOUCH_ORBIT_MODEL_MODES.has(state.modelMode)) return 'orbit';
   if (state.modelMode === 'e8_2d' && state.e8MorphT > 0.0001) return 'orbit';
+  if (TOUCH_PLANE_ROTATE_MODEL_MODES.has(state.modelMode)) return 'plane-orbit';
+  if (TOUCH_ORBIT_MODEL_MODES.has(state.modelMode)) return 'orbit';
   return 'pan';
 }
 
@@ -8881,7 +9319,13 @@ function onPointerMove(event) {
     return;
   }
   drag.moved = true;
-  if (drag.mode === 'orbit') {
+  if (drag.mode === 'plane-orbit') {
+    markInteraction('plane-orbit-drag');
+    state.rotation = drag.rotation + dx * 0.008;
+    state.cameraTilt = clamp(drag.cameraTilt - dy * 0.006, -Math.PI / 3, Math.PI / 3);
+    state.cameraPath = 'manual';
+    state.autoRotate = false;
+  } else if (drag.mode === 'orbit') {
     markInteraction('orbit-drag');
     state.rotation = drag.rotation + dx * 0.008;
     state.cameraTilt = clamp(drag.cameraTilt - dy * 0.006, -Math.PI / 3, Math.PI / 3);
@@ -9118,6 +9562,10 @@ function selectNearest(x, y) {
     selectDynkinNode(x, y);
     return;
   }
+  if (state.modelMode === 'rootlab') {
+    selectNearestRootLabRoot(x, y);
+    return;
+  }
   if (state.modelMode === 'sdf' || state.modelMode === 'platonic' || state.modelMode === 'poly4d') {
     clearSelection();
     return;
@@ -9140,6 +9588,63 @@ function selectNearest(x, y) {
     return;
   }
   selectRoot(best.idx, { status: true, drawerExpanded: false });
+}
+
+function selectNearestRootLabRoot(x, y) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const target of rootLabHitTargets) {
+    const distance = Math.hypot(target.x - x, target.y - y);
+    if (distance < bestDistance) {
+      best = target;
+      bestDistance = distance;
+    }
+  }
+  if (!best || bestDistance > Math.max(30, best.size + 16)) {
+    clearSelection();
+    return false;
+  }
+  if (selectedRootLabIndex === best.index) return clearSelection();
+  return selectRootLabRoot(best.index, { drawerExpanded: true, status: true });
+}
+
+function rootLabSelectionDetails(index = selectedRootLabIndex) {
+  if (state.modelMode !== 'rootlab' || !Number.isInteger(index)) return null;
+  const system = generateRank2RootSystem(state.rootSystem);
+  const root = system.roots[index];
+  if (!root) return null;
+  const simpleIndex = system.simpleRoots.findIndex(simple => (
+    Math.abs(simple[0] - root.vector[0]) < 1e-7
+    && Math.abs(simple[1] - root.vector[1]) < 1e-7
+  ));
+  const oppositeIndex = system.roots.findIndex(candidate => (
+    Math.abs(candidate.vector[0] + root.vector[0]) < 1e-7
+    && Math.abs(candidate.vector[1] + root.vector[1]) < 1e-7
+  ));
+  return {
+    system,
+    root,
+    index,
+    simpleIndex,
+    oppositeIndex,
+    angleDegrees: root.angle * 180 / Math.PI,
+    lengthLabel: system.shortRootCount > 0 ? `${root.kind} root` : 'equal-length root',
+  };
+}
+
+function selectRootLabRoot(index, options = {}) {
+  const next = Number(index);
+  const details = rootLabSelectionDetails(next);
+  if (!details) return false;
+  stopMobileTourForManualExplore();
+  clearTapMemory();
+  markInteraction(options.interactionType || 'select-root-lab-root');
+  selectedRootLabIndex = next;
+  rootDrawerExpanded = options.drawerExpanded !== false;
+  updateSelectionUI({ reason: options.interactionType || 'select-root-lab-root' });
+  requestRender(options.interactionType || 'select-root-lab-root');
+  if (options.status) showStatus(`${details.system.label} root #${next}`);
+  return true;
 }
 
 function selectRoot(idx, options = {}) {
@@ -9217,6 +9722,8 @@ function fitAllRoots(interactionType = 'fit-all', options = {}) {
   if (options.clearSelection) {
     previousSelectedRoot = state.selectedRoot;
     state.selectedRoot = null;
+    selectedRootLabIndex = null;
+    rootDrawerExpanded = false;
     updateSelectionUI();
   }
   const fitted = state.modelMode === 'sdf'
@@ -9321,8 +9828,6 @@ function frameModelBounds(modelBounds, interactionType, options = {}) {
 
 function pointModelBounds(list) {
   if (!list.length) return null;
-  const cos = Math.cos(state.rotation);
-  const sin = Math.sin(state.rotation);
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -9330,12 +9835,11 @@ function pointModelBounds(list) {
   for (const idx of list) {
     const point = points[idx];
     if (!point) continue;
-    const x = point.x * cos - point.y * sin;
-    const y = point.x * sin + point.y * cos;
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
+    const projected = projectPlaneCoordinates(point.x, point.y, point.norm * 0.62 * state.e8MorphT);
+    minX = Math.min(minX, projected.x);
+    minY = Math.min(minY, projected.y);
+    maxX = Math.max(maxX, projected.x);
+    maxY = Math.max(maxY, projected.y);
   }
   if (!Number.isFinite(minX)) return null;
   return { minX, minY, maxX, maxY };
@@ -9381,8 +9885,6 @@ function pointFrameMetrics(list) {
   if (!list.length) return null;
   const layout = layoutForCanvas();
   const view = usableViewBounds();
-  const cos = Math.cos(state.rotation);
-  const sin = Math.sin(state.rotation);
   const originX = layout.cx + state.panX;
   const originY = layout.cy + state.panY;
   const scale = layout.scale;
@@ -9393,8 +9895,9 @@ function pointFrameMetrics(list) {
   for (const idx of list) {
     const point = points[idx];
     if (!point) continue;
-    const x = originX + (point.x * cos - point.y * sin) * scale;
-    const y = originY + (point.x * sin + point.y * cos) * scale;
+    const projected = projectPlaneCoordinates(point.x, point.y, point.norm * 0.62 * state.e8MorphT);
+    const x = originX + projected.x * scale;
+    const y = originY + projected.y * scale;
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);
     maxX = Math.max(maxX, x);
@@ -9464,10 +9967,11 @@ function ensureSelectedRootVisible() {
 }
 
 function clearSelection(interactionType = 'clear-selection') {
-  if (state.selectedRoot == null) return false;
+  if (state.selectedRoot == null && selectedRootLabIndex == null) return false;
   markInteraction(interactionType);
   previousSelectedRoot = state.selectedRoot;
   state.selectedRoot = null;
+  selectedRootLabIndex = null;
   rootDrawerExpanded = false;
   saveState();
   updateSelectionUI();
@@ -9477,12 +9981,31 @@ function clearSelection(interactionType = 'clear-selection') {
 }
 
 function selectOpposite() {
+  if (state.modelMode === 'rootlab') {
+    const details = rootLabSelectionDetails();
+    if (details?.oppositeIndex == null || details.oppositeIndex < 0) return false;
+    return selectRootLabRoot(details.oppositeIndex, {
+      status: true,
+      drawerExpanded: true,
+      interactionType: 'opposite-root-lab-root',
+    });
+  }
   const context = getSelectedContext();
   if (context?.antipode == null) return false;
   return selectRoot(context.antipode, { status: true, drawerExpanded: true, interactionType: 'opposite-root' });
 }
 
 function selectNeighbor() {
+  if (state.modelMode === 'rootlab') {
+    const details = rootLabSelectionDetails();
+    if (!details) return false;
+    const next = (details.index + 1) % details.system.roots.length;
+    return selectRootLabRoot(next, {
+      status: true,
+      drawerExpanded: true,
+      interactionType: 'next-root-lab-root',
+    });
+  }
   const context = getSelectedContext();
   const neighbors = context?.point?.neighbors || [];
   if (!neighbors.length) return false;
@@ -9491,6 +10014,17 @@ function selectNeighbor() {
 }
 
 function centerSelectedRoot() {
+  if (state.modelMode === 'rootlab') {
+    const target = rootLabHitTargets[selectedRootLabIndex];
+    if (!target) return false;
+    const layout = layoutForCanvas();
+    clearTapMemory();
+    markInteraction('center-root-lab-root');
+    state.panX += layout.cx - target.x;
+    state.panY += layout.cy - target.y;
+    requestRender('center-root-lab-root');
+    return true;
+  }
   const selected = state.selectedRoot;
   const point = points[selected];
   if (!point) return false;
@@ -9507,7 +10041,7 @@ function centerSelectedRoot() {
 
 function setRootDrawerExpanded(expanded, reason = 'root-drawer-toggle') {
   const next = !!expanded;
-  if (rootDrawerExpanded === next || state.selectedRoot == null) return false;
+  if (rootDrawerExpanded === next || (state.selectedRoot == null && selectedRootLabIndex == null)) return false;
   rootDrawerExpanded = next;
   markInteraction(reason);
   if (next) metrics.rootDrawerExpandCount++;
@@ -9515,7 +10049,7 @@ function setRootDrawerExpanded(expanded, reason = 'root-drawer-toggle') {
   metrics.lastRootDrawerToggleMs = performance.now();
   metrics.lastRootDrawerToggleReason = reason;
   updateSelectionUI({ reason });
-  if (next && ensureSelectedRootVisible()) requestRender(reason);
+  if (next && state.selectedRoot != null && ensureSelectedRootVisible()) requestRender(reason);
   return true;
 }
 
@@ -9552,6 +10086,12 @@ function getDynkinNodeScreenPoint(order) {
   };
 }
 
+function getRootLabRootScreenPoint(index) {
+  const target = rootLabHitTargets[Number(index)];
+  if (state.modelMode !== 'rootlab' || !target) return null;
+  return { ...target };
+}
+
 function screenPointFor(point, layout = layoutForCanvas()) {
   if (state.modelMode === 'dynkin') {
     const node = simpleRootIndices.indexOf(point.idx);
@@ -9568,6 +10108,9 @@ function screenPointFor(point, layout = layoutForCanvas()) {
       x: point.bloomVisible ? point.sx : layout.cx + state.panX,
       y: point.bloomVisible ? point.sy : layout.cy + state.panY,
     };
+  }
+  if (state.modelMode === 'e8_2d') {
+    return projectPlaneScreenPoint(point.x, point.y, point.norm * 0.62 * state.e8MorphT, layout);
   }
   const cos = Math.cos(state.rotation);
   const sin = Math.sin(state.rotation);
@@ -9648,6 +10191,10 @@ function modelInfoHtml() {
     const poly = polytope4DGeometry[state.polytope4d];
     return `<strong>${POLYTOPE4D_LABELS[state.polytope4d] || state.polytope4d}</strong><small>4D regular polytope | ${poly?.verts?.length || 0} vertices | ${poly?.edges?.length || 0} edges</small><small>Projected from 4D to depth, then into the phone canvas.</small>`;
   }
+  if (state.modelMode === 'rootlab') {
+    const system = generateRank2RootSystem(state.rootSystem);
+    return `<strong>${system.label} root system</strong><small>${system.rootCount} roots | ${system.chamberCount} chambers | Coxeter number ${system.coxeterNumber}</small><small>Built live from two simple roots by repeated reflections. One finger orbits and tilts; two fingers pan or zoom.</small>`;
+  }
   if (state.modelMode === 'dynkin') {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     return `<strong>${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin diagram</strong><small>${diagram?.nodes?.length || 0} simple roots | ${diagram?.edges?.length || 0} Cartan edges</small><small>Tap an E8 node to select its simple root context.</small>`;
@@ -9661,6 +10208,56 @@ function modelInfoHtml() {
   return 'No root selected.';
 }
 
+function updateRootLabSelectionUI(reason = null) {
+  selectedContext = null;
+  const details = rootLabSelectionDetails();
+  if (!details) {
+    lastSelectionDetailHtml = null;
+    rootDrawerExpanded = false;
+    els.rootDrawer.classList.add('hidden');
+    els.infoSelection.innerHTML = modelInfoHtml();
+    selectionUiDetailsDeferred = false;
+    syncCuriosityCard();
+    syncLearnPanel();
+    return;
+  }
+
+  const { system, root, index, simpleIndex, oppositeIndex, angleDegrees, lengthLabel } = details;
+  const title = `${system.label} root #${index}${simpleIndex >= 0 ? ` (α${simpleIndex + 1})` : ''}`;
+  const vectorText = `(${root.vector.map(formatRootCoordinate).join(', ')})`;
+  const angleText = `${formatScalar(angleDegrees)}°`;
+  const lengthText = formatScalar(root.length);
+  const squaredLengthText = formatScalar(root.length * root.length);
+  const oppositeText = oppositeIndex >= 0 ? `#${oppositeIndex}` : 'none';
+  const drawerToggleText = rootDrawerExpanded ? 'Less' : 'More';
+  const drawerToggleLabel = rootDrawerExpanded ? 'Collapse selected root details' : 'Expand selected root details';
+  const drawerSummary = `${lengthLabel} | ${angleText} | opposite ${oppositeText}`;
+  const drawerToggle = `<button type="button" class="drawer-summary" data-root-drawer-toggle aria-expanded="${rootDrawerExpanded ? 'true' : 'false'}" aria-label="${drawerToggleLabel}"><span><strong>${title}</strong><small>${drawerSummary}</small></span><span class="drawer-more">${drawerToggleText}</span></button>`;
+  const drawerDetails = rootDrawerExpanded
+    ? `<div class="root-lab-drawer-details"><code class="root-coords">α = ${vectorText}</code><small>Length ${lengthText} | squared ${squaredLengthText}${simpleIndex >= 0 ? ` | simple root α${simpleIndex + 1}` : ''}</small></div><div class="drawer-actions drawer-actions-compact"><button type="button" data-root-action="neighbor" aria-label="Select next generated root">Next</button><button type="button" data-root-action="opposite" aria-label="Select opposite generated root">Opp</button><button type="button" data-root-action="center" aria-label="Focus selected generated root">Focus</button><button type="button" data-root-action="clear" aria-label="Clear generated root selection">Clear</button></div>`
+    : '';
+  const drawerHtml = `${drawerToggle}${drawerDetails}`;
+  const infoHtml = `<strong>${title}</strong><small>${lengthLabel} | angle ${angleText} | opposite ${oppositeText}</small><code class="root-coords root-coords-block">α = ${vectorText}</code><small>Length: ${lengthText} | squared length: ${squaredLengthText}${simpleIndex >= 0 ? ` | simple root α${simpleIndex + 1}` : ''}</small><div class="drawer-actions"><button type="button" data-root-action="neighbor">Next root</button><button type="button" data-root-action="opposite">Opposite</button><button type="button" data-root-action="center">Focus</button><button type="button" data-root-action="clear">Clear</button></div>`;
+  const detailKey = `${drawerHtml}\n${infoHtml}`;
+  if (detailKey !== lastSelectionDetailHtml) {
+    lastSelectionDetailHtml = detailKey;
+    metrics.selectionUiFullDomWriteCount++;
+    metrics.lastSelectionUiDomRoot = index;
+    metrics.lastSelectionUiDomMs = performance.now();
+    els.rootDrawer.innerHTML = drawerHtml;
+    els.infoSelection.innerHTML = infoHtml;
+  } else {
+    metrics.selectionUiFullDomSkipCount++;
+  }
+  els.rootDrawer.classList.remove('hidden');
+  els.rootDrawer.classList.toggle('expanded', rootDrawerExpanded);
+  els.rootDrawer.classList.toggle('collapsed', !rootDrawerExpanded);
+  selectionUiDetailsDeferred = false;
+  metrics.lastSelectionUiReason = reason || 'root-lab-selection';
+  syncCuriosityCard();
+  syncLearnPanel();
+}
+
 function updateSelectionUI(options = {}) {
   const lite = !!options.lite;
   metrics.lastSelectionUiMode = lite ? 'lite' : 'full';
@@ -9668,6 +10265,11 @@ function updateSelectionUI(options = {}) {
   metrics.lastSelectionUiMs = performance.now();
   if (lite) metrics.selectionUiLiteUpdateCount++;
   else metrics.selectionUiFullUpdateCount++;
+
+  if (state.modelMode === 'rootlab') {
+    updateRootLabSelectionUI(options.reason);
+    return;
+  }
 
   const selected = state.selectedRoot;
   selectedContext = getSelectedContext();
@@ -9783,6 +10385,14 @@ function getMetrics() {
     savePending,
     saveQueued: !!saveTimer,
     selectedRoot: state.selectedRoot,
+    selectedRootLabIndex,
+    selectedRootLab: rootLabSelectionDetails() ? {
+      index: selectedRootLabIndex,
+      oppositeIndex: rootLabSelectionDetails().oppositeIndex,
+      simpleIndex: rootLabSelectionDetails().simpleIndex,
+      vector: [...rootLabSelectionDetails().root.vector],
+      kind: rootLabSelectionDetails().lengthLabel,
+    } : null,
     contextVisible: !!(state.showContext && selectedContext),
     subsetSize: rootSubset().size,
     subsetIndex: subsetIndex(),
@@ -9879,6 +10489,7 @@ async function init() {
     setZoom,
     stepZoom,
     selectRoot,
+    selectRootLabRoot,
     selectCartanRoot,
     selectAdjacentRoot,
     selectFirstSubsetRoot,
@@ -9922,6 +10533,7 @@ async function init() {
     setRootDrawerExpanded,
     toggleRootDrawer,
     getRootScreenPoint,
+    getRootLabRootScreenPoint,
     getDynkinNodeScreenPoint,
     handleBackNavigation,
     showStatus,

@@ -97,7 +97,7 @@ assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
 
-for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'dynkin']) {
+for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'rootlab', 'dynkin']) {
   const { near, far } = autoZoomBounds(view);
   const speed = 2;
   const halfSweep = Math.PI / (0.22 * speed);
@@ -115,7 +115,7 @@ const learning = new LearningProgressService({
   postcardsCreated: 0,
   explorationBadges: [],
 });
-assert.equal(learning.summary().quizTotal, 9);
+assert.equal(learning.summary().quizTotal, 10);
 assert.equal(learning.quizById('e8-roots')?.id, 'e8-roots');
 learning.recordPostcard('postcard-prime');
 assert.equal(learning.progress.postcardsCreated, 1);

@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUMMARY_DIR = ROOT / "dist" / "verify"
 WEB_DIST = ROOT / "dist" / "web"
-VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "dynkin"]
+VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "rootlab", "dynkin"]
 FX_MODES = ["none", "glow", "pulse", "trail", "chromatic", "kaleidoscope", "ripple",
             "spiral", "fog", "heat", "edge-glow", "aura", "voronoi", "caustic",
             "iridescent", "flowfield", "plasma", "kaleido6", "dof", "nebula",
@@ -102,6 +102,7 @@ def check_js_syntax() -> None:
 
 def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_state_modules.mjs"])
+    run(["node", "scripts/test_rank2_roots.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
     run(["node", "scripts/test_recording_recovery.mjs"])
@@ -901,7 +902,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")
     export_contract = page.evaluate("""() => {
       const formats = {};
-      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']) {
+      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']) {
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
         formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
@@ -928,6 +929,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         "sixhundred": ["PNG", "Data"],
         "polytope": ["PNG", "Data"],
         "raymarched": ["PNG", "Data"],
+        "rootlab": ["PNG", "Data"],
         "dynkin": ["PNG", "SVG", "OBJ", "Data"],
     }
     if export_contract["formats"] != expected_export_formats:
@@ -937,6 +939,124 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or dynkin_export["nodes"] != 8 or "o dynkin_E8" not in dynkin_export["obj"]
             or "E8 Dynkin diagram" not in dynkin_export["svg"]):
         fail(f"Dynkin export contract failed: {dynkin_export}")
+
+    root_lab = page.evaluate("""async () => {
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+      const sample = () => {
+        const canvas = document.getElementById('canvas');
+        const copy = document.createElement('canvas');
+        copy.width = 96;
+        copy.height = 60;
+        const context = copy.getContext('2d', { willReadFrequently: true });
+        context.drawImage(canvas, 0, 0, copy.width, copy.height);
+        return context.getImageData(0, 0, copy.width, copy.height).data;
+      };
+      window.__app.switchView('rootlab');
+      window.__app.setRootSystem('G2');
+      window.__app.setPanelMode('scene');
+      await frame(); await frame();
+      const geometry = window.__app.getGeometryJSON();
+      const scene = {
+        activeSystem: window.__app.params.rootSystem,
+        selectedButtons: document.querySelectorAll('[data-act="setRootSystem"][aria-pressed="true"]').length,
+        toggleButtons: document.querySelectorAll('.root-lab-toggles button').length,
+        factCells: document.querySelectorAll('.root-lab-readout > div').length,
+        equation: document.querySelector('.root-lab-equation code')?.textContent,
+        canvasLabel: document.getElementById('canvas')?.getAttribute('aria-label'),
+        geometry: { kind: geometry?.kind, rootCount: geometry?.roots?.length, h: geometry?.coxeterNumber },
+        polygons: window.__app.currentView.object3d.getObjectByName('RootPolygons')?.children.length,
+        referenceChambers: window.__app.currentView.object3d.getObjectByName('RootChambers')?.children.filter(child => child.userData.referenceChamber).length,
+        orbitMarker: window.__app.currentView.object3d.getObjectByName('CoxeterStepMarker')?.geometry?.type,
+        tooltips: (() => {
+          const data = window.__app.currentView.object3d.getObjectByName('RootPoints')?.userData?.tooltipData;
+          return {
+            count: data?.length || 0,
+            first: data?.[0]?.html || '',
+            simpleCount: (data || []).filter(item => item.html.includes('simple root')).length,
+          };
+        })(),
+      };
+      window.__app.params.paused = true;
+      window.__app.setFX('none');
+      await frame(); await frame();
+      const baseline = sample();
+      window.__app.setFX('plasma');
+      await frame(); await frame();
+      const effected = sample();
+      let total = 0;
+      let changed = 0;
+      for (let i = 0; i < effected.length; i += 4) {
+        const delta = Math.abs(effected[i] - baseline[i])
+          + Math.abs(effected[i + 1] - baseline[i + 1])
+          + Math.abs(effected[i + 2] - baseline[i + 2]);
+        total += delta;
+        if (delta >= 12) changed++;
+      }
+      const fxMaterials = [];
+      window.__app.currentView.object3d.traverse(object => {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (material?.uniforms?.uFXMode) fxMaterials.push(material.uniforms.uFXMode.value);
+        }
+      });
+      scene.fx = {
+        materialCount: fxMaterials.length,
+        allPlasma: fxMaterials.length > 0 && fxMaterials.every(mode => mode === 16),
+        meanRgbDelta: total / (baseline.length / 4) / 3,
+        changed,
+      };
+      window.__app.setFX('none');
+      window.__app.params.paused = false;
+      window.__app.setPanelMode('learn');
+      scene.matrixCells = document.querySelectorAll('[aria-label="G2 reflection matrix"] td').length;
+      scene.summary = document.querySelector('.root-lab-info')?.textContent;
+      scene.learnTitle = document.querySelector('[data-section="learn"] .curiosity-card .info-title')?.textContent;
+      scene.lessonCard = document.querySelector('[data-learn-paths] .learn-path-card.primary span')?.textContent;
+      return scene;
+    }""")
+    if (root_lab["activeSystem"] != "G2" or root_lab["selectedButtons"] != 1
+            or root_lab["toggleButtons"] != 4 or root_lab["factCells"] != 4
+            or root_lab["equation"] != "[2, -3] [-1, 2]"
+            or root_lab["polygons"] != 3 or root_lab["referenceChambers"] != 1
+            or root_lab["orbitMarker"] != "ShapeGeometry"
+            or root_lab["tooltips"]["count"] != 12 or root_lab["tooltips"]["simpleCount"] != 2
+            or "G₂ root #0" not in root_lab["tooltips"]["first"]
+            or "opposite:" not in root_lab["tooltips"]["first"]
+            or root_lab["fx"]["materialCount"] < 10 or not root_lab["fx"]["allPlasma"]
+            or root_lab["fx"]["meanRgbDelta"] < 0.35 or root_lab["fx"]["changed"] < 20
+            or root_lab["matrixCells"] != 4
+            or "12 roots" not in (root_lab["summary"] or "")
+            or "G2 Root System" not in (root_lab["canvasLabel"] or "")
+            or root_lab["geometry"] != {"kind": "rank-2-root-system", "rootCount": 12, "h": 6}
+            or root_lab["learnTitle"] != "From two reflections to a root system"
+            or "Root systems from reflections" not in (root_lab["lessonCard"] or "")):
+        fail(f"Root Lab desktop contract failed: {root_lab}")
+
+    root_hover_target = page.evaluate("""() => {
+      window.__app.setPanelMode('scene');
+      window.__app.params.autoRotate = false;
+      const points = window.__app.currentView.object3d.getObjectByName('RootPoints');
+      const position = points.geometry.attributes.position;
+      const world = points.position.clone().set(position.getX(0), position.getY(0), position.getZ(0));
+      points.updateWorldMatrix(true, false);
+      points.localToWorld(world);
+      window.__app.camera.updateMatrixWorld();
+      world.project(window.__app.camera);
+      const rect = document.getElementById('canvas').getBoundingClientRect();
+      return {
+        x: rect.left + (world.x + 1) * rect.width / 2,
+        y: rect.top + (1 - world.y) * rect.height / 2,
+      };
+    }""")
+    page.mouse.move(root_hover_target["x"], root_hover_target["y"])
+    page.wait_for_timeout(120)
+    root_hover_tooltip = page.locator("#tooltip").evaluate("""element => ({
+      visible: element.classList.contains('visible'),
+      text: element.textContent,
+    })""")
+    if (not root_hover_tooltip["visible"] or "G₂ root #0" not in root_hover_tooltip["text"]
+            or "simple root α1" not in root_hover_tooltip["text"]):
+        fail(f"Root Lab hover tooltip failed: {root_hover_tooltip}")
 
     dynkin_learn = page.evaluate("""() => {
       window.__app.switchView('dynkin');

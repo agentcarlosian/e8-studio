@@ -19,9 +19,11 @@ OUT = ROOT / "dist" / "e8-studio-mobile-v2.html"
 MOBILE_HTML = ROOT / "mobile.html"
 MOBILE_CSS = ROOT / "src" / "mobile" / "style.css"
 MOBILE_JS = ROOT / "src" / "mobile" / "main.js"
+RANK2_JS = ROOT / "src" / "math" / "rank2-roots.js"
 
 CSS_LINK_RE = re.compile(r'<link\s+rel="stylesheet"\s+href="src/mobile/style\.css"\s*>')
 MOBILE_SCRIPT_RE = re.compile(r'<script\s+type="module"\s+src="src/mobile/main\.js"></script>')
+RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/rank2-roots\.js['\"];?\s*", re.M | re.S)
 LOAD_DATA_RE = re.compile(
     r"async function loadData\(\) \{\n"
     r"  if \(window\.MOBILE_DATA\) return window\.MOBILE_DATA;\n"
@@ -47,6 +49,15 @@ def inline_mobile_data() -> str:
     return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n"
 
 
+def bundled_mobile_js() -> str:
+    rank2 = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", RANK2_JS.read_text(encoding="utf-8"))
+    mobile = MOBILE_JS.read_text(encoding="utf-8")
+    mobile, count = RANK2_IMPORT_RE.subn("", mobile, count=1)
+    if count != 1:
+        raise SystemExit("ERROR: Could not inline the rank-2 root-system module")
+    return rank2 + "\n\n" + mobile
+
+
 def remove_data_fetch_fallback(js: str) -> str:
     replacement = (
         "async function loadData() {\n"
@@ -69,7 +80,7 @@ def main() -> int:
     OUT.parent.mkdir(exist_ok=True)
     html = MOBILE_HTML.read_text(encoding="utf-8")
     css = MOBILE_CSS.read_text(encoding="utf-8")
-    js = remove_data_fetch_fallback(MOBILE_JS.read_text(encoding="utf-8"))
+    js = remove_data_fetch_fallback(bundled_mobile_js())
 
     html, css_count = CSS_LINK_RE.subn(f"<style>\n/* src/mobile/style.css */\n{css}\n</style>", html)
     script_replacement = (

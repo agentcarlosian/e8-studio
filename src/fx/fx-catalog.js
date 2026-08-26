@@ -7,7 +7,7 @@
 import { FX_MODE_MAP } from './fx-shader.js';
 
 const SHARED_VIEWS = Object.freeze([
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'rootlab', 'dynkin',
 ]);
 
 const SDF_VIEWS = Object.freeze(['raymarched']);
