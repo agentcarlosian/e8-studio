@@ -550,7 +550,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     if not sdf_quality["rebuiltForLow"] or not sdf_quality["rebuiltForRestore"]:
         fail(f"SDF quality change did not rebuild the fixed-budget shader: {sdf_quality}")
     if sdf_quality["qualityButtons"] != 3:
-        fail(f"SDF quality controls are not available in the panel: {sdf_quality}")
+        fail(f"Global quality controls are not available in the panel: {sdf_quality}")
 
     sdf_environment_contract = page.evaluate("""async () => {
       const frame = () => new Promise(resolve => requestAnimationFrame(resolve));

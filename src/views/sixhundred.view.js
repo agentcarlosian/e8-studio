@@ -30,6 +30,19 @@ const CLASS_LABELS = [
 // Conjugacy class sizes (1, 12, 20, 12, 30, 12, 20, 12, 1)
 const CLASS_SIZES = [1, 12, 20, 12, 30, 12, 20, 12, 1];
 
+export function buildSixHundredClassColors(palette, blendMode = 'spectrum') {
+  return CLASS_LABELS.map((_, i) => {
+    const t = i / Math.max(1, CLASS_LABELS.length - 1);
+    const c = new THREE.Color(colorAt(palette, t, blendMode));
+    // Lift the dark end just enough for the dense 720-edge structure to remain
+    // legible without flattening the palette's intended contrast.
+    const hsl = { h: 0, s: 0, l: 0 };
+    c.getHSL(hsl);
+    if (hsl.l < 0.24) c.setHSL(hsl.h, hsl.s, 0.24);
+    return c;
+  });
+}
+
 function rot4Plane(i, j, a) {
   const M = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
   const c = Math.cos(a), s = Math.sin(a);
@@ -73,21 +86,11 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
   const edges = p.edges;
   const classes = p.conjugacy_classes;
 
-  // 9 colors (one per conjugacy class) — rotate hue through full spectrum
-  // using chroma.js's HSL hue shift on the base palette color
-  const baseColor = new THREE.Color(colorAt(palette, 0.5));
-  const hsl = { h: 0, s: 0, l: 0 };
-  baseColor.getHSL(hsl);
-  const classColors = CLASS_LABELS.map((_, i) => {
-    // Distribute hues across the full 360° wheel — even spaced
-    const hueShift = (i - 4) * 0.11;  // -0.44 to +0.44, full spectrum coverage
-    const c = new THREE.Color().setHSL(
-      (hsl.h + hueShift + 1) % 1,
-      Math.min(1, hsl.s + 0.1),
-      hsl.l
-    );
-    return c;
-  });
+  // Nine conjugacy classes sample the chosen palette itself. The previous HSL
+  // hue rotation forced every palette into the same rainbow, so Gold, Midnight,
+  // and Petrie stopped looking meaningfully different in this view.
+  const blendMode = runtimeParams().blendMode || 'spectrum';
+  const classColors = buildSixHundredClassColors(palette, blendMode);
 
   // Pre-build edge geometry (positions update each frame)
   const edgePositions = new Float32Array(edges.length * 6);
@@ -102,26 +105,28 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
   }
   const edgeGeo = new THREE.BufferGeometry();
   edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
-  // Color edges by the larger (further-from-identity) class of the two endpoints —
-  // creates a visual gradient from the "center" outward as icosa → dodeca → icosa → icosidodeca
+  // Blend the endpoint classes instead of assigning the larger class to both
+  // ends. Chords now carry the palette continuously through the structure and
+  // class boundaries stay visible when zoomed in.
   const edgeColors = new Float32Array(edges.length * 6);
   for (let i = 0; i < edges.length; i++) {
     const [a, b] = edges[i];
-    const cls = Math.max(classes[a], classes[b]);
-    const c = classColors[cls];
-    edgeColors[i*6]     = c.r;
-    edgeColors[i*6 + 1] = c.g;
-    edgeColors[i*6 + 2] = c.b;
-    edgeColors[i*6 + 3] = c.r;
-    edgeColors[i*6 + 4] = c.g;
-    edgeColors[i*6 + 5] = c.b;
+    const ca = classColors[classes[a]];
+    const cb = classColors[classes[b]];
+    edgeColors[i*6]     = ca.r;
+    edgeColors[i*6 + 1] = ca.g;
+    edgeColors[i*6 + 2] = ca.b;
+    edgeColors[i*6 + 3] = cb.r;
+    edgeColors[i*6 + 4] = cb.g;
+    edgeColors[i*6 + 5] = cb.b;
   }
   edgeGeo.setAttribute('color', new THREE.BufferAttribute(edgeColors, 3));
   const edgeMat = new LineFXMaterial({
     color: 0xffffff,          // multiplied with per-vertex colors in the shader
     vertexColors: true,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.68,
+    depthWrite: false,
   });
   const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
   group.add(edgeLines);
@@ -248,7 +253,7 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
   group.userData.edgeLines = edgeLines;
   group.userData.vPoints = vPoints;
   // Expose material so update() can set FX uniforms
-  group.userData.materials = [vMat];
+  group.userData.materials = [edgeMat, vMat];
   group.userData.trailGeo = vGeo;
 
   let angleXY = 0, angleZW = 0;

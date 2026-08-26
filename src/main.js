@@ -150,7 +150,6 @@ const AUTO_MODEL_SEQUENCE = Object.freeze([
     'great_stellated_dodecahedron'].map(shape => ({ view: 'platonic', shape })),
   ...['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell']
     .map(poly4d => ({ view: 'polytope', poly4d })),
-  ...['E6', 'E7', 'E8'].map(dynkin => ({ view: 'dynkin', dynkin })),
 ]);
 
 const PLATONIC_VERTEX_COUNTS = {
@@ -3151,6 +3150,7 @@ window.__app = {
     // cinematic paths remain available through the command palette.
     if (params.autoRotate) {
       params.cameraMode = 'orbit';
+      params.cameraOrbit = false;
       params.cameraPath = 'manual';
     }
     refreshPanel();
@@ -3391,6 +3391,7 @@ window.__app = {
   },
   setCameraMode(mode) {
     updateParam('cameraMode', mode, { refresh: false });
+    updateParam('autoRotate', false, { refresh: false });
     // A camera mode only drives the camera while auto-rotation is on and no
     // cinematic camera *path* is overriding it. Enable both so picking a mode is
     // immediately visible (otherwise the button looks like it does nothing).
@@ -3400,12 +3401,14 @@ window.__app = {
   },
   setCameraPath(path) {
     cameraController.pathStartedAt = performance.now();
+    if (path !== 'manual') params.autoRotate = false;
     params.cameraOrbit = false;
     updateParam('cameraPath', path);
     showSavedToast(path === 'manual' ? 'Camera path off' : 'Camera path: ' + path);
   },
   setCameraPreset(preset) {
     params.autoZoom = false;
+    params.autoRotate = false;
     if (preset === 'dive') {
       params.cameraOrbit = false;
       params.cameraPath = 'ringDive';
@@ -3681,7 +3684,10 @@ window.__app = {
         && (!item.shape || item.shape === params.shape)
         && (!item.poly4d || item.poly4d === params.poly4d)
         && (!item.dynkin || item.dynkin === params.dynkin));
-      autoModelIndex = Math.max(0, match);
+      // Dynkin remains fully available for intentional exploration, but is
+      // not part of the visual showcase. Starting Auto Model from Dynkin wraps
+      // cleanly into E8 instead of skipping ahead to the second scene.
+      autoModelIndex = match >= 0 ? match : AUTO_MODEL_SEQUENCE.length - 1;
       lastModelShiftAt = performance.now() / 1000;
       params.intro = false;
     }
@@ -3844,7 +3850,9 @@ window.__app = {
       bgRuntime.setIntensity(params.bgIntensity);
     }
     switchView(selected.view, { resetSelection: false });
-    saveConfig(params);
+    // Reset is an explicit commit point. Persist immediately so a reload or
+    // tab close cannot restore the dirty scene during the normal debounce.
+    saveConfig(params, { immediate: true });
     refreshPanel();
     updateOverlays(params.view);
     const button = document.querySelector('[data-act="resetConfig"]');
@@ -4084,7 +4092,10 @@ function animate() {
     const speed = (params.cameraSpeed || 1.0) * recScale;
     switch (params.cameraMode) {
       case 'orbit':
-        cameraController.theta += dt * 0.5 * speed * (params.rotationSpeed / 0.003);
+        // Camera speed is controlled solely by Camera speed. Reusing the model
+        // rotation slider here made orbit speed vary by almost 7× and let a
+        // setting from one renderer distort motion in another.
+        cameraController.theta += dt * 0.5 * speed;
         break;
       case 'spiral':
         cameraController.theta += dt * 0.7 * speed;

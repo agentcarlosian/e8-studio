@@ -4,6 +4,10 @@ import { THEMES, THEME_LABELS, DEFAULT_THEME } from '../src/ui/theme.js';
 import { PALETTE_GROUPS, PALETTE_NAMES, PALETTE_PRESETS, paletteFamily, palettePreviewCSS } from '../src/ui/palettes.js';
 import { BACKGROUND_PRESETS, BG_MODES, backgroundModesForQuality, coerceBackgroundForQuality } from '../src/ui/backgrounds.js';
 import { shouldWritePlatonicFaceDepth } from '../src/views/platonic.view.js';
+import { SurfaceFXMaterial, makeTriangleBarycentrics } from '../src/fx/fx-surface-material.js';
+import { buildSixHundredClassColors } from '../src/views/sixhundred.view.js';
+import { FX_BY_ID, effectAvailableForView } from '../src/fx/fx-catalog.js';
+import { GALLERY_PRESETS, createGalleryBaseline } from '../src/state/gallery.js';
 
 const REQUIRED_THEME_KEYS = [
   '--bg-0', '--bg-1', '--bg-2', '--bg-3', '--line', '--line-soft',
@@ -22,6 +26,8 @@ const contrast = (a, b) => {
 };
 
 const css = readFileSync(new URL('../src/assets/style.css', import.meta.url), 'utf8');
+const desktopMain = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+const mobileMain = readFileSync(new URL('../src/mobile/main.js', import.meta.url), 'utf8');
 for (const token of [
   '--space-1', '--space-2', '--space-3', '--space-4', '--space-5',
   '--text-xs', '--text-sm', '--text-md', '--text-body',
@@ -30,6 +36,13 @@ for (const token of [
   assert.match(css, new RegExp(`${token}:\\s*[^;]+;`), `${token} is defined`);
 }
 assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/, 'reduced motion policy');
+
+const desktopAutoModelSequence = desktopMain.match(/const AUTO_MODEL_SEQUENCE = Object\.freeze\(\[([\s\S]*?)\n\]\);/)?.[1] || '';
+const mobileAutoModelSequence = mobileMain.match(/const AUTO_MODEL_SEQUENCE = \[([\s\S]*?)\n\];/)?.[1] || '';
+assert.ok(desktopAutoModelSequence, 'desktop auto-model sequence is discoverable');
+assert.ok(mobileAutoModelSequence, 'mobile auto-model sequence is discoverable');
+assert.doesNotMatch(desktopAutoModelSequence, /view:\s*'dynkin'/, 'desktop showcase excludes manual-only Dynkin diagrams');
+assert.doesNotMatch(mobileAutoModelSequence, /modelMode:\s*'dynkin'/, 'mobile showcase excludes manual-only Dynkin diagrams');
 
 const stylesheetNames = ['style.css', 'panel-extra.css', 'panel-v2.css'];
 const selectorOwners = new Map();
@@ -88,4 +101,74 @@ for (const shape of ['stellated_dodecahedron', 'great_dodecahedron', 'great_icos
   assert.equal(shouldWritePlatonicFaceDepth(shape), false, `${shape} transparent overlaps do not write depth`);
 }
 
-console.log(`Visual system tests passed: ${Object.keys(THEMES).length} themes, ${PALETTE_NAMES.length} palettes.`);
+assert.deepEqual(
+  [...makeTriangleBarycentrics(1)],
+  [1, 0, 0, 0, 1, 0, 0, 0, 1],
+  'surface FX receives one barycentric basis per triangle'
+);
+const convexSurface = new SurfaceFXMaterial();
+const starSurface = new SurfaceFXMaterial({ star: true });
+assert.equal(convexSurface.uniforms.uSurfaceRole.value, 0);
+assert.equal(starSurface.uniforms.uSurfaceRole.value, 1);
+assert.notEqual(convexSurface.customProgramCacheKey(), starSurface.customProgramCacheKey());
+const shaderProbe = {
+  uniforms: {},
+  vertexShader: '#include <common>\n#include <worldpos_vertex>',
+  fragmentShader: '#include <common>\n#include <color_fragment>',
+};
+convexSurface.onBeforeCompile(shaderProbe);
+assert.ok(shaderProbe.uniforms.uFXMode === convexSurface.uniforms.uFXMode, 'compiled surface shares runtime FX uniforms');
+assert.match(shaderProbe.vertexShader, /vFxBarycentric = fxBarycentric/);
+assert.match(shaderProbe.fragmentShader, /diffuseColor = applySurfaceFX/);
+convexSurface.dispose();
+starSurface.dispose();
+
+const goldClasses = buildSixHundredClassColors('gold');
+const rainbowClasses = buildSixHundredClassColors('rainbow');
+assert.equal(goldClasses.length, 9);
+assert.equal(rainbowClasses.length, 9);
+const hueSpan = colors => {
+  const hues = colors.map(color => {
+    const hsl = { h: 0, s: 0, l: 0 };
+    color.getHSL(hsl);
+    return hsl.h;
+  });
+  return Math.max(...hues) - Math.min(...hues);
+};
+assert.ok(hueSpan(goldClasses) < 0.2, 'gold 600-cell classes stay within the selected warm palette');
+assert.ok(hueSpan(rainbowClasses) > 0.5, 'rainbow 600-cell classes retain broad palette coverage');
+
+const galleryViews = new Set(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']);
+assert.equal(GALLERY_PRESETS.length, 22, 'gallery retains its 22 curated scenes');
+assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.id)).size, GALLERY_PRESETS.length, 'gallery IDs are unique');
+assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.name)).size, GALLERY_PRESETS.length, 'gallery names are unique');
+for (const preset of GALLERY_PRESETS) {
+  const { settings } = preset;
+  assert.ok(preset.description?.trim(), `${preset.id} has a useful description`);
+  assert.ok(galleryViews.has(settings.view), `${preset.id} uses a known view`);
+  assert.ok(PALETTE_PRESETS[settings.palette], `${preset.id} uses a known palette`);
+  assert.ok(BACKGROUND_PRESETS[settings.bgMode || 'void'], `${preset.id} uses a known background`);
+  assert.ok(FX_BY_ID[settings.fxMode || 'none'], `${preset.id} uses a known effect`);
+  assert.ok(effectAvailableForView(settings.view, settings.fxMode || 'none', 'high'), `${preset.id} effect supports its view`);
+}
+const galleryBaseline = createGalleryBaseline();
+assert.deepEqual(
+  {
+    vertices: galleryBaseline.showVertices,
+    fxShift: galleryBaseline.autoFx,
+    modelShift: galleryBaseline.autoModel,
+    pointScale: galleryBaseline.pointScale,
+    inspector: galleryBaseline.showInspector,
+    ambient: galleryBaseline.lightAmbient,
+    key: galleryBaseline.lightKey,
+    fill: galleryBaseline.lightFill,
+    accent: galleryBaseline.lightAccent,
+  },
+  {
+    vertices: false, fxShift: false, modelShift: false, pointScale: 1,
+    inspector: false, ambient: 0.55, key: 1.2, fill: 0.6, accent: 1,
+  },
+  'gallery baseline clears presentation state that would contaminate a curated scene'
+);
+
+console.log(`Visual system tests passed: ${Object.keys(THEMES).length} themes, ${PALETTE_NAMES.length} palettes, ${GALLERY_PRESETS.length} gallery scenes.`);

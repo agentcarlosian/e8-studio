@@ -68,9 +68,24 @@ function renderCameraControls(params, caps) {
   html += '<div class="ps-subtitle">Motion</div>';
   html += '<div class="seg seg-wrap">';
   html += `<button class="${params.autoZoom ? 'on' : ''}" ${pressed(params.autoZoom)} data-act="toggleAutoZoom" title="Travel through the full useful zoom range">Auto zoom</button>`;
-  html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio model catalog">Auto model</button>`;
+  html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio's visual showcase">Auto model</button>`;
   html += '</div>';
   html += slider('Motion speed', 'cameraSpeed', params.cameraSpeed ?? 1, 0.2, 2, 0.05, v => `${v.toFixed(2)}×`);
+  return html;
+}
+
+function renderShapeMorphDisclosure(params, uiState = {}) {
+  const morphParams = ['shapeTwist', 'shapeSpike', 'shapeJitter'];
+  const morphActive = morphParams.some(name => Math.abs(params[name] || 0) > 0.001)
+    || morphParams.some(name => (params.autoSliders || []).includes(name));
+  const morphOpen = uiState.openDisclosures?.has('shape-morph');
+  let html = `<details class="control-disclosure" data-panel-disclosure="shape-morph" ${morphOpen ? 'open' : ''}>
+    <summary id="panel-disclosure-shape-morph"><span>Morph</span><small>${morphActive ? 'active deformations' : 'optional deformations'}</small></summary>
+    <div class="control-disclosure-body">`;
+  html += slider('Twist', 'shapeTwist', params.shapeTwist || 0, 0, 3, 0.02, v => v.toFixed(2));
+  html += slider('Spike', 'shapeSpike', params.shapeSpike || 0, 0, 1.5, 0.02, v => v.toFixed(2));
+  html += slider('Jitter', 'shapeJitter', params.shapeJitter || 0, 0, 1, 0.02, v => v.toFixed(2));
+  html += '</div></details>';
   return html;
 }
 
@@ -157,16 +172,17 @@ function renderViewSection(params, data, uiState = {}) {
       html += '</div>';
     }
 
-    // Platonic morphs. Multi-solid stack modes were removed from the UI: they
-    // obscured the selected solid and were not useful in the normal workflow.
     if (params.view === 'platonic') {
-      // Parametric shape morphs — deform the solid live. Each is a slider, so it
-      // also picks up the ⟳ per-slider auto-animate for generative play.
-      html += '<div class="ps-subtitle">Morph</div>';
-      html += slider('Twist', 'shapeTwist', params.shapeTwist || 0, 0, 3, 0.02, v => v.toFixed(2));
-      html += slider('Spike', 'shapeSpike', params.shapeSpike || 0, 0, 1.5, 0.02, v => v.toFixed(2));
-      html += slider('Jitter', 'shapeJitter', params.shapeJitter || 0, 0, 1, 0.02, v => v.toFixed(2));
+      // Vertex nodes are structural, not a deformation. Keep this important
+      // point-sphere toggle discoverable even though the optional morph tools
+      // move into a disclosure below.
       html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
+
+      // Camera and motion are the primary way users explore a solid. Present
+      // them in full where the old Morph block used to dominate the panel.
+      if (caps.rotate) {
+        html += `<div class="primary-camera-controls">${renderCameraControls(params, caps)}</div>`;
+      }
     }
   }
 
@@ -207,19 +223,16 @@ function renderViewSection(params, data, uiState = {}) {
     </div>`;
   }
 
-  // The selected model's controls are the primary task. Camera and motion are
-  // shared utilities, so keep them directly after the model controls in a
-  // disclosure instead of forcing every view-specific choice below them.
-  if (caps.rotate) {
-    const cameraOpen = uiState.openDisclosures?.has('camera-motion')
-      || params.cameraPath !== 'manual'
-      || params.autoZoom
-      || params.autoModel;
-    const zoom = Math.round(100 * 6 / Math.max(0.24, params.cameraDistance ?? 6));
-    html += `<details class="control-disclosure" data-panel-disclosure="camera-motion" ${cameraOpen ? 'open' : ''}>
-      <summary id="panel-disclosure-camera-motion"><span>Camera &amp; motion</span><small>${zoom}% zoom · ${params.cameraPath === 'manual' ? 'manual' : params.cameraPath}</small></summary>
-      <div class="control-disclosure-body">${renderCameraControls(params, caps)}</div>
-    </details>`;
+  // Keep camera and motion fully visible in every model. Platonic places them
+  // beside the model picker above; other views retain their existing order.
+  if (caps.rotate && params.view !== 'platonic') {
+    html += `<div class="primary-camera-controls">${renderCameraControls(params, caps)}</div>`;
+  }
+
+  // Parametric shape deformations are optional specialist controls. Preserve
+  // them at the bottom without letting them crowd out everyday navigation.
+  if (params.view === 'platonic') {
+    html += renderShapeMorphDisclosure(params, uiState);
   }
   if (caps.e8) html += renderE8ExploreControls(params, data, uiState);
 
@@ -363,13 +376,8 @@ function overlayOption(label, detail, active, action, title = '') {
 }
 
 function renderSDFControls(params, data) {
-  let html = '<div class="ps-subtitle">SDF shape &amp; quality</div>';
-  html += '<div class="seg" aria-label="SDF render quality">';
-  for (const [level, label] of [['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']]) {
-    html += `<button class="${params.mobileQuality === level ? 'on' : ''}" ${pressed(params.mobileQuality === level)} data-act="setMobileQuality" data-arg="${level}" title="${label} SDF shader budget">${label}</button>`;
-  }
-  html += '</div>';
-  html += '<div class="ps-help">Quality changes the raymarch budget. Native SDF looks are lightweight surface treatments.</div>';
+  let html = '<div class="ps-subtitle">SDF shape</div>';
+  html += '<div class="ps-help">The global Render quality selector above also changes this view’s raymarch budget.</div>';
   html += slider('Sphere radius', 'sdfSphereR', params.sdfSphereR ?? 0.08, 0.02, 0.15, 0.005, v => v.toFixed(3));
   html += slider('Blend (smin)', 'sdfBlend', params.sdfBlend ?? 0.03, 0.0, 0.12, 0.005, v => v.toFixed(3));
   html += slider('Highlight bloom', 'sdfBloom', params.sdfBloom ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
@@ -380,27 +388,35 @@ function renderSDFControls(params, data) {
 
 function renderPolytopeControls(params, data) {
   const polys = data.polytopes4d || {};
+  const preferredOrder = ['5cell', 'tesseract', '16cell', '24cell', '120cell', '600cell'];
+  const polyKeys = [
+    ...preferredOrder.filter(key => polys[key]),
+    ...Object.keys(polys).filter(key => !preferredOrder.includes(key)),
+  ];
   let html = '<div class="ps-subtitle">Polytope</div>';
   html += '<div class="seg seg-wrap">';
-  for (const k of Object.keys(polys)) {
+  for (const k of polyKeys) {
     html += `<button class="${params.poly4d === k ? 'on' : ''}" ${pressed(params.poly4d === k)} data-act="setPoly4d" data-arg="${k}">${k}</button>`;
   }
   html += '</div>';
   html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
-  html += slider('w-depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
-  html += slider('4D speed', 'polyRotationSpeed', params.polyRotationSpeed ?? 0.18, 0.04, 0.6, 0.01, v => v.toFixed(2));
-  html += slider('Rot XY', 'polyRotXY', params.polyRotXY || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
-  html += slider('Rot ZW', 'polyRotZW', params.polyRotZW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
-  // Round 9: two extra 4D rotation planes for richer manipulation.
-  html += slider('Rot XZ', 'polyRotXZ', params.polyRotXZ || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
-  html += slider('Rot YW', 'polyRotYW', params.polyRotYW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
-  // Round 10: complete all 6 rotation planes of ℝ⁴.
-  html += slider('Rot XW', 'polyRotXW', params.polyRotXW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
-  html += slider('Rot YZ', 'polyRotYZ', params.polyRotYZ || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += '<div class="ps-subtitle">4D projection</div>';
+  html += '<div class="ps-help">Change how strongly the fourth coordinate affects the 3D projection.</div>';
+  html += slider('4D depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
+  html += '<div class="ps-subtitle">4D motion</div>';
+  html += slider('Rotation speed', 'polyRotationSpeed', params.polyRotationSpeed ?? 0.18, 0.04, 0.6, 0.01, v => v.toFixed(2));
   html += '<div class="seg">';
   html += `<button class="${params.polyAutoRotate ? 'on' : ''}" data-act="togglePolyAutoRotate">${params.polyAutoRotate ? 'Pause 4D' : 'Animate 4D'}</button>`;
-  html += `<button data-act="resetPolyAngles">Reset</button>`;
+  html += '<button data-act="resetPolyAngles">Reset angles</button>';
   html += '</div>';
+  html += '<div class="ps-subtitle">Rotation planes</div>';
+  html += '<div class="ps-help">Each slider rotates through one coordinate plane of four-dimensional space.</div>';
+  html += slider('XY plane', 'polyRotXY', params.polyRotXY || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += slider('ZW plane', 'polyRotZW', params.polyRotZW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += slider('XZ plane', 'polyRotXZ', params.polyRotXZ || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += slider('YW plane', 'polyRotYW', params.polyRotYW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += slider('XW plane', 'polyRotXW', params.polyRotXW || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
+  html += slider('YZ plane', 'polyRotYZ', params.polyRotYZ || 0, -3.14, 3.14, 0.01, v => v.toFixed(2), 'polyAutoRotate');
   return html;
 }
 
@@ -744,9 +760,12 @@ function slider(label, paramKey, value, min, max, step, formatFn, off, options =
 // `act` is a window.__app method name, dispatched via the delegated click
 // handler (data-act) so no inline onclick is emitted (CSP: no 'unsafe-inline').
 function toggle(label, value, act) {
-  return `<div class="control-row">
+  return `<div class="control-row ps-toggle-row">
     <span class="control-label">${label}</span>
-    <button class="${value ? 'on' : ''}" ${pressed(value)} data-act="${act}" aria-label="${label}: ${value ? 'on' : 'off'}">${value ? 'on' : 'off'}</button>
+    <button class="ps-toggle-button ${value ? 'on' : ''}" ${pressed(value)} data-act="${act}" aria-label="${label}: ${value ? 'on' : 'off'}">
+      <span class="ps-toggle-track" aria-hidden="true"><span class="ps-toggle-thumb"></span></span>
+      <span class="ps-toggle-state">${value ? 'On' : 'Off'}</span>
+    </button>
   </div>`;
 }
 
@@ -934,6 +953,12 @@ export class ControlPanel {
         <div class="ps-mode-tabs" role="tablist" aria-label="Control workspace">
           ${PANEL_WORKSPACES.map(mode => `<button id="panel-tab-${mode}" class="${workspace === mode ? 'on' : ''}" data-act="setPanelMode" data-arg="${mode}" role="tab" aria-controls="ps-body" aria-selected="${workspace === mode ? 'true' : 'false'}" tabindex="${workspace === mode ? '0' : '-1'}">${PANEL_WORKSPACE_LABELS[mode]}</button>`).join('')}
         </div>
+        <div class="ps-global-quality" role="group" aria-label="Render quality">
+          <span class="ps-global-quality-label">Quality</span>
+          <div class="ps-quality-options">
+            ${[['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']].map(([level, label]) => `<button class="${this.params.mobileQuality === level ? 'on' : ''}" ${pressed(this.params.mobileQuality === level)} data-act="setMobileQuality" data-arg="${level}" title="Set global render quality to ${label}">${label}</button>`).join('')}
+          </div>
+        </div>
         <div class="ps-scroll" id="ps-body" role="tabpanel" aria-labelledby="panel-tab-${workspace}"></div>
         <div class="panel-footer" role="group" aria-label="Studio actions">
           <button data-act="resetConfig" title="Reset this model's visuals and motion"><span style="font-size:13px">↺</span> Reset</button>
@@ -945,7 +970,7 @@ export class ControlPanel {
             <summary id="panel-disclosure-footer-tools" title="Open more studio tools">Tools</summary>
             <div class="panel-tools-popover">
               <button data-act="openVideoExport" title="Record a video clip (720p+)"><span aria-hidden="true">⏺</span> Video</button>
-              <button data-act="togglePerf" title="Toggle the performance overlay">Performance</button>
+              <button data-act="togglePerf" title="Toggle the frames-per-second overlay">FPS overlay</button>
               <button data-act="toggleCommandPalette" title="Open the command palette">Commands</button>
               <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diagnostics</button>
               <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keyboard help</button>

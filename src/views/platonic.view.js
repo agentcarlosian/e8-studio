@@ -10,6 +10,7 @@ import { FX_MODE_MAP } from '../fx/fx-shader.js';
 import { getStellation, STELLATION_NAMES } from '../math/stellations.js';
 import { deformPlatonicVert } from '../math/morph.js';
 import { LineFXMaterial } from '../fx/fx-line-shader.js';
+import { SurfaceFXMaterial, makeTriangleBarycentrics } from '../fx/fx-surface-material.js';
 
 // Round 9: the four Kepler–Poinsot star polyhedra are not in data/platonic.json
 // (their faces are self-intersecting, which doesn't fit the triangle-list
@@ -112,9 +113,11 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
 
   // Resolve current shape via the shared runtime params.
   // Helper: build a single Platonic solid (or star stellation) at the given
-  // world scale. Returns its FX-aware edge material for uniform updating.
+  // world scale. Returns every FX-aware material for uniform updating.
   function buildSolid(shapeName, worldScale, colorT, spread = 0.7) {
     const blendMode = runtimeParams().blendMode || 'spectrum';
+    const isStar = STELLATION_SET.has(shapeName);
+    const materials = [];
     // Star polyhedra: pull derived geometry from the stellations module.
     // Fall back to data.platonic for the five convex solids.
     let shape, faces;
@@ -179,20 +182,27 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
       faceGeo = new THREE.BufferGeometry();
       faceGeo.setAttribute('position', new THREE.Float32BufferAttribute(faceVerts, 3));
       faceGeo.setAttribute('color', new THREE.Float32BufferAttribute(faceCols, 3));
+      faceGeo.setAttribute('fxBarycentric', new THREE.Float32BufferAttribute(makeTriangleBarycentrics(faces.length), 3));
       faceGeo.computeVertexNormals();
-      const faceMat = new THREE.MeshStandardMaterial({
+      const faceMat = new SurfaceFXMaterial({
+        star: isStar,
         vertexColors: true,                     // per-vertex palette spread
         emissive: new THREE.Color(colorAt(palette, colorT + 0.1, blendMode)),
-        emissiveIntensity: 0.25,
-        metalness: 0.15,
-        roughness: 0.55,
+        emissiveIntensity: isStar ? 0.44 : 0.3,
+        metalness: isStar ? 0.05 : 0.12,
+        roughness: isStar ? 0.36 : 0.48,
         transparent: true,
-        opacity: 0.7,  // high enough that each face is clearly distinct
+        opacity: isStar ? 0.34 : 0.58,
         side: THREE.DoubleSide,
         depthWrite: shouldWritePlatonicFaceDepth(shapeName),
         depthTest: true,
+        blending: THREE.NormalBlending,
       });
-      group.add(new THREE.Mesh(faceGeo, faceMat));
+      const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+      faceMesh.name = isStar ? 'star-polyhedron-faces' : 'platonic-faces';
+      faceMesh.renderOrder = isStar ? 1 : 0;
+      group.add(faceMesh);
+      materials.push(faceMat);
     }
 
     // Edges as line segments (slightly fainter)
@@ -207,11 +217,17 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
       lineGeo = new THREE.BufferGeometry();
       lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
       lineMaterial = new LineFXMaterial({
-        color: new THREE.Color(colorAt(palette, colorT, blendMode)),
+        color: new THREE.Color(colorAt(palette, Math.min(1, colorT + 0.18), blendMode)),
         transparent: true,
-        opacity: 0.7,
+        opacity: isStar ? 0.98 : 0.84,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
       });
-      group.add(new THREE.LineSegments(lineGeo, lineMaterial));
+      const edgeObject = new THREE.LineSegments(lineGeo, lineMaterial);
+      edgeObject.name = isStar ? 'star-polyhedron-edges' : 'platonic-edges';
+      edgeObject.renderOrder = 2;
+      group.add(edgeObject);
+      materials.push(lineMaterial);
     }
 
     // Optional clean vertex markers. They are deliberately off by default so
@@ -235,7 +251,7 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
     // Record everything the morph deformer needs to rewrite the buffers in place
     // (no object churn → no fxRuntime leak, smooth live morphing + auto-animate).
     group.userData.solids.push({ verts, worldScale, faces, edges, faceGeo, lineGeo, pointGeo, pointMaterial, pointObject });
-    return lineMaterial;
+    return materials;
   }
 
   // Rewrite one solid's face and edge buffers from its base verts + morph.
@@ -284,6 +300,9 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
   // Build only the selected solid. The former dual/all/nested stack modes made
   // the model difficult to read and have been removed from the product UI.
   const buildForShape = (shapeName) => {
+    for (const material of group.userData.materials || []) {
+      context.unregisterFXMaterial?.(material);
+    }
     while (group.children.length) {
       const c = group.children.pop();
       if (c.geometry) c.geometry.dispose();
@@ -293,8 +312,11 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
     group.userData.solids = [];
 
     const R = baseScale;
-    const material = buildSolid(shapeName, R, 0.5, 0.95);
-    if (material) group.userData.materials.push(material);
+    const materials = buildSolid(shapeName, R, 0.5, 0.95);
+    if (materials) {
+      group.userData.materials.push(...materials);
+      for (const material of materials) context.registerFXMaterial?.(material);
+    }
   };
   const R = baseScale;
   // Bounding sphere outline (faint)
