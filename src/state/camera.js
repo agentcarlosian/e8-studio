@@ -6,6 +6,29 @@ export const CAMERA_TOUCH_DEFAULT_DISTANCE = 8.2;
 export const CAMERA_MIN_DISTANCE = 0.18;
 export const CAMERA_MAX_DISTANCE = 120;
 
+export function autoZoomBounds(view) {
+  return {
+    near: ['e8coxeter', 'raymarched', 'bloom'].includes(view) ? 0.45 : 0.75,
+    far: view === 'dynkin' ? 9 : 12,
+  };
+}
+
+export function autoZoomPhaseForDistance(distance, view) {
+  const { near, far } = autoZoomBounds(view);
+  const current = Math.min(far, Math.max(near, Number(distance) || CAMERA_DEFAULT_DISTANCE));
+  const wave = (Math.log(current) - Math.log(far)) / (Math.log(near) - Math.log(far));
+  return Math.asin(Math.min(1, Math.max(-1, wave * 2 - 1)));
+}
+
+export function autoZoomDistance(elapsedSeconds, speed, startPhase, view) {
+  const { near, far } = autoZoomBounds(view);
+  const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
+  const rate = Math.max(0, Number(speed) || 0);
+  const phase = Number.isFinite(startPhase) ? startPhase : -Math.PI / 2;
+  const wave = 0.5 + 0.5 * Math.sin(phase + elapsed * 0.22 * rate);
+  return Math.exp(Math.log(far) + (Math.log(near) - Math.log(far)) * wave);
+}
+
 export class CameraController {
   constructor() {
     this.theta = Math.PI / 6;

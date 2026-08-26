@@ -32,7 +32,13 @@ import { PRESETS, applyPreset } from './state/presets.js';
 import { GALLERY_PRESETS, galleryPresetById, adjacentGalleryPreset, createGalleryBaseline } from './state/gallery.js';
 import { planViewTransition } from './state/view-transition.js';
 import { createViewModifierReset, createViewSelectionReset } from './state/selection-policy.js';
-import { CameraController, CAMERA_DEFAULT_DISTANCE, CAMERA_TOUCH_DEFAULT_DISTANCE } from './state/camera.js';
+import {
+  CameraController,
+  CAMERA_DEFAULT_DISTANCE,
+  CAMERA_TOUCH_DEFAULT_DISTANCE,
+  autoZoomDistance,
+  autoZoomPhaseForDistance,
+} from './state/camera.js';
 import { ExportRecordingService, isCapacitorNative } from './services/export-recording.js';
 import { createResourceScope } from './platform/resource-scope.js';
 import { FrameHealthController } from './platform/frame-health.js';
@@ -262,19 +268,9 @@ function clampCameraDistance(value, fallback = CAMERA_DEFAULT_DISTANCE) {
   return cameraController.clampDistance(value, fallback);
 }
 
-function autoZoomBounds(view = params?.view) {
-  return {
-    near: ['e8coxeter', 'raymarched', 'bloom'].includes(view) ? 0.45 : 0.75,
-    far: view === 'dynkin' ? 9 : 12,
-  };
-}
-
 function beginAutoZoom(nowSeconds = performance.now() / 1000) {
-  const { near, far } = autoZoomBounds();
-  const current = Math.min(far, Math.max(near,
-    Number(cameraController.distance) || Number(params?.cameraDistance) || CAMERA_DEFAULT_DISTANCE));
-  const wave = (Math.log(current) - Math.log(far)) / (Math.log(near) - Math.log(far));
-  autoZoomStartPhase = Math.asin(Math.min(1, Math.max(-1, wave * 2 - 1)));
+  const current = Number(cameraController.distance) || Number(params?.cameraDistance) || CAMERA_DEFAULT_DISTANCE;
+  autoZoomStartPhase = autoZoomPhaseForDistance(current, params?.view);
   autoZoomStartedAt = nowSeconds;
 }
 
@@ -4397,11 +4393,9 @@ function animate() {
   // retain a little more near-plane margin.
   if (currentView && params.autoZoom && !isDragging) {
     const speed = (params.cameraSpeed || 1) * recScale;
-    const { near, far } = autoZoomBounds();
     if (!autoZoomStartedAt) beginAutoZoom(t);
     const elapsed = Math.max(0, t - autoZoomStartedAt);
-    const wave = 0.5 + 0.5 * Math.sin(autoZoomStartPhase + elapsed * 0.22 * speed);
-    cameraController.distance = Math.exp(Math.log(far) + (Math.log(near) - Math.log(far)) * wave);
+    cameraController.distance = autoZoomDistance(elapsed, speed, autoZoomStartPhase, params.view);
     cameraController.distanceTarget = cameraController.distance;
     cameraController.autoZoomFactor = 1;
     params.cameraDistance = cameraController.distance;
