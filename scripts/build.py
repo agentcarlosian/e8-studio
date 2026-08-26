@@ -36,6 +36,7 @@ JS_FILES    = [
     ROOT / 'src' / 'fx' / 'fx-runtime.js',
     ROOT / 'src' / 'fx' / 'fx-branches.js',
     ROOT / 'src' / 'fx' / 'fx-line-shader.js',
+    ROOT / 'src' / 'fx' / 'fx-surface-material.js',
     ROOT / 'src' / 'fx' / 'bg-runtime.js',
     ROOT / 'src' / 'fx' / 'mandelbox.js',
     ROOT / 'src' / 'ui' / 'palettes.js',

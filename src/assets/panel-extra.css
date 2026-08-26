@@ -91,11 +91,11 @@
 /* Per-slider ⟳ auto-animate toggle. Spins while active so it's obvious which
    sliders are self-driving. */
 .slider-auto {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1;
   border-radius: 50%;
   border: 1px solid var(--line);

@@ -122,6 +122,86 @@ def main() -> int:
             check("all view-compatible FX modes activate across all views",
                   not shader_fail, "; ".join(shader_fail[:4]))
 
+            # Every model must survive every global quality tier. Use one effect
+            # and background at the ceiling of each tier so this also verifies
+            # that the global selector drives the shared capability policy.
+            quality_matrix = pg.evaluate("""() => {
+              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin'];
+              const tiers = {
+                low: {fx: 'glow', bg: 'starfield'},
+                medium: {fx: 'trail', bg: 'aurora'},
+                high: {fx: 'voronoi', bg: 'cosmos'},
+              };
+              const rows = [];
+              for (const [quality, choices] of Object.entries(tiers)) {
+                window.__app.setMobileQuality(quality);
+                for (const view of views) {
+                  window.__app.switchView(view);
+                  window.__app.setFX(choices.fx);
+                  window.__app.setBgMode(choices.bg);
+                  window.__app.currentView?.update?.(0.016, performance.now() / 1000, window.__app.params);
+                  rows.push({
+                    quality,
+                    view,
+                    activeView: window.__app.params.view,
+                    fx: window.__app.params.fxMode,
+                    bg: window.__app.params.bgMode,
+                    hasView: !!window.__app.currentView,
+                    objectVisible: window.__app.currentView?.object3d?.visible !== false,
+                  });
+                }
+              }
+              window.__app.setMobileQuality('high');
+              return rows;
+            }""")
+            matrix_fail = [row for row in quality_matrix if
+                           row["activeView"] != row["view"]
+                           or row["fx"] != {"low": "glow", "medium": "trail", "high": "voronoi"}[row["quality"]]
+                           or row["bg"] != {"low": "starfield", "medium": "aurora", "high": "cosmos"}[row["quality"]]
+                           or row["hasView"] is not True
+                           or row["objectVisible"] is not True]
+            check("all seven models render across Low, Balanced, and High quality",
+                  not matrix_fail, str(matrix_fail[:3]))
+
+            # Platonic faces must participate in the centralized FX pipeline,
+            # and star polyhedra must retain their non-depth-writing material
+            # path so transparent self-intersections do not flicker.
+            surface_fx = pg.evaluate("""() => {
+              window.__app.switchView('platonic');
+              window.__app.setShape('icosahedron');
+              window.__app.setFX('plasma');
+              const convexFace = window.__app.currentView.object3d.getObjectByName('platonic-faces');
+              const convexState = convexFace ? {
+                tracked: window.__app.fxRuntime.fxMaterials.has(convexFace.material),
+                mode: convexFace.material.uniforms?.uFXMode?.value,
+                role: convexFace.material.userData?.surfaceRole,
+                depthWrite: convexFace.material.depthWrite,
+              } : null;
+              window.__app.setShape('great_icosahedron');
+              window.__app.setFX('plasma');
+              window.__app.currentView.update(0.016, 2, window.__app.params);
+              const starFace = window.__app.currentView.object3d.getObjectByName('star-polyhedron-faces');
+              return {
+                convex: convexState,
+                star: starFace ? {
+                  tracked: window.__app.fxRuntime.fxMaterials.has(starFace.material),
+                  mode: starFace.material.uniforms?.uFXMode?.value,
+                  role: starFace.material.userData?.surfaceRole,
+                  depthWrite: starFace.material.depthWrite,
+                  transparent: starFace.material.transparent,
+                } : null,
+              };
+            }""")
+            check("Platonic and star faces use the FX-aware surface paths",
+                  surface_fx["convex"] == {
+                    "tracked": True, "mode": 16, "role": "convex", "depthWrite": True
+                  }
+                  and surface_fx["star"] == {
+                    "tracked": True, "mode": 16, "role": "star",
+                    "depthWrite": False, "transparent": True
+                  },
+                  str(surface_fx))
+
             # ---- 4. Delegation works under strict CSP ----
             pg.evaluate("() => window.__app.switchView('platonic')")
             pg.wait_for_timeout(200)
@@ -169,6 +249,38 @@ def main() -> int:
             check("tesseract defaults to cube-within-cube projection",
                   tess["depth"] > 0.5 and tess["unique"] == 16, str(tess))
 
+            polytope_order = pg.evaluate("""() =>
+              [...document.querySelectorAll('[data-act="setPoly4d"]')].map(button => button.dataset.arg)
+            """)
+            check("4D polytope selector places 120-cell before 600-cell",
+                  polytope_order == ["5cell", "tesseract", "16cell", "24cell", "120cell", "600cell"],
+                  str(polytope_order))
+
+            polytope_controls = pg.evaluate("""() => ({
+              subtitles: [...document.querySelectorAll('.ps-subtitle')].map(el => el.textContent.trim()),
+              sliders: [...document.querySelectorAll('input[data-param]')].map(input => ({
+                param: input.dataset.param,
+                label: input.labels?.[0]?.textContent.trim(),
+              })),
+              animate: document.querySelector('[data-act="togglePolyAutoRotate"]')?.textContent.trim(),
+              reset: document.querySelector('[data-act="resetPolyAngles"]')?.textContent.trim(),
+            })""")
+            expected_controls = {
+                "morph4d": "4D depth", "polyRotationSpeed": "Rotation speed",
+                "polyRotXY": "XY plane", "polyRotZW": "ZW plane",
+                "polyRotXZ": "XZ plane", "polyRotYW": "YW plane",
+                "polyRotXW": "XW plane", "polyRotYZ": "YZ plane",
+            }
+            actual_controls = {item["param"]: item["label"] for item in polytope_controls["sliders"]}
+            check("4D controls explain projection, motion, and all six rotation planes",
+                  all(label in polytope_controls["subtitles"] for label in
+                      ["4D projection", "4D motion", "Rotation planes"])
+                  and all(actual_controls.get(param) == label
+                          for param, label in expected_controls.items())
+                  and polytope_controls["animate"] in ["Animate 4D", "Pause 4D"]
+                  and polytope_controls["reset"] == "Reset angles",
+                  str(polytope_controls))
+
             camera_ui = pg.evaluate("""() => {
               const subtitles = Array.from(document.querySelectorAll('.ps-subtitle'))
                 .map(el => el.textContent.trim());
@@ -180,12 +292,14 @@ def main() -> int:
                 hasBookmarks: !!document.querySelector('[data-act="saveCameraBookmark"], [data-act="loadCameraBookmark"]'),
                 presets: Array.from(document.querySelectorAll('[data-act="setCameraPreset"]')).map(el => el.textContent.trim()),
                 hasZoomSlider: !!document.querySelector('input[data-param="cameraDistance"]'),
+                hasCameraDisclosure: !!document.querySelector('[data-panel-disclosure="camera-motion"]'),
               };
             }""")
-            check("model controls precede compact camera utilities",
+            check("model controls precede fully visible camera utilities",
                   camera_ui["cameraIndex"] >= 0
                   and camera_ui["polyIndex"] >= 0
                   and camera_ui["polyIndex"] < camera_ui["cameraIndex"]
+                  and camera_ui["hasCameraDisclosure"] is False
                   and camera_ui["hasPathPresets"] is False
                   and camera_ui["hasModePresets"] is False
                   and camera_ui["hasBookmarks"] is False,
@@ -193,6 +307,34 @@ def main() -> int:
             check("camera keeps three useful presets and a real zoom slider",
                   camera_ui["presets"] == ["Orbit", "Dive", "Spiral"]
                   and camera_ui["hasZoomSlider"] is True, str(camera_ui))
+
+            platonic_hierarchy = pg.evaluate("""() => {
+              window.__app.switchView('platonic');
+              const camera = [...document.querySelectorAll('.ps-subtitle')]
+                .find(el => el.textContent.trim() === 'Camera');
+              const motion = [...document.querySelectorAll('.ps-subtitle')]
+                .find(el => el.textContent.trim() === 'Motion');
+              const morph = document.querySelector('[data-panel-disclosure="shape-morph"]');
+              const nodes = document.querySelector('[data-act="toggleVertices"]');
+              return {
+                cameraVisible: !!camera && camera.getClientRects().length > 0,
+                motionVisible: !!motion && motion.getClientRects().length > 0,
+                morphCollapsed: !!morph && !morph.open,
+                cameraBeforeMorph: !!camera && !!morph
+                  && camera.getBoundingClientRect().top < morph.getBoundingClientRect().top,
+                nodesOutsideMorph: !!nodes && !nodes.closest('[data-panel-disclosure="shape-morph"]'),
+                morphSliders: morph ? [...morph.querySelectorAll('input[type="range"]')]
+                  .map(input => input.dataset.param) : [],
+              };
+            }""")
+            check("Platonic promotes motion and demotes optional morph controls",
+                  platonic_hierarchy["cameraVisible"] is True
+                  and platonic_hierarchy["motionVisible"] is True
+                  and platonic_hierarchy["morphCollapsed"] is True
+                  and platonic_hierarchy["cameraBeforeMorph"] is True
+                  and platonic_hierarchy["nodesOutsideMorph"] is True
+                  and platonic_hierarchy["morphSliders"] == ["shapeTwist", "shapeSpike", "shapeJitter"],
+                  str(platonic_hierarchy))
 
             # ---- Desktop shell, hierarchy, and accessibility regressions ----
             shell = pg.evaluate("""() => {
@@ -225,6 +367,155 @@ def main() -> int:
                   and bool(shell["canvasName"])
                   and shell["liveStatus"] == "polite",
                   str(shell))
+
+            global_quality = pg.evaluate("""() => {
+              window.__app.switchView('platonic');
+              window.__app.setPanelMode('style');
+              window.__app.setMobileQuality('low');
+              const low = {
+                buttons: [...document.querySelectorAll('.ps-global-quality [data-act="setMobileQuality"]')]
+                  .map(button => button.textContent.trim()),
+                disabled: document.querySelectorAll('.fx-catalog-item:disabled').length,
+                backgrounds: document.querySelectorAll('[data-section="style"] [data-act="setBgMode"]').length,
+              };
+              document.querySelector('.ps-global-quality [data-arg="high"]').click();
+              const high = {
+                quality: window.__app.params.mobileQuality,
+                reduced: window.__app.params.reducedMode,
+                disabled: document.querySelectorAll('.fx-catalog-item:disabled').length,
+                backgrounds: document.querySelectorAll('[data-section="style"] [data-act="setBgMode"]').length,
+              };
+              window.__app.setPanelMode('learn');
+              const persistsInLearn = !!document.querySelector('.ps-global-quality [data-arg="high"].on');
+              window.__app.setPanelMode('style');
+              return {
+                low, high, persistsInLearn,
+                toolsLabel: document.querySelector('[data-act="togglePerf"]')?.textContent.trim(),
+              };
+            }""")
+            check("global quality selector is visible and unlocks FX from every workspace",
+                  global_quality["low"]["buttons"] == ["Low", "Balanced", "High"]
+                  and global_quality["low"]["disabled"] > 0
+                  and global_quality["low"]["backgrounds"] == 4
+                  and global_quality["high"]["quality"] == "high"
+                  and global_quality["high"]["reduced"] is False
+                  and global_quality["high"]["disabled"] == 0
+                  and global_quality["high"]["backgrounds"] > global_quality["low"]["backgrounds"]
+                  and global_quality["persistsInLearn"] is True
+                  and global_quality["toolsLabel"] == "FPS overlay",
+                  str(global_quality))
+
+            gallery_reset = pg.evaluate("""() => {
+              window.__app.setParam('showVertices', true);
+              window.__app.setParam('pointScale', 2.4);
+              window.__app.setParam('lightAmbient', 0.1);
+              window.__app.toggleFXShift();
+              window.__app.toggleAutoModel();
+              window.__app.applyGalleryPreset('coxeter-rings');
+              return {
+                preset: window.__app.params.galleryPreset,
+                vertices: window.__app.params.showVertices,
+                pointScale: window.__app.params.pointScale,
+                ambient: window.__app.params.lightAmbient,
+                fxShift: window.__app.params.autoFx,
+                modelShift: window.__app.params.autoModel,
+                description: window.__app.getGalleryPresets().find(p => p.id === 'coxeter-rings')?.description,
+              };
+            }""")
+            check("gallery presets clear inherited presentation state",
+                  gallery_reset["preset"] == "coxeter-rings"
+                  and gallery_reset["vertices"] is False
+                  and gallery_reset["pointScale"] == 1
+                  and gallery_reset["ambient"] == 0.55
+                  and gallery_reset["fxShift"] is False
+                  and gallery_reset["modelShift"] is False
+                  and bool(gallery_reset["description"]),
+                  str(gallery_reset))
+
+            model_reset = pg.evaluate("""() => {
+              window.__app.switchView('polytope');
+              window.__app.setPoly4d('120cell');
+              window.__app.setPanelMode('style');
+              window.__app.setMobileQuality('high');
+              window.__app.setPalette('rainbow');
+              window.__app.setBgMode('cosmos');
+              window.__app.setFX('glow');
+              window.__app.setParam('showVertices', true);
+              window.__app.setParam('pointScale', 2.4);
+              window.__app.toggleFXShift();
+              window.__app.toggleAutoModel();
+              window.__app.resetConfig();
+              const button = document.querySelector('[data-act="resetConfig"]');
+              const stored = JSON.parse(localStorage.getItem('e8_studio_config_v1') || '{}');
+              return {
+                view: window.__app.params.view,
+                poly4d: window.__app.params.poly4d,
+                panelMode: window.__app.params.panelMode,
+                quality: window.__app.params.mobileQuality,
+                palette: window.__app.params.palette,
+                bg: window.__app.params.bgMode,
+                fx: window.__app.params.fxMode,
+                vertices: window.__app.params.showVertices,
+                pointScale: window.__app.params.pointScale,
+                fxShift: window.__app.params.autoFx,
+                modelShift: window.__app.params.autoModel,
+                feedback: button?.classList.contains('is-confirmed') && button?.textContent.includes('Reset done'),
+                storedView: stored.view,
+                storedPoly: stored.poly4d,
+              };
+            }""")
+            check("Reset preserves selection and quality while clearing visual state",
+                  model_reset == {
+                    "view": "polytope", "poly4d": "120cell", "panelMode": "style", "quality": "high",
+                    "palette": "gold", "bg": "void", "fx": "none", "vertices": False,
+                    "pointScale": 1, "fxShift": False, "modelShift": False, "feedback": True,
+                    "storedView": "polytope", "storedPoly": "120cell",
+                  }, str(model_reset))
+
+            toggle_ui = pg.evaluate("""() => {
+              window.__app.switchView('platonic');
+              window.__app.setPanelMode('scene');
+              const vertex = document.querySelector('[data-act="toggleVertices"]');
+              const auto = document.querySelector('[data-act="toggleSliderAuto"][data-arg="cameraRotation"]');
+              const vertexState = {
+                styled: vertex?.classList.contains('ps-toggle-button') || false,
+                track: vertex?.querySelectorAll('.ps-toggle-track, .ps-toggle-thumb').length || 0,
+                text: vertex?.textContent.trim(),
+                pressed: vertex?.getAttribute('aria-pressed'),
+                width: vertex?.getBoundingClientRect().width || 0,
+                height: vertex?.getBoundingClientRect().height || 0,
+              };
+              const autoState = {
+                width: auto?.getBoundingClientRect().width || 0,
+                height: auto?.getBoundingClientRect().height || 0,
+              };
+              window.__app.setPanelMode('style');
+              const fx = document.querySelector('[data-act="toggleFXShift"]');
+              return {
+                vertex: vertexState,
+                fx: {
+                  styled: fx?.classList.contains('ps-toggle-button') || false,
+                  track: fx?.querySelectorAll('.ps-toggle-track, .ps-toggle-thumb').length || 0,
+                  text: fx?.textContent.trim(),
+                  pressed: fx?.getAttribute('aria-pressed'),
+                },
+                auto: autoState,
+              };
+            }""")
+            check("Vertex nodes and FX shift use the Studio switch treatment",
+                  toggle_ui["vertex"]["styled"] is True
+                  and toggle_ui["vertex"]["track"] == 2
+                  and toggle_ui["vertex"]["text"] in ["On", "Off"]
+                  and toggle_ui["vertex"]["pressed"] in ["true", "false"]
+                  and toggle_ui["vertex"]["width"] >= 74
+                  and toggle_ui["vertex"]["height"] >= 28
+                  and toggle_ui["fx"]["styled"] is True
+                  and toggle_ui["fx"]["track"] == 2
+                  and toggle_ui["fx"]["text"] in ["On", "Off"]
+                  and toggle_ui["fx"]["pressed"] in ["true", "false"]
+                  and toggle_ui["auto"]["width"] >= 26
+                  and toggle_ui["auto"]["height"] >= 26,
+                  str(toggle_ui))
 
             palette_focus = pg.evaluate("""() => {
               const button = document.querySelector('[data-panel-act="togglePaletteExpanded"]');
@@ -326,6 +617,39 @@ def main() -> int:
                   and camera_runtime["objectStill"] is True,
                   str(camera_runtime))
 
+            motion_ownership = pg.evaluate("""() => {
+              window.__app.switchView('platonic');
+              window.__app.setParam('rotationSpeed', 0.02);
+              window.__app.setCameraMode('orbit');
+              const cameraOwns = {
+                orbit: window.__app.params.cameraOrbit,
+                model: window.__app.params.autoRotate,
+              };
+              window.__app.toggleAutoRotate();
+              const modelOwns = {
+                orbit: window.__app.params.cameraOrbit,
+                model: window.__app.params.autoRotate,
+                path: window.__app.params.cameraPath,
+              };
+              window.__app.setCameraPath('petrieSpiral');
+              return {
+                cameraOwns,
+                modelOwns,
+                pathOwns: {
+                  orbit: window.__app.params.cameraOrbit,
+                  model: window.__app.params.autoRotate,
+                  path: window.__app.params.cameraPath,
+                },
+              };
+            }""")
+            check("model rotation and camera orbit have one clear owner",
+                  motion_ownership == {
+                    "cameraOwns": {"orbit": True, "model": False},
+                    "modelOwns": {"orbit": False, "model": True, "path": "manual"},
+                    "pathOwns": {"orbit": False, "model": False, "path": "petrieSpiral"},
+                  },
+                  str(motion_ownership))
+
             zoom_slider = pg.evaluate("""() => {
               window.__app.setPanelMode('scene');
               window.__app.switchView('platonic');
@@ -381,6 +705,7 @@ def main() -> int:
 
             poly_motion = pg.evaluate("""() => {
               window.__app.switchView('polytope');
+              window.__app.setPoly4d('tesseract');
               window.__app.setParam('morph4d', 1.4);
               window.__app.resetPolyAngles();
               window.__app.setParam('rotationSpeed', 0);

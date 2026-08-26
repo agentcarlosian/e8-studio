@@ -490,7 +490,6 @@ const AUTO_MODEL_SEQUENCE = [
   { modelMode: 'poly4d', polytope4d: '24cell' },
   { modelMode: 'poly4d', polytope4d: '600cell' },
   { modelMode: 'poly4d', polytope4d: '120cell' },
-  { modelMode: 'dynkin', dynkinDiagram: 'E8' },
 ];
 const MOBILE_TOUR_STEPS = [
   {
@@ -8578,7 +8577,9 @@ function currentAutoModelIndex() {
     if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
     return true;
   });
-  return index >= 0 ? index : 0;
+  // Manual-only models such as Dynkin start the showcase at its canonical E8
+  // scene on the next advance rather than entering midway through the cycle.
+  return index >= 0 ? index : AUTO_MODEL_SEQUENCE.length - 1;
 }
 
 function advanceAutoModel() {
