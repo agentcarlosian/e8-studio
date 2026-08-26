@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-VENDORS = ["three.module.js", "chroma-js.js", "simplex-noise.js"]
+VENDORS = ["three.module.js", "three.core.js", "chroma-js.js", "simplex-noise.js"]
 
 IMPORT_BLOCK = (
     'import * as THREE from "./vendor/three.module.js";\n'
@@ -59,7 +59,26 @@ const __standaloneImport = async (label, b64) => {{
     URL.revokeObjectURL(url);
   }}
 }};
-const THREE = await __standaloneImport("three.module.js", "{encoded["three.module.js"]}");
+const __standaloneImportThree = async (moduleB64, coreB64) => {{
+  const coreSource = __standaloneDecodeUtf8(coreB64);
+  const coreUrl = URL.createObjectURL(new Blob([coreSource], {{ type: "text/javascript" }}));
+  const moduleSource = __standaloneDecodeUtf8(moduleB64)
+    .replaceAll("./three.core.js", coreUrl);
+  const moduleUrl = URL.createObjectURL(new Blob([moduleSource], {{ type: "text/javascript" }}));
+  try {{
+    return await import(moduleUrl);
+  }} catch (error) {{
+    console.error("[standalone] Failed to load Three.js", error);
+    throw error;
+  }} finally {{
+    URL.revokeObjectURL(moduleUrl);
+    URL.revokeObjectURL(coreUrl);
+  }}
+}};
+const THREE = await __standaloneImportThree(
+  "{encoded["three.module.js"]}",
+  "{encoded["three.core.js"]}"
+);
 const __chromaModule = await __standaloneImport("chroma-js.js", "{encoded["chroma-js.js"]}");
 const chroma = __chromaModule.default || __chromaModule;
 const simplexNoise = await __standaloneImport("simplex-noise.js", "{encoded["simplex-noise.js"]}");

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "paths": [
     {
       "id": "solid-foundations",
@@ -25,6 +25,7 @@
       "title": "Exceptional Bridges",
       "description": "Explore the qualified relationships connecting E8 to McKay and H4 imagery.",
       "lessonIds": [
+        "reading-dynkin",
         "mckay-bridge",
         "designed-bloom"
       ]
@@ -45,8 +46,70 @@
       "view": "platonic",
       "pathId": "solid-foundations",
       "lessonIndex": 0,
+      "estimatedMinutes": 7,
+      "prerequisites": [],
+      "objectives": [
+        "Recognize the five convex regular solids.",
+        "Explain face–vertex duality."
+      ],
+      "activity": "Switch among all five solids and compare one dual pair.",
       "claimType": "established-mathematics",
       "claimNote": "The five-solid classification and dual pairs are standard results for convex regular polyhedra.",
+      "experiment": {
+        "title": "Find a dual pair",
+        "intro": "Compare a familiar solid with its dual and watch faces exchange roles with vertices.",
+        "steps": [
+          {
+            "id": "tetrahedron",
+            "title": "Begin with the self-dual case",
+            "instruction": "Open the tetrahedron and count four triangular faces and four vertices.",
+            "question": "Why can the tetrahedron be its own dual?",
+            "takeaway": "Replacing each face by a vertex produces another tetrahedron because both counts are four.",
+            "action": {
+              "view": "platonic",
+              "params": {
+                "shape": "tetrahedron",
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "cube",
+            "title": "Inspect the cube",
+            "instruction": "Open the cube and compare its six faces with its eight vertices.",
+            "question": "Which counts should its dual reverse?",
+            "takeaway": "A dual must have eight faces and six vertices.",
+            "action": {
+              "view": "platonic",
+              "params": {
+                "shape": "cube",
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "octahedron",
+            "title": "Reveal the dual",
+            "instruction": "Switch to the octahedron and compare it directly with the cube.",
+            "question": "What stayed regular while the counts exchanged?",
+            "takeaway": "The cube and octahedron exchange faces and vertices while preserving their shared symmetry group.",
+            "action": {
+              "view": "platonic",
+              "params": {
+                "shape": "octahedron",
+                "autoRotate": false
+              }
+            }
+          }
+        ],
+        "reflection": "Duality changes the description of a regular solid without discarding its symmetry."
+      },
+      "connections": [
+        {
+          "lessonId": "into-four-dimensions",
+          "label": "Extend regularity into 4D"
+        }
+      ],
       "readings": [
         {
           "id": "platonic_why_five",
@@ -78,8 +141,82 @@
       "view": "polytope",
       "pathId": "solid-foundations",
       "lessonIndex": 1,
+      "estimatedMinutes": 9,
+      "prerequisites": [
+        "why-five-solids"
+      ],
+      "objectives": [
+        "Read a basic Schläfli symbol.",
+        "Distinguish projection from intrinsic 4D geometry."
+      ],
+      "activity": "Rotate a tesseract in two independent planes and identify projection changes.",
       "claimType": "established-mathematics",
       "claimNote": "Polytope counts and Schläfli notation are mathematical facts; the animated projection is an explanatory display choice.",
+      "experiment": {
+        "title": "Rotate without moving through space",
+        "intro": "A 4D rotation acts in a coordinate plane. Compare two rotations while the tesseract itself remains unchanged.",
+        "steps": [
+          {
+            "id": "baseline",
+            "title": "Establish the projection",
+            "instruction": "Open a stationary tesseract in its cube-within-a-cube projection.",
+            "question": "Are the inner and outer cubes separate objects?",
+            "takeaway": "They are parts of one tesseract seen through a 3D projection.",
+            "action": {
+              "view": "polytope",
+              "params": {
+                "poly4d": "tesseract",
+                "morph4d": 0.65,
+                "polyAutoRotate": false,
+                "polyRotXY": 0,
+                "polyRotZW": 0,
+                "polyRotXW": 0
+              }
+            }
+          },
+          {
+            "id": "xw-plane",
+            "title": "Rotate in the XW plane",
+            "instruction": "Apply an XW rotation and follow vertices whose depth changes.",
+            "question": "Which apparent distortions come from projection rather than the polytope?",
+            "takeaway": "Edge lengths appear to change on screen even though the intrinsic tesseract remains regular.",
+            "action": {
+              "view": "polytope",
+              "params": {
+                "poly4d": "tesseract",
+                "morph4d": 0.65,
+                "polyAutoRotate": false,
+                "polyRotXW": 0.9,
+                "polyRotZW": 0
+              }
+            }
+          },
+          {
+            "id": "double-plane",
+            "title": "Add an independent plane",
+            "instruction": "Combine the XW rotation with a ZW rotation.",
+            "question": "Why can a 4D object have more rotational freedom than a 3D one?",
+            "takeaway": "Four coordinates provide six coordinate planes, so several independent plane rotations can contribute to one pose.",
+            "action": {
+              "view": "polytope",
+              "params": {
+                "poly4d": "tesseract",
+                "morph4d": 0.65,
+                "polyAutoRotate": false,
+                "polyRotXW": 0.9,
+                "polyRotZW": 0.7
+              }
+            }
+          }
+        ],
+        "reflection": "A changing projection is evidence about viewpoint and rotation, not a deformation of the underlying polytope."
+      },
+      "connections": [
+        {
+          "lessonId": "six-hundred-cell",
+          "label": "Meet the most intricate simplicial 4-polytope"
+        }
+      ],
       "readings": [
         {
           "id": "rotation_planes_4d",
@@ -115,8 +252,80 @@
       "view": "sixhundred",
       "pathId": "coxeter-geometry",
       "lessonIndex": 0,
+      "estimatedMinutes": 8,
+      "prerequisites": [
+        "into-four-dimensions"
+      ],
+      "objectives": [
+        "Identify the 600-cell’s basic counts.",
+        "Relate its vertices to binary icosahedral unit quaternions."
+      ],
+      "activity": "Compare vertex classes while rotating the 4D projection.",
       "claimType": "established-mathematics",
       "claimNote": "Element counts, duality, and the quaternion model are established; screen depth and motion are projection choices.",
+      "experiment": {
+        "title": "Separate structure from projection",
+        "intro": "Hold the 600-cell still, then move it and change the highlighted icosahedral context.",
+        "steps": [
+          {
+            "id": "still",
+            "title": "Read the still projection",
+            "instruction": "Open the 600-cell with all edges visible and pause its rotation.",
+            "question": "Which counts belong to the polytope even when the drawing overlaps?",
+            "takeaway": "The 120 vertices and 720 edges are intrinsic; overlap is a consequence of projection.",
+            "action": {
+              "view": "sixhundred",
+              "params": {
+                "shape": "icosahedron",
+                "showEdges": true,
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "rotate",
+            "title": "Change the projection",
+            "instruction": "Start a slow rotation and watch crossings appear and disappear.",
+            "question": "Did the adjacency of any two vertices change?",
+            "takeaway": "Rotation changes screen positions but preserves the edge graph.",
+            "action": {
+              "view": "sixhundred",
+              "params": {
+                "shape": "icosahedron",
+                "showEdges": true,
+                "autoRotate": true,
+                "rotationSpeed": 0.003
+              }
+            }
+          },
+          {
+            "id": "context",
+            "title": "Change the symmetry context",
+            "instruction": "Use dodecahedral highlighting while keeping the same 600-cell.",
+            "question": "What changed: the polytope or the subset being emphasized?",
+            "takeaway": "The underlying 600-cell is unchanged; the Studio is changing the explanatory highlight.",
+            "action": {
+              "view": "sixhundred",
+              "params": {
+                "shape": "dodecahedron",
+                "showEdges": true,
+                "autoRotate": false
+              }
+            }
+          }
+        ],
+        "reflection": "Mathematical structure survives changes of projection, color, motion, and emphasis."
+      },
+      "connections": [
+        {
+          "lessonId": "coxeter-plane",
+          "label": "Project E8 with a symmetry-adapted plane"
+        },
+        {
+          "lessonId": "mckay-bridge",
+          "label": "Return to the binary polyhedral bridge"
+        }
+      ],
       "readings": [
         {
           "id": "sixhundred_overview",
@@ -148,8 +357,85 @@
       "view": "e8coxeter",
       "pathId": "coxeter-geometry",
       "lessonIndex": 1,
+      "estimatedMinutes": 8,
+      "prerequisites": [
+        "six-hundred-cell"
+      ],
+      "objectives": [
+        "Explain why the projection is structurally special.",
+        "Recognize the eight 30-root orbits."
+      ],
+      "activity": "Toggle rings and the Petrie path, then follow one 30-step orbit.",
       "claimType": "established-mathematics",
       "claimNote": "The Coxeter projection and root orbits are canonical up to orientation and scale; glow and color are display choices.",
+      "experiment": {
+        "title": "Find the order-30 rhythm",
+        "intro": "Build the Coxeter-plane picture in layers, from rings to one orbit and then reflection context.",
+        "steps": [
+          {
+            "id": "rings",
+            "title": "Start with the eight rings",
+            "instruction": "Show the ring guides and temporarily remove the Petrie path.",
+            "question": "How can 240 roots divide evenly across eight rings?",
+            "takeaway": "Each ring contains 30 projected roots: 8 × 30 = 240.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "showRings": true,
+                "showPetrie": false,
+                "showWeylMirrors": false,
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "petrie",
+            "title": "Trace a 30-step orbit",
+            "instruction": "Add the Petrie path and follow its equal angular steps.",
+            "question": "What repeats after one full turn?",
+            "takeaway": "The Coxeter element has order 30, and this orbit returns after 30 steps.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "showRings": true,
+                "showPetrie": true,
+                "showWeylMirrors": false,
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "mirrors",
+            "title": "Add reflection context",
+            "instruction": "Turn on Weyl mirrors while keeping the ring and path structure visible.",
+            "question": "How do a few generating reflections relate to the much larger root system?",
+            "takeaway": "Simple reflections generate the Weyl group that permutes all 240 roots.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "showRings": true,
+                "showPetrie": true,
+                "showWeylMirrors": true,
+                "autoRotate": false
+              }
+            }
+          }
+        ],
+        "reflection": "The Coxeter plane is useful because its rotation exposes algebraic order as visible rhythm."
+      },
+      "connections": [
+        {
+          "lessonId": "roots-reflections",
+          "label": "Inspect the reflections behind the picture"
+        },
+        {
+          "lessonId": "distance-fields",
+          "label": "Render the same source points as a field"
+        }
+      ],
       "readings": [
         {
           "id": "coxeter",
@@ -189,8 +475,82 @@
       "view": "e8coxeter",
       "pathId": "coxeter-geometry",
       "lessonIndex": 2,
+      "estimatedMinutes": 10,
+      "prerequisites": [
+        "coxeter-plane"
+      ],
+      "objectives": [
+        "Distinguish roots from simple roots.",
+        "Interpret a Weyl reflection as a symmetry operation."
+      ],
+      "activity": "Select a root, inspect its neighbors, and animate a Weyl path.",
       "claimType": "established-mathematics",
       "claimNote": "Root counts, inner products, and Weyl reflections come from the canonical E8 data; the interface highlighting is explanatory.",
+      "experiment": {
+        "title": "Use one root to navigate 240",
+        "intro": "Select a deterministic root, reveal its graph neighborhood, and then add the simple-reflection mirrors.",
+        "steps": [
+          {
+            "id": "select",
+            "title": "Choose a root",
+            "instruction": "Open the root inspector on root 0 and read its 8D coordinates and opposite root.",
+            "question": "What makes the displayed point a root rather than merely a dot?",
+            "takeaway": "Its coordinates, norm, and inner products belong to the canonical E8 root data.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "pickedRoot": 0,
+                "showInspector": true,
+                "rootDiffusion": false,
+                "showWeylMirrors": false
+              }
+            }
+          },
+          {
+            "id": "neighbors",
+            "title": "Reveal Cartan neighbors",
+            "instruction": "Turn on root diffusion from the selected root.",
+            "question": "What does graph distance add that screen distance cannot?",
+            "takeaway": "The diffusion follows root adjacency, so visually nearby points need not be algebraically adjacent.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "pickedRoot": 0,
+                "showInspector": true,
+                "rootDiffusion": true,
+                "rootHaloDepth": 3,
+                "showWeylMirrors": false
+              }
+            }
+          },
+          {
+            "id": "reflect",
+            "title": "Expose the generators",
+            "instruction": "Add the Weyl mirrors while preserving the selected-root context.",
+            "question": "Why are eight simple roots enough to organize all 240 roots?",
+            "takeaway": "Their reflections generate the E8 Weyl group; the full root system is closed under those reflections.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "e8ViewMode": "coxeter",
+                "pickedRoot": 0,
+                "showInspector": true,
+                "rootDiffusion": true,
+                "showWeylMirrors": true
+              }
+            }
+          }
+        ],
+        "reflection": "The picture becomes mathematical when selections are tied back to coordinates, inner products, and symmetry actions."
+      },
+      "connections": [
+        {
+          "lessonId": "reading-dynkin",
+          "label": "Compress the simple-root data into a graph"
+        }
+      ],
       "readings": [
         {
           "id": "e8_overview",
@@ -221,13 +581,188 @@
       ]
     },
     {
+      "id": "reading-dynkin",
+      "title": "Reading Dynkin diagrams",
+      "view": "dynkin",
+      "pathId": "exceptional-bridges",
+      "lessonIndex": 0,
+      "estimatedMinutes": 9,
+      "prerequisites": [
+        "roots-reflections"
+      ],
+      "objectives": [
+        "Read nodes and bonds as simple-root data.",
+        "Distinguish finite E8 from affine E8^(1)."
+      ],
+      "activity": "Switch among E6, E7, and E8 and locate the branch node and rank.",
+      "claimType": "established-mathematics",
+      "claimNote": "Finite simply-laced Dynkin diagrams encode simple-root inner products; the McKay graph uses their affine extensions.",
+      "experiment": {
+        "title": "Grow the exceptional diagrams",
+        "intro": "Compare E6, E7, and E8 while tracking rank, branch position, and Cartan-matrix size.",
+        "steps": [
+          {
+            "id": "e6",
+            "title": "Read E6",
+            "instruction": "Open E6 and count six nodes before inspecting its 6 × 6 Cartan matrix.",
+            "question": "What does each bond mean in a simply-laced diagram?",
+            "takeaway": "A bond records inner product −1 between the corresponding simple roots under the standard normalization.",
+            "action": {
+              "view": "dynkin",
+              "params": {
+                "dynkin": "E6"
+              }
+            }
+          },
+          {
+            "id": "e7",
+            "title": "Extend to E7",
+            "instruction": "Switch to E7 and identify the added node without losing the branch.",
+            "question": "Which property changes immediately when one node is added?",
+            "takeaway": "The rank and Cartan-matrix dimension both increase from six to seven.",
+            "action": {
+              "view": "dynkin",
+              "params": {
+                "dynkin": "E7"
+              }
+            }
+          },
+          {
+            "id": "e8",
+            "title": "Complete E8",
+            "instruction": "Switch to E8 and compare its eight nodes with the 240-root visualization.",
+            "question": "Why does the diagram have eight nodes rather than 240?",
+            "takeaway": "Dynkin nodes represent a simple-root basis, not every root in the system.",
+            "action": {
+              "view": "dynkin",
+              "params": {
+                "dynkin": "E8"
+              }
+            }
+          }
+        ],
+        "reflection": "A Dynkin diagram is compact because it stores the generating simple-root relationships rather than drawing every root."
+      },
+      "connections": [
+        {
+          "lessonId": "mckay-bridge",
+          "label": "See why affine ADE diagrams reappear in group theory"
+        }
+      ],
+      "readings": [
+        {
+          "id": "dynkin",
+          "title": "Dynkin diagrams"
+        },
+        {
+          "id": "simple_roots",
+          "title": "Simple roots"
+        },
+        {
+          "id": "affine_e8",
+          "title": "Affine E₈"
+        }
+      ],
+      "quiz": {
+        "id": "dynkin-diagrams",
+        "title": "Dynkin Diagrams"
+      },
+      "sources": [
+        {
+          "id": "aim-e8-technical",
+          "title": "The Character Table for E8 — Technical Details",
+          "author": "American Institute of Mathematics",
+          "url": "https://aimath.org/E8/technicaldetails.html",
+          "scope": "E8 rank, dimension, root count, and Weyl-group order",
+          "tier": "research-institute"
+        },
+        {
+          "id": "mckay-michigan-notes",
+          "title": "McKay correspondence lecture notes",
+          "author": "University of Michigan",
+          "url": "https://dept.math.lsa.umich.edu/~idolga/McKaybook.pdf",
+          "scope": "binary polyhedral groups, irreducible representations, and affine ADE McKay graphs",
+          "tier": "university-notes"
+        }
+      ]
+    },
+    {
       "id": "mckay-bridge",
       "title": "McKay correspondence",
       "view": "e8coxeter",
       "pathId": "exceptional-bridges",
-      "lessonIndex": 0,
+      "lessonIndex": 1,
+      "estimatedMinutes": 10,
+      "prerequisites": [
+        "reading-dynkin"
+      ],
+      "objectives": [
+        "Relate binary polyhedral groups to affine ADE graphs.",
+        "Separate the theorem from the Studio’s visual analogy."
+      ],
+      "activity": "Compare a McKay highlight with the corresponding affine-diagram reading.",
       "claimType": "interpretation",
       "claimNote": "The McKay correspondence is established; transitions among solids, the 600-cell, and E8 are a qualified visual analogy, not a literal construction.",
+      "experiment": {
+        "title": "Cross three representations carefully",
+        "intro": "Move from an icosahedron to an E8 highlight and finally to E8’s finite Dynkin diagram, noting where the theorem ends and the Studio’s analogy begins.",
+        "steps": [
+          {
+            "id": "solid",
+            "title": "Start with icosahedral symmetry",
+            "instruction": "Open the icosahedron as the familiar geometric source.",
+            "question": "Why does McKay use a binary group rather than this rotation group directly?",
+            "takeaway": "The classical correspondence uses finite subgroups of SU(2), which double-cover the rotational polyhedral groups in SO(3).",
+            "action": {
+              "view": "platonic",
+              "params": {
+                "shape": "icosahedron",
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "highlight",
+            "title": "Inspect the Studio highlight",
+            "instruction": "Open E8 with the icosahedral source selected and compare the highlighted subset with all 240 roots.",
+            "question": "Is this highlight itself the McKay correspondence?",
+            "takeaway": "No. It is an explanatory Studio selection; the theorem relates representations of a binary group to an affine ADE graph.",
+            "action": {
+              "view": "e8coxeter",
+              "params": {
+                "shape": "icosahedron",
+                "compareMode": "off",
+                "showRings": true,
+                "showPetrie": false
+              }
+            }
+          },
+          {
+            "id": "diagram",
+            "title": "Return to the diagram",
+            "instruction": "Open finite E8 and read its eight simple-root nodes.",
+            "question": "What must be added for the McKay graph associated with the binary icosahedral group?",
+            "takeaway": "The McKay graph is affine E8, which has an additional extending node beyond the finite E8 diagram shown here.",
+            "action": {
+              "view": "dynkin",
+              "params": {
+                "dynkin": "E8"
+              }
+            }
+          }
+        ],
+        "reflection": "Good mathematical visualization labels when it is showing a theorem, source data, or a designed analogy."
+      },
+      "connections": [
+        {
+          "lessonId": "designed-bloom",
+          "label": "Apply the same theorem-versus-design test to Bloom"
+        },
+        {
+          "lessonId": "six-hundred-cell",
+          "label": "Revisit binary icosahedral geometry"
+        }
+      ],
       "readings": [
         {
           "id": "e8_mckay",
@@ -266,9 +801,79 @@
       "title": "The designed Bloom morph",
       "view": "bloom",
       "pathId": "exceptional-bridges",
-      "lessonIndex": 1,
+      "lessonIndex": 2,
+      "estimatedMinutes": 6,
+      "prerequisites": [
+        "mckay-bridge"
+      ],
+      "objectives": [
+        "Identify which endpoints are sourced mathematics.",
+        "Recognize the interpolation as an artistic construction."
+      ],
+      "activity": "Pause the Bloom timeline at three points and describe what is data versus design.",
       "claimType": "app-designed-visualization",
       "claimNote": "Bloom is an artistic interpolation created for this app. It is not a canonical deformation or mathematical map into E8.",
+      "experiment": {
+        "title": "Audit a beautiful interpolation",
+        "intro": "Pause Bloom at its beginning, middle, and end, then classify what is mathematical data and what is authored motion.",
+        "steps": [
+          {
+            "id": "start",
+            "title": "Read the source endpoint",
+            "instruction": "Pause Bloom at time 0 with the icosahedron selected.",
+            "question": "Which part of this frame is canonical mathematics?",
+            "takeaway": "The regular icosahedron and its symmetry data are established; its styling is not.",
+            "action": {
+              "view": "bloom",
+              "params": {
+                "shape": "icosahedron",
+                "bloomAmount": 0,
+                "bloomAuto": false,
+                "bloomMandelbox": false
+              }
+            }
+          },
+          {
+            "id": "middle",
+            "title": "Interrogate the transition",
+            "instruction": "Move to the midpoint and inspect the in-between geometry.",
+            "question": "Does the midpoint represent a recognized mathematical object?",
+            "takeaway": "Not necessarily. The interpolation is authored to be expressive and legible, not to define a canonical object.",
+            "action": {
+              "view": "bloom",
+              "params": {
+                "shape": "icosahedron",
+                "bloomAmount": 0.5,
+                "bloomAuto": false,
+                "bloomMandelbox": false
+              }
+            }
+          },
+          {
+            "id": "end",
+            "title": "Read the destination image",
+            "instruction": "Move to the final E8-inspired endpoint and compare it with the Coxeter view.",
+            "question": "What is preserved from the canonical E8 projection?",
+            "takeaway": "The destination draws on the 240-root Coxeter image, while the path used to reach it remains app-designed.",
+            "action": {
+              "view": "bloom",
+              "params": {
+                "shape": "icosahedron",
+                "bloomAmount": 1,
+                "bloomAuto": false,
+                "bloomMandelbox": false
+              }
+            }
+          }
+        ],
+        "reflection": "An artistic bridge can teach effectively when the interface is explicit about which claims are exact."
+      },
+      "connections": [
+        {
+          "lessonId": "distance-fields",
+          "label": "Separate source data from another rendering technique"
+        }
+      ],
       "readings": [
         {
           "id": "bloom_morph",
@@ -308,8 +913,82 @@
       "view": "raymarched",
       "pathId": "rendering-mathematics",
       "lessonIndex": 0,
+      "estimatedMinutes": 8,
+      "prerequisites": [
+        "coxeter-plane"
+      ],
+      "objectives": [
+        "Explain what a signed distance function returns.",
+        "Separate E8 source points from the rendered surface."
+      ],
+      "activity": "Change sphere radius and blend, then describe which mathematical data stayed fixed.",
       "claimType": "rendering-technique",
       "claimNote": "Sphere tracing and distance fields are established rendering techniques; this scene’s shapes and composition are app-designed.",
+      "experiment": {
+        "title": "Change the surface, keep the roots",
+        "intro": "Vary the radius and smooth-union blend while holding the 240 E8 source points fixed.",
+        "steps": [
+          {
+            "id": "separate",
+            "title": "Resolve individual sources",
+            "instruction": "Use small spheres and very little blending.",
+            "question": "What determines where each surface component begins?",
+            "takeaway": "Each component is centered on a fixed projected E8 root point.",
+            "action": {
+              "view": "raymarched",
+              "params": {
+                "sdfSphereR": 0.05,
+                "sdfBlend": 0.01,
+                "sdfEdges": 0.3,
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "grow",
+            "title": "Grow the field",
+            "instruction": "Increase sphere radius while keeping the blend restrained.",
+            "question": "Did any root coordinate move?",
+            "takeaway": "No. Only the rendered distance threshold changed.",
+            "action": {
+              "view": "raymarched",
+              "params": {
+                "sdfSphereR": 0.1,
+                "sdfBlend": 0.02,
+                "sdfEdges": 0.3,
+                "autoRotate": false
+              }
+            }
+          },
+          {
+            "id": "merge",
+            "title": "Smooth the unions",
+            "instruction": "Increase blending until neighboring components flow together.",
+            "question": "Is the merged surface itself the E8 root system?",
+            "takeaway": "No. It is a surface generated from the root positions by an app-selected distance-field composition.",
+            "action": {
+              "view": "raymarched",
+              "params": {
+                "sdfSphereR": 0.1,
+                "sdfBlend": 0.12,
+                "sdfEdges": 0.2,
+                "autoRotate": false
+              }
+            }
+          }
+        ],
+        "reflection": "A rendering can change radically while its mathematical source data remains identical."
+      },
+      "connections": [
+        {
+          "lessonId": "coxeter-plane",
+          "label": "Compare the field with the canonical projection"
+        },
+        {
+          "lessonId": "designed-bloom",
+          "label": "Compare two app-designed presentations"
+        }
+      ],
       "readings": [
         {
           "id": "sdf_raymarching",

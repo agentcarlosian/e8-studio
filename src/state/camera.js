@@ -40,7 +40,11 @@ export class CameraController {
     this.baseX = x;
     this.baseY = y;
     this.baseZ = z;
-    if (params) params.cameraRotation = Math.atan2(Math.sin(this.theta), Math.cos(this.theta));
+    if (params) {
+      params.cameraRotation = Math.atan2(Math.sin(this.theta), Math.cos(this.theta));
+      params.cameraPhi = this.phi;
+      params.cameraDistance = this.clampDistance(this.distance);
+    }
   }
 
   syncTargets() {

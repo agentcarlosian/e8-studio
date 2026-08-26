@@ -77,14 +77,13 @@
    background catalog, drawing resolution, and the SDF raymarch budget. Keep it
    visible below the workspace tabs instead of hiding it inside the SDF view. */
 .ps-global-quality {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px 8px;
+  padding: 5px 10px 8px;
   border-bottom: 1px solid var(--line-soft);
 }
 .ps-global-quality-label {
+  display: block;
+  margin: 0 0 5px;
+  text-align: center;
   color: var(--ink-2);
   font: 8px 'JetBrains Mono', monospace;
   letter-spacing: 0.1em;
@@ -93,18 +92,19 @@
 .ps-quality-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
+  gap: 4px;
 }
 .ps-quality-options button {
   min-width: 0;
-  min-height: 25px;
+  min-height: 29px;
   padding: 4px 3px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--bg-1);
   color: var(--ink-2);
   cursor: pointer;
-  font: 8px 'JetBrains Mono', monospace;
+  font: 9px 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .ps-quality-options button:hover { border-color: var(--accent); color: var(--ink-0); }
@@ -533,6 +533,7 @@
   gap: 4px;
   margin: 6px 0 8px;
 }
+.learn-progress-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .learn-fact-strip div,
 .learn-progress-stats div {
   min-width: 0;
@@ -756,3 +757,15 @@
   font: 9px inherit;
 }
 .gallery-browse:hover { border-color: var(--accent); color: var(--ink-0); }
+
+.cartan-scroll { margin-top: 6px; overflow-x: auto; }
+.dynkin-cartan { border-collapse: collapse; margin: 0 auto; }
+.dynkin-cartan td {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  color: var(--ink-1);
+  text-align: center;
+  font: 9px 'JetBrains Mono', monospace;
+}
+.dynkin-cartan td:nth-child(n) { background: color-mix(in srgb, var(--bg-2) 88%, transparent); }

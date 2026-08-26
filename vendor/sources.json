@@ -1,0 +1,6 @@
+{
+  "chroma-js.js": "https://cdn.jsdelivr.net/npm/chroma-js@3.2.0/+esm",
+  "simplex-noise.js": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm",
+  "three.core.js": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.core.js",
+  "three.module.js": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js"
+}

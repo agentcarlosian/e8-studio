@@ -99,7 +99,7 @@ const learning = new LearningProgressService({
   postcardsCreated: 0,
   explorationBadges: [],
 });
-assert.equal(learning.summary().quizTotal, 8);
+assert.equal(learning.summary().quizTotal, 9);
 assert.equal(learning.quizById('e8-roots')?.id, 'e8-roots');
 learning.recordPostcard('postcard-prime');
 assert.equal(learning.progress.postcardsCreated, 1);

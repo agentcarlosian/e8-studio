@@ -58,7 +58,7 @@ export function createGalleryBaseline() {
     pickedRootPrev: null, hoveredRoot: null, cartanEntry: null,
     _rootDistanceCounts: {}, cartanHighlight: false, cameraPath: 'manual',
     cameraOrbit: false, cameraMode: 'orbit', cameraSpeed: 1,
-    cameraDistance: 6, cameraRotation: Math.PI / 6, autoRotate: false,
+    cameraDistance: 6, cameraRotation: Math.PI / 6, cameraPhi: Math.PI / 3, autoRotate: false,
     autoZoom: false, showAmbient: true, showStarfield: false, bloomAuto: false,
     bloomAmount: 0, shapeTwist: 0, shapeSpike: 0, shapeJitter: 0, morph4d: 0,
     polyRotXY: 0, polyRotZW: 0, polyRotXZ: 0, polyRotYW: 0, polyRotXW: 0,

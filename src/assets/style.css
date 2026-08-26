@@ -1274,7 +1274,12 @@ body[data-layout="compact"].essay-open #tour-overlay {
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
+.learning-path-title small { color: var(--ink-3); font-size: 9px; }
 .learning-path.active .learning-path-title { color: var(--accent); }
 .learning-lesson-link {
   width: 100%;
@@ -1302,6 +1307,159 @@ body[data-layout="compact"].essay-open #tour-overlay {
   color: var(--ink-2);
   font: var(--text-xs)/1.5 'JetBrains Mono', monospace;
 }
+.learning-prerequisite-grid,
+.learning-connection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.learning-prerequisite,
+.learning-connection-card {
+  min-height: 48px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-1);
+  color: var(--ink-1);
+  text-align: left;
+}
+.learning-prerequisite.complete { border-color: color-mix(in srgb, var(--good, #7df0b8) 45%, var(--line)); }
+.learning-prerequisite span,
+.learning-prerequisite small,
+.learning-connection-card span,
+.learning-connection-card small { display: block; }
+.learning-prerequisite span,
+.learning-connection-card span { color: var(--ink-0); font-size: var(--text-sm); }
+.learning-prerequisite small,
+.learning-connection-card small { margin-top: 3px; color: var(--ink-3); font-size: var(--text-xs); }
+.learning-prerequisite:is(button):hover,
+.learning-connection-card:hover { border-color: var(--accent); }
+.learning-experiment {
+  margin: var(--space-5) 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 88%, var(--accent) 12%);
+}
+.learning-experiment-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.learning-experiment-header span,
+.learning-experiment-reflection > span,
+.learning-experiment-question > span,
+.learning-experiment-takeaway > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent);
+  font: 9px 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.learning-experiment-header h3 { margin: 2px 0 0; }
+.learning-experiment-header > strong { color: var(--accent); font: 600 18px 'JetBrains Mono', monospace; }
+.learning-experiment > p { color: var(--ink-1); font-size: var(--text-sm); line-height: 1.5; }
+.learning-experiment-progress {
+  height: 5px;
+  margin: 12px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-3);
+}
+.learning-experiment-progress span { display: block; height: 100%; background: var(--accent); transition: width 180ms var(--ease); }
+.learning-experiment-steps { display: grid; gap: 9px; }
+.learning-experiment-step {
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+}
+.learning-experiment-step.complete { border-color: color-mix(in srgb, var(--good, #7df0b8) 52%, var(--line)); }
+.learning-experiment-step-head { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; }
+.learning-experiment-step-head > span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent);
+  font: 10px 'JetBrains Mono', monospace;
+}
+.learning-experiment-step-head strong { color: var(--ink-0); font-size: var(--text-sm); }
+.learning-experiment-step-head small { color: var(--ink-3); font-size: 9px; text-transform: uppercase; }
+.learning-experiment-step > p { margin: 8px 0; color: var(--ink-1); font-size: var(--text-sm); line-height: 1.45; }
+.learning-experiment-question,
+.learning-experiment-takeaway,
+.learning-experiment-reflection {
+  margin-top: 8px;
+  padding: 9px;
+  border-left: 2px solid var(--accent);
+  background: var(--bg-2);
+  color: var(--ink-1);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.learning-experiment-takeaway { border-left-color: var(--good, #7df0b8); }
+.learning-experiment-takeaway > span { color: var(--good, #7df0b8); }
+.learning-experiment-step-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.learning-experiment-step-actions button { min-height: 34px; }
+
+.learning-experiment-coach {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  width: min(370px, calc(100vw - 280px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-0) 94%, transparent);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
+}
+.experiment-coach-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+.experiment-coach-head span,
+.experiment-coach-head strong { display: block; }
+.experiment-coach-head span { color: var(--accent); font: 9px 'JetBrains Mono', monospace; text-transform: uppercase; }
+.experiment-coach-head strong { margin-top: 3px; color: var(--ink-0); font-size: 12px; }
+.experiment-coach-head button { min-width: 30px; min-height: 30px; padding: 0; }
+.experiment-coach-body { padding: 12px; }
+.experiment-coach-body > strong { color: var(--ink-0); font-size: 13px; }
+.experiment-coach-body > p { margin: 6px 0 9px; color: var(--ink-1); font-size: 11px; line-height: 1.45; }
+.experiment-question,
+.experiment-takeaway { padding: 8px; border-left: 2px solid var(--accent); background: var(--bg-2); color: var(--ink-1); font-size: 10px; line-height: 1.4; }
+.experiment-takeaway { margin-top: 7px; border-left-color: var(--good, #7df0b8); }
+.experiment-question span,
+.experiment-takeaway span { display: block; margin-bottom: 2px; color: var(--accent); font: 8px 'JetBrains Mono', monospace; text-transform: uppercase; }
+.experiment-takeaway span { color: var(--good, #7df0b8); }
+.experiment-coach-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 12px; }
+.experiment-coach-actions button { min-width: 0; min-height: 36px; padding: 5px; font-size: 9px; }
+.experiment-coach-actions button.complete { border-color: var(--good, #7df0b8); color: var(--good, #7df0b8); }
+.learning-objectives {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-1);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.learning-activity {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-1));
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.learning-activity strong { color: var(--accent); }
   .learning-primary-actions { justify-content: flex-start; margin-top: var(--space-3); }
   .learning-claim-note {
     display: grid;
@@ -1371,13 +1529,18 @@ body[data-layout="compact"].essay-open #tour-overlay {
   border-top: 1px solid var(--line);
 }
 .learning-lesson-nav button { min-height: var(--control-min); }
+.learning-lesson-nav > span { color: var(--ink-3); font: var(--text-xs)/var(--control-min) 'JetBrains Mono', monospace; }
 @media (max-width: 720px) {
   .learning-dialog.learning-center-dialog { overflow: auto; }
   .learning-center-shell { display: block; min-height: 0; }
   .learning-center-nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 240px; }
   .learning-center-content { padding: 20px 16px; overflow: visible; }
   .learning-resource-grid { grid-template-columns: 1fr; }
+  .learning-prerequisite-grid,
+  .learning-connection-grid { grid-template-columns: 1fr; }
   .learning-lesson-nav { flex-direction: column; }
+  .learning-experiment { padding: 12px; }
+  .learning-experiment-coach { right: 10px; bottom: 10px; width: calc(100vw - 20px); }
 }
 .modal-close {
   position: absolute;

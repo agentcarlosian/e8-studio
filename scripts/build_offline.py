@@ -30,6 +30,7 @@ from build import harden_csp  # re-pin CSP hashes after the offline rewrites
 
 ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / "vendor"          # source cache (committed, audit-friendly)
+VENDOR_MANIFEST = VENDOR / "sources.json"
 DIST_VENDOR = ROOT / "dist" / "vendor"  # where dist/index.html loads from
 DIST_INDEX = ROOT / "dist" / "index.html"
 
@@ -37,8 +38,11 @@ DIST_INDEX = ROOT / "dist" / "index.html"
 # in sync here means an offline build produces a drop-in replacement.
 CDN_DEPS = [
     # (url, local_filename)
-    ("https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three.module.js"),
-    ("https://cdn.jsdelivr.net/npm/chroma-js@2.4.2/+esm", "chroma-js.js"),
+    ("https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js", "three.module.js"),
+    # Three r185 split its WebGL entrypoint from the shared core. The relative
+    # import inside three.module.js must exist beside it in offline builds.
+    ("https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.core.js", "three.core.js"),
+    ("https://cdn.jsdelivr.net/npm/chroma-js@3.2.0/+esm", "chroma-js.js"),
     ("https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm", "simplex-noise.js"),
 ]
 # lil-gui is also a CDN import in dev (index.html importmap), but the dist build
@@ -62,20 +66,31 @@ def vendor_deps() -> dict[str, Path]:
     """
     VENDOR.mkdir(exist_ok=True)
     DIST_VENDOR.mkdir(exist_ok=True)
+    try:
+        cached_sources = json.loads(VENDOR_MANIFEST.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        cached_sources = {}
     mapping = {}
     for url, filename in CDN_DEPS:
         cache = VENDOR / filename
-        if cache.exists() and cache.stat().st_size > 1000:
+        cache_matches_source = cached_sources.get(filename) == url
+        if cache_matches_source and cache.exists() and cache.stat().st_size > 1000:
             print(f"  cached: {filename} ({cache.stat().st_size:,} bytes)")
         else:
             print(f"  fetching: {url}")
             data = fetch(url)
             cache.write_bytes(data)
+            cached_sources[filename] = url
             print(f"  wrote: {filename} ({len(data):,} bytes)")
         # Copy into dist/vendor/ so the built dist is fully self-contained.
         runtime = DIST_VENDOR / filename
         runtime.write_bytes(cache.read_bytes())
         mapping[url] = runtime
+    VENDOR_MANIFEST.write_text(
+        json.dumps(cached_sources, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return mapping
 
 
@@ -130,7 +145,8 @@ PWA_CACHE = "e8-studio-v1"
 # Core assets the service worker precaches so the app loads with no network.
 PWA_PRECACHE = [
     "./", "./index.html", "./manifest.webmanifest", "./icon.svg",
-    "./vendor/three.module.js", "./vendor/chroma-js.js", "./vendor/simplex-noise.js",
+    "./vendor/three.module.js", "./vendor/three.core.js",
+    "./vendor/chroma-js.js", "./vendor/simplex-noise.js",
 ]
 
 PWA_MANIFEST = {

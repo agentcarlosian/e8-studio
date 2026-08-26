@@ -116,7 +116,7 @@ export const BIOGRAPHIES = [
     name: 'John McKay',
     dates: '1939–2022',
     field: 'Group theory, number theory',
-    blurb: `British-Canadian mathematician. In 1979 he noticed that 196,884 = 196,883 + 1, where both numbers are dimensions of representations of the Monster group — the seed of "Monstrous Moonshine." In the same period he formulated the McKay correspondence linking finite subgroups of SU(2) (the Platonic symmetries) to the simply-laced Dynkin diagrams E6, E7, E8. The whole premise of this studio rests on that correspondence.`,
+    blurb: `British-Canadian mathematician. In 1979 he noticed that 196,884 = 196,883 + 1, where both numbers are dimensions of representations of the Monster group — the seed of "Monstrous Moonshine." In the same period he formulated the McKay correspondence linking finite subgroups of SU(2), including the binary lifts of Platonic rotation groups, to affine simply-laced Dynkin diagrams. That representation-theoretic bridge motivates part of this studio.`,
     related: ['mckay-correspondence', 'e8-roots'],
   },
   {
@@ -159,7 +159,7 @@ export const TIMELINE = [
   { year: '1935', title: 'Bourbaki founded', body: 'A collective of mostly French mathematicians begins rewriting maths from scratch. Their 1963 Lie-groups volume contains the iconic E₈ Coxeter-plane diagram.' },
   { year: '1948', title: 'Coxeter’s Regular Polytopes', body: 'H.S.M. Coxeter publishes the definitive geometry reference. The Coxeter plane and Coxeter element — the projection this studio renders — bear his name.' },
   { year: '1979', title: 'McKay correspondence + Monstrous Moonshine', body: 'John McKay observes both the ADE/Dynkin correspondence for Platonic symmetries AND the 196,884 = 196,883 + 1 Moonshine identity. The seed of two Fields Medals.' },
-  { year: '1985', title: 'The heterotic string', body: 'Gross, Harvey, Martinec & Rohm propose the E₈ × E₈ heterotic string. E₈ is special because its size makes the theory anomaly-free.' },
+  { year: '1985', title: 'The heterotic string', body: 'Gross, Harvey, Martinec & Rohm construct ten-dimensional heterotic strings with two consistent gauge choices, Spin(32)/Z₂ and E₈ × E₈. Their consistency includes anomaly cancellation; it is not explained by the number 248 alone.' },
   { year: '1992', title: 'Borcherds proves Moonshine', body: 'Richard Borcherds proves the Conway–Norton Monstrous Moonshine conjecture using a Kac–Moody algebra built from E₈. Wins the Fields Medal in 1998.' },
   { year: '2007', title: 'The Atlas computation for E₈', body: 'The Atlas of Lie Groups project completes a large Kazhdan–Lusztig–Vogan polynomial computation for the split real form of E₈. The reported output matrix had 453,060 rows and columns and the computation took about 77 hours.' },
 ];
@@ -171,6 +171,7 @@ export const BADGE_INFO = [
   { id: 'quiz:sixhundred-basics',    kind: 'quiz', name: '600-cell Basics',       description: 'Passed the 600-cell quiz.' },
   { id: 'quiz:coxeter-plane',        kind: 'quiz', name: 'Coxeter Plane',         description: 'Passed the Coxeter plane quiz.' },
   { id: 'quiz:e8-roots',             kind: 'quiz', name: 'E8 Roots',              description: 'Passed the E8 roots quiz.' },
+  { id: 'quiz:dynkin-diagrams',       kind: 'quiz', name: 'Dynkin Diagrams',       description: 'Passed the Dynkin diagram quiz.' },
   { id: 'quiz:mckay-correspondence', kind: 'quiz', name: 'McKay Correspondence',  description: 'Passed the McKay correspondence quiz.' },
   { id: 'quiz:bloom-morph',          kind: 'quiz', name: 'Bloom Morph',           description: 'Passed the Bloom morph quiz.' },
   { id: 'quiz:4d-polytopes',         kind: 'quiz', name: '4D Polytopes',          description: 'Passed the 4D polytope quiz.' },
@@ -183,6 +184,9 @@ export const BADGE_INFO = [
   { id: 'explore:essay-reader',      kind: 'explore', name: 'Reader',            description: 'Opened 5 distinct essays.' },
   { id: 'explore:exporter',          kind: 'explore', name: 'Exporter',          description: 'Used any export (PNG, SVG, OBJ, or JSON).' },
   { id: 'explore:command-palette',   kind: 'explore', name: 'Power User',        description: 'Opened the command palette (⌘K).' },
+  { id: 'explore:first-experiment',  kind: 'explore', name: 'Experimenter',      description: 'Completed a guided Studio experiment.' },
+  { id: 'explore:all-experiments',   kind: 'explore', name: 'Lab Notebook',      description: 'Completed every guided Studio experiment.' },
+  { id: 'explore:curriculum-complete', kind: 'explore', name: 'E8 Graduate',     description: 'Completed every curriculum lesson.' },
 ];
 
 export const CURIOUS_CARDS = {
@@ -209,6 +213,10 @@ export const CURIOUS_CARDS = {
   raymarched: {
     title: 'Curiosity: an E8 field',
     body: 'The SDF view treats the roots as a field of distance surfaces, making E8 feel less like a diagram and more like a material.',
+  },
+  dynkin: {
+    title: 'Curiosity: a diagram is compressed geometry',
+    body: 'Each node represents a simple root. For simply-laced E6, E7, and E8, a bond means the two roots meet at 120°, so a small graph records the full Cartan matrix.',
   },
 };
 
@@ -393,21 +401,46 @@ export const QUIZ_MODULES = [
     questions: [
       {
         prompt: 'McKay correspondence connects Platonic symmetry to...',
-        choices: ['ADE diagrams', 'weather maps', 'prime-only polygons'],
+        choices: ['affine ADE diagrams', 'Schläfli symbols', 'Fourier spectra'],
         answer: 0,
         explanation: 'The ADE diagrams are the bridge between finite symmetries and Lie theory.',
       },
       {
         prompt: 'The icosahedron is especially tied to...',
-        choices: ['binary icosahedral symmetry', 'square tilings', 'flat tori only'],
+        choices: ['binary icosahedral symmetry', 'binary octahedral symmetry', 'a cyclic group of order five alone'],
         answer: 0,
         explanation: 'The binary icosahedral group is central to the E8/600-cell story.',
       },
       {
         prompt: 'In E8 Studio, choosing a McKay source highlights...',
-        choices: ['an illustrative E8 subset', 'external ads', 'private contacts'],
+        choices: ['an illustrative E8 subset', 'a literal one-to-one embedding of solid vertices', 'only the nodes of an affine Dynkin diagram'],
         answer: 0,
         explanation: 'The app highlights an illustrative subset; it is not a canonical vertex-by-vertex McKay map.',
+      },
+    ],
+  },
+  {
+    id: 'dynkin-diagrams',
+    title: 'Dynkin Diagrams',
+    rewardId: 'aurora-proof',
+    questions: [
+      {
+        prompt: 'A node in a finite Dynkin diagram represents...',
+        choices: ['a simple root', 'every positive root at once', 'a projected Coxeter ring'],
+        answer: 0,
+        explanation: 'Each node represents one simple root; the bonds encode their pairwise Cartan data.',
+      },
+      {
+        prompt: 'How does affine E8 differ from finite E8 in its diagram?',
+        choices: ['It adds one affine node associated with the negative highest root', 'It removes the branch node', 'It turns every bond into a triple bond'],
+        answer: 0,
+        explanation: 'The untwisted affine extension E8^(1) adds α0, producing a nine-node diagram and an infinite-dimensional Kac–Moody algebra.',
+      },
+      {
+        prompt: 'For simply-laced E8, a single bond between equal-length simple roots records an angle of...',
+        choices: ['120°', '90°', '60°'],
+        answer: 0,
+        explanation: 'Adjacent E8 simple roots have inner product −1 and squared length 2, hence angle 120°.',
       },
     ],
   },
@@ -488,6 +521,19 @@ export const QUIZ_MODULES = [
   },
 ];
 
+// Avoid teaching users that the first choice is probably correct. Preserve
+// every question's semantics while distributing correct answers across the
+// available positions in a deterministic way.
+QUIZ_MODULES.forEach((quiz, moduleIndex) => {
+  quiz.questions.forEach((question, questionIndex) => {
+    const target = (moduleIndex + questionIndex + 1) % question.choices.length;
+    const current = question.answer;
+    if (target === current) return;
+    [question.choices[current], question.choices[target]] = [question.choices[target], question.choices[current]];
+    question.answer = target;
+  });
+});
+
 export const LEARNING_CONTENT_PROVENANCE = {
   biographies: {
     plato: ['mactutor-plato'], theaetetus: ['mactutor-theaetetus'], euclid: ['mactutor-euclid'],
@@ -512,13 +558,14 @@ export const LEARNING_CONTENT_PROVENANCE = {
   quizzes: {
     'platonic-foundations': ['mathworld-platonic-solids'], 'sixhundred-basics': ['mathworld-600-cell'],
     'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'e8-roots': ['aim-e8-technical'],
+    'dynkin-diagrams': ['aim-e8-technical', 'mckay-michigan-notes'],
     'mckay-correspondence': ['mckay-michigan-notes'], 'bloom-morph': ['mit-e8-plane', 'mathworld-600-cell'],
     '4d-polytopes': ['mathworld-schlafli-symbol', 'mathworld-120-cell'], 'e8-sdf': ['hart-sphere-tracing'],
   },
   curiosity: {
     bloom: ['mit-e8-plane'], platonic: ['mathworld-platonic-solids'], e8coxeter: ['mit-e8-plane'],
     sixhundred: ['mathworld-600-cell', 'mckay-michigan-notes'], polytope: ['mathworld-schlafli-symbol'],
-    raymarched: ['hart-sphere-tracing'],
+    raymarched: ['hart-sphere-tracing'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
   },
 };
 
@@ -552,7 +599,9 @@ for (const [id, card] of Object.entries(CURIOUS_CARDS)) {
 }
 
 export function dailyFactForDate(date = new Date()) {
-  const stamp = date instanceof Date ? date.toISOString().slice(0, 10) : String(date).slice(0, 10);
+  const stamp = date instanceof Date
+    ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    : String(date).slice(0, 10);
   let sum = 0;
   for (let i = 0; i < stamp.length; i++) sum += stamp.charCodeAt(i);
   return DAILY_FACTS[sum % DAILY_FACTS.length];

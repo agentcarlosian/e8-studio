@@ -13,13 +13,13 @@
   <main class="mobile-shell">
     <canvas id="mobile-background-canvas" aria-hidden="true"></canvas>
     <canvas id="mobile-e8-chord-canvas" aria-hidden="true"></canvas>
-    <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots and 12 rings"></canvas>
+    <canvas id="mobile-canvas" aria-label="E8 Coxeter plane visualization with 240 roots on eight rings"></canvas>
     <canvas id="mobile-sdf-canvas" aria-hidden="true"></canvas>
 
-    <div class="topbar" aria-label="E8 Coxeter, 240 roots, 12 rings">
+    <div class="topbar" aria-label="E8 Coxeter, 240 roots, eight rings">
       <button id="scene-chip" class="scene-chip" type="button" aria-label="Scene: E8 Coxeter, tap to switch">
         <strong>E8</strong>
-        <small>240 / 12 rings</small>
+        <small>240 / 8 rings</small>
       </button>
       <button id="quality-chip" class="quality-chip" type="button">Smooth</button>
     </div>
@@ -447,7 +447,7 @@
 
         <section class="settings-section" data-section="info">
           <h2>Info</h2>
-          <p id="info-copy" class="info-copy">The 240 E8 root vectors are projected onto the Coxeter plane, forming 12 concentric shells. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.</p>
+          <p id="info-copy" class="info-copy">The 240 E8 root vectors are projected onto the Coxeter plane, forming eight concentric rings. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.</p>
           <div id="info-selection" class="selection-card">No root selected.</div>
           <div id="mckay-card" class="selection-card mckay-card" aria-label="McKay bridge">McKay bridge loading.</div>
           <div id="curiosity-card" class="selection-card curiosity-card" aria-label="Context note">

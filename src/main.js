@@ -15,7 +15,8 @@ if (typeof window !== 'undefined') {
   window.PALETTE_PRESETS = PALETTE_PRESETS;
   window.BLEND_MODES = BLEND_MODES;
 }
-import { saveConfig, loadConfig, clearConfig, exportConfig, importConfig, readUrlConfig, startAutoSave, applyConfig, showSavedToast } from './state/persistence.js';
+import { saveConfig, loadConfig, clearConfig, exportConfig, importConfig, readUrlConfig, startAutoSave, applyConfig, buildShareUrl, showSavedToast } from './state/persistence.js';
+import { modelCanvasLabel, viewSupportsExport } from './state/model-registry.js';
 import { LearningProgressService } from './state/learning-service.js';
 import { ControlPanel, initPanelEvents, updateMotionStatus, formatSliderValue, SLIDER_META, isPanelCollapsed, setPanelCollapsed } from './ui/panel.js';
 import { FXRuntime } from './fx/fx-runtime.js';
@@ -175,11 +176,11 @@ const COMMAND_ITEMS = [
   { id: 'loadBookmark2', label: 'Load camera 2', keywords: 'bookmark camera load' },
   { id: 'loadBookmark3', label: 'Load camera 3', keywords: 'bookmark camera load' },
   { id: 'diagnostics', label: 'Copy diagnostics', keywords: 'debug browser renderer params' },
-  { id: 'transparentPng', label: 'Transparent PNG', keywords: 'export image alpha' },
-  { id: 'hiResPng', label: 'High-res PNG', keywords: 'export image 2x' },
-  { id: 'svg', label: 'SVG diagram', keywords: 'export coxeter petrie vector' },
-  { id: 'obj', label: 'OBJ 3D model', keywords: 'export 3d blender unity mesh print obj wavefront' },
-  { id: 'geojson', label: 'Geometry JSON', keywords: 'export data json coordinates python processing' },
+  { id: 'transparentPng', label: 'Transparent PNG', keywords: 'export image alpha', exportFormat: 'png' },
+  { id: 'hiResPng', label: 'High-res PNG', keywords: 'export image 2x', exportFormat: 'png' },
+  { id: 'svg', label: 'SVG diagram', keywords: 'export coxeter dynkin petrie vector', exportFormat: 'svg' },
+  { id: 'obj', label: 'OBJ model', keywords: 'export 3d graph blender unity mesh obj wavefront', exportFormat: 'obj' },
+  { id: 'geojson', label: 'Geometry JSON', keywords: 'export data json coordinates python processing', exportFormat: 'data' },
   { id: 'clip', label: 'Record video clip', keywords: 'export video webm mp4 movie film' },
   { id: 'postcard', label: 'Postcard Studio', keywords: 'share social image story vertical create' },
   { id: 'dailyFact', label: 'Claim daily fact', keywords: 'learn daily streak reward' },
@@ -279,6 +280,13 @@ function beginAutoZoom(nowSeconds = performance.now() / 1000) {
 
 function updateCameraFromSpherical() {
   cameraController.updateCamera(camera, camTarget, params);
+}
+
+function syncCameraParamsFromController() {
+  if (!params) return;
+  params.cameraRotation = Math.atan2(Math.sin(cameraController.theta), Math.cos(cameraController.theta));
+  params.cameraPhi = cameraController.phi;
+  params.cameraDistance = clampCameraDistance(cameraController.distance);
 }
 
 // Resync the inertia targets + zero velocity. Call whenever the camera is moved
@@ -691,10 +699,8 @@ function initThree() {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x07070c);
-  // NOTE: scene.fog intentionally omitted — three.js r170's renderer calls
-  // fog.color.getRGB() which was removed from Color in r163, causing a runtime
-  // error every frame. Depth-fade FX is handled in the shader (uFXMode == 8)
-  // instead, which works without the scene.fog API.
+  // NOTE: scene.fog intentionally omitted. Depth-fade FX is handled in the
+  // shader (uFXMode == 8), which keeps the result consistent across view types.
 
   camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
   camera.position.set(0, 0, 6);
@@ -859,6 +865,16 @@ function initThree() {
 
   updateCameraFromSpherical();
 
+  const persistManualCameraTarget = () => {
+    params.cameraRotation = Math.atan2(
+      Math.sin(cameraController.thetaTarget),
+      Math.cos(cameraController.thetaTarget),
+    );
+    params.cameraPhi = cameraController.phiTarget;
+    params.cameraDistance = clampCameraDistance(cameraController.distanceTarget);
+    saveConfig(params);
+  };
+
   // Multi-touch support: track active pointers and compute pinch distance
   const activePointers = new Map(); // pointerId -> {x, y}
   // Track the down position so a quick tap (no drag) can be detected as a
@@ -924,6 +940,7 @@ function initThree() {
     if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
       canvas.releasePointerCapture(e.pointerId);
     }
+    persistManualCameraTarget();
     // Click detection: if the pointer barely moved and was held briefly,
     // treat as a click on the 3D scene (not a drag). Single-pointer only.
     const down = downAt.get(e.pointerId);
@@ -949,12 +966,14 @@ function initThree() {
     isDraggingLocal = false;
     if (e && e.pointerId != null) activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    persistManualCameraTarget();
   });
   canvas.addEventListener('pointercancel', (e) => {
     isDragging = false;
     isDraggingLocal = false;
     if (e && e.pointerId != null) activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    persistManualCameraTarget();
   });
   canvas.addEventListener('pointermove', (e) => {
     if (isDraggingLocal) return;  // don't update mouse pos during drag
@@ -968,6 +987,7 @@ function initThree() {
     e.preventDefault();
     cameraController.distanceTarget = clampCameraDistance(cameraController.distanceTarget * (1 + e.deltaY * 0.001));
     params.cameraDistance = cameraController.distanceTarget;
+    persistManualCameraTarget();
   }, { passive: false });
 
   // Resize handler
@@ -1022,6 +1042,8 @@ function switchView(id, options = {}) {
   // Update params
   params.view = id;
   normalizeParams(params);
+  const canvas = document.getElementById('canvas');
+  if (canvas) canvas.setAttribute('aria-label', modelCanvasLabel(id, params));
   if (fxRuntime) fxRuntime.setMode(params.fxMode);
 
   // Track exploration: award the "Grand Tour" badge once all 6 primary views
@@ -1086,8 +1108,7 @@ function updateOverlays(viewId) {
   const bl = document.getElementById('ov-bl');
   const br = document.getElementById('ov-br');
 
-  // Count only visible views so the "view N / M" badge matches the tab strip
-  // (Dynkin is hidden/URL-only and must not inflate the total).
+  // Count only visible views so the "view N / M" badge matches the model grid.
   const visibleViews = VIEWS.filter(v => !v.hidden);
   const idx = visibleViews.findIndex(v => v.id === viewId);
 
@@ -1246,7 +1267,7 @@ function defaultParams() {
     showEdges: false,
     showRings: true,
     showPetrie: false,       // toggle real Hamiltonian 30-cycle (Petrie polygon)
-    showAmbient: true,    // ambient simplex-noise drift on camera
+    showAmbient: !prefersReducedMotion, // ambient simplex-noise drift on camera
     // Bug fix 2026-06-25 (audit #16): removed fogDensity — declared but
     // never read since FX mode 8 ('fog') uses shader-based depth fade via
     // vWorldPos instead of three.js scene.fog. Dead param.
@@ -1267,6 +1288,7 @@ function defaultParams() {
     cameraSpeed: 1.0,     // multiplier on automatic camera motion
     cameraDistance: CAMERA_DEFAULT_DISTANCE,
     cameraRotation: Math.PI / 6,
+    cameraPhi: Math.PI / 3,
     autoZoom: false,
     autoModel: false,
     blendMode: 'spectrum', // internal palette-mixing pattern (sampler)
@@ -1482,6 +1504,7 @@ function normalizeParams(target) {
   target.cameraSpeed = clampNumber(target.cameraSpeed, 0.1, 5, 1.0);
   target.cameraDistance = clampNumber(target.cameraDistance, 0.45, 12, CAMERA_DEFAULT_DISTANCE);
   target.cameraRotation = clampNumber(target.cameraRotation, -Math.PI, Math.PI, Math.PI / 6);
+  target.cameraPhi = clampNumber(target.cameraPhi, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01, Math.PI / 3);
   target.polyRotationSpeed = clampNumber(target.polyRotationSpeed, 0.04, 0.6, 0.18);
   target.bloomAmount = clampNumber(target.bloomAmount, 0, 1, 0);
   target.bloomMandelboxScale = clampNumber(target.bloomMandelboxScale, 1.5, 3.5, 2.618);
@@ -1505,6 +1528,29 @@ function normalizeParams(target) {
     if (target[k] !== undefined && !Number.isFinite(Number(target[k]))) target[k] = 0;
   }
   return target;
+}
+
+function applyReducedMotionAtStartup(target) {
+  const reduce = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) return;
+  Object.assign(target, {
+    intro: false,
+    showAmbient: false,
+    autoRotate: false,
+    cameraOrbit: false,
+    autoZoom: false,
+    autoModel: false,
+    autoFx: false,
+    bloomAuto: false,
+    polyAutoRotate: false,
+    e8AutoRotate: false,
+    e8ProjectionAuto: false,
+    weylOrbit: false,
+    cameraPath: 'manual',
+    autoSliders: [],
+  });
 }
 
 function updateParam(k, v, options = {}) {
@@ -1620,7 +1666,10 @@ function commandMatches(item, query) {
 function renderCommandList(host, query = '') {
   const list = host.querySelector('[data-cmd-list]');
   if (!list) return;
-  const matches = COMMAND_ITEMS.filter(item => commandMatches(item, query)).slice(0, 18);
+  const matches = COMMAND_ITEMS
+    .filter(item => !item.exportFormat || viewSupportsExport(params?.view, item.exportFormat))
+    .filter(item => commandMatches(item, query))
+    .slice(0, 18);
   list.innerHTML = matches.map((item, i) =>
     `<button data-cmd="${item.id}" class="${i === 0 ? 'cmd-active' : ''}" role="option" aria-selected="${i === 0 ? 'true' : 'false'}">${item.label}</button>`
   ).join('') || '<div class="cmd-empty">No matching command</div>';
@@ -1802,6 +1851,25 @@ function objForShape(name) {
   return s;
 }
 
+function objForDynkin(name) {
+  const diagram = DATA.dynkin?.[name];
+  if (!diagram?.nodes) return null;
+  const num = value => Number(value).toFixed(6);
+  let text = `# E8 Studio — ${name} Dynkin diagram\n`;
+  text += '# Diagram nodes lie in the z=0 plane; OBJ lines encode bonds.\n';
+  text += `o dynkin_${name}\n`;
+  for (const node of diagram.nodes) text += `v ${num(node[0])} ${num(-node[1])} 0.000000\n`;
+  for (const edge of diagram.edges || []) text += `l ${edge[0] + 1} ${edge[1] + 1}\n`;
+  return text;
+}
+
+function objForCurrentView() {
+  if (!viewSupportsExport(params.view, 'obj')) return null;
+  if (params.view === 'platonic') return objForShape(params.shape);
+  if (params.view === 'dynkin') return objForDynkin(params.dynkin);
+  return null;
+}
+
 // A clean, documented geometry record for the CURRENT view — portable to any
 // language (Python, Processing, three.js, …). Keeps the canonical coordinates
 // (8-D for E8, 4-D for polytopes, 3-D for solids) rather than the screen
@@ -1816,6 +1884,18 @@ function geometryForView() {
   if (v === 'sixhundred') {
     const p = DATA.polytopes4d?.['600cell'];
     return p && { ...meta, kind: '4d-polytope', name: '600cell', dimension: 4, verts: p.verts, edges: p.edges, conjugacy_classes: p.conjugacy_classes };
+  }
+  if (v === 'dynkin') {
+    const diagram = DATA.dynkin?.[params.dynkin];
+    return diagram && {
+      ...meta,
+      kind: 'dynkin-diagram',
+      name: params.dynkin,
+      label: diagram.name || params.dynkin,
+      rank: diagram.nodes?.length || 0,
+      nodes: diagram.nodes || [],
+      edges: diagram.edges || [],
+    };
   }
   if (v === 'e8coxeter' || v === 'raymarched' || v === 'bloom') {
     const e8 = DATA.e8;
@@ -1880,6 +1960,49 @@ function svgForCurrentE8() {
 ${petrie}
 <g>${points}</g>
 </svg>`;
+}
+
+function svgForCurrentDynkin() {
+  const diagram = DATA.dynkin?.[params.dynkin];
+  if (!diagram?.nodes?.length) return null;
+  const width = 1200;
+  const height = 700;
+  const padding = 120;
+  const xs = diagram.nodes.map(node => Number(node[0]));
+  const ys = diagram.nodes.map(node => Number(node[1]));
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
+  const point = node => ({
+    x: width / 2 + (node[0] - (minX + maxX) / 2) * scale,
+    y: height / 2 - (node[1] - (minY + maxY) / 2) * scale,
+  });
+  const edgeMarkup = (diagram.edges || []).map(edge => {
+    const a = point(diagram.nodes[edge[0]]);
+    const b = point(diagram.nodes[edge[1]]);
+    return `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="#e7c76b" stroke-width="10" stroke-linecap="round"/>`;
+  }).join('\n');
+  const nodeMarkup = diagram.nodes.map((node, index) => {
+    const p = point(node);
+    const fill = colorAt(params.palette || 'gold', index / Math.max(1, diagram.nodes.length - 1));
+    return `<g><circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="31" fill="${svgEsc(fill)}" stroke="#fff4c2" stroke-width="5"><title>Simple root ${index + 1}</title></circle><text x="${p.x.toFixed(2)}" y="${(p.y + 7).toFixed(2)}" fill="#07070c" font-family="monospace" font-size="22" text-anchor="middle">${index + 1}</text></g>`;
+  }).join('\n');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+<title>${svgEsc(params.dynkin)} Dynkin diagram</title>
+<rect width="100%" height="100%" fill="#07070c"/>
+<text x="60" y="70" fill="#ffe082" font-family="monospace" font-size="30">${svgEsc(diagram.name || params.dynkin)} Dynkin diagram</text>
+<g>${edgeMarkup}</g>
+<g>${nodeMarkup}</g>
+</svg>`;
+}
+
+function svgForCurrentView() {
+  if (!viewSupportsExport(params.view, 'svg')) return null;
+  if (params.view === 'e8coxeter') return svgForCurrentE8();
+  if (params.view === 'dynkin') return svgForCurrentDynkin();
+  return null;
 }
 
 function ensurePerfOverlay() {
@@ -1980,7 +2103,7 @@ function applyGallerySettings(preset) {
   // Start every curated scene from a deterministic camera pose. A named path
   // can then take over without inheriting the previous preset's last frame.
   cameraController.theta = params.cameraRotation;
-  cameraController.phi = Math.PI / 3;
+  cameraController.phi = params.cameraPhi;
   cameraController.distance = params.cameraDistance;
   cameraController.autoZoomFactor = 1;
   syncCameraTargets();
@@ -2090,30 +2213,107 @@ function showLearningModal(html) {
   return host;
 }
 
+function closeExperimentCoach() {
+  document.getElementById('learning-experiment-coach')?.remove();
+}
+
+function showExperimentCoach(lessonId, stepId) {
+  const lesson = learningLessonById(lessonId);
+  const steps = lesson?.experiment?.steps || [];
+  const stepIndex = steps.findIndex(entry => entry.id === stepId);
+  if (!lesson || stepIndex < 0) return false;
+  const entry = steps[stepIndex];
+  const state = learningProgress.experimentState(lesson.id);
+  const observed = state.completedSteps.has(entry.id);
+  const next = steps[stepIndex + 1] || null;
+  let coach = document.getElementById('learning-experiment-coach');
+  if (!coach) {
+    coach = document.createElement('aside');
+    coach.id = 'learning-experiment-coach';
+    coach.className = 'learning-experiment-coach';
+    coach.setAttribute('aria-label', 'Guided experiment');
+    document.body.appendChild(coach);
+  }
+  coach.innerHTML = `
+    <div class="experiment-coach-head">
+      <div><span>Guided experiment · ${stepIndex + 1}/${steps.length}</span><strong>${svgEsc(lesson.experiment.title)}</strong></div>
+      <button data-experiment-coach-close aria-label="Close guided experiment">×</button>
+    </div>
+    <div class="experiment-coach-body">
+      <strong>${svgEsc(entry.title)}</strong>
+      <p>${svgEsc(entry.instruction)}</p>
+      <div class="experiment-question"><span>Notice</span>${svgEsc(entry.question)}</div>
+      ${observed ? `<div class="experiment-takeaway"><span>Takeaway</span>${svgEsc(entry.takeaway)}</div>` : ''}
+    </div>
+    <div class="experiment-coach-actions">
+      <button data-experiment-coach-apply>Apply setup</button>
+      <button class="${observed ? 'complete' : ''}" data-experiment-coach-observed>${observed ? '✓ Observed' : 'Mark observed'}</button>
+      ${next ? `<button data-experiment-coach-next>Next step →</button>` : `<button data-experiment-coach-review>Review lesson</button>`}
+    </div>`;
+  coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', closeExperimentCoach);
+  coach.querySelector('[data-experiment-coach-apply]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, entry.id));
+  coach.querySelector('[data-experiment-coach-observed]')?.addEventListener('click', () => {
+    learningProgress.setExperimentStepComplete(lesson.id, entry.id, !observed);
+    showExperimentCoach(lesson.id, entry.id);
+    refreshPanel();
+  });
+  coach.querySelector('[data-experiment-coach-next]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, next.id));
+  coach.querySelector('[data-experiment-coach-review]')?.addEventListener('click', () => {
+    closeExperimentCoach();
+    openLearningCenter(lesson.id);
+  });
+  return true;
+}
+
+function applyLearningExperimentStep(lessonId, stepId) {
+  const lesson = learningLessonById(lessonId);
+  const entry = lesson?.experiment?.steps?.find(step => step.id === stepId);
+  if (!lesson || !entry?.action) return false;
+  closeLearningModal();
+  const targetView = entry.action.view || lesson.view;
+  if (params.view !== targetView) switchView(targetView, { resetSelection: false });
+  Object.assign(params, entry.action.params || {}, { autoModel: false, intro: false });
+  normalizeParams(params);
+  // Rebuild after applying the setup so shape/diagram changes are immediate.
+  switchView(targetView, { resetSelection: false });
+  saveConfig(params);
+  refreshPanel();
+  updateOverlays(params.view);
+  setStatus(`Experiment: ${entry.title}`);
+  showExperimentCoach(lesson.id, entry.id);
+  return true;
+}
+
 function openLearningCenter(lessonId = null) {
-  const lesson = learningLessonById(lessonId) || LEARNING_LESSONS[0];
+  const lesson = learningLessonById(lessonId)
+    || learningProgress.recommendedLesson(params?.view || 'e8coxeter')
+    || LEARNING_LESSONS[0];
   if (!lesson) return;
   const path = LEARNING_PATHS.find(item => item.id === lesson.pathId);
   const quizState = learningProgress.progress.quiz?.[lesson.quizId] || null;
   const lessonComplete = learningProgress.lessonComplete(lesson.id);
+  const experimentState = learningProgress.experimentState(lesson.id);
+  const completedLessonIds = new Set(Object.keys(learningProgress.progress.lessons || {}));
   const claimLabels = {
     'established-mathematics': 'Established mathematics',
     interpretation: 'Interpretation',
     'app-designed-visualization': 'App-designed visualization',
     'rendering-technique': 'Rendering technique',
   };
-  const pathNavigation = LEARNING_PATHS.map(item => `
+  const pathNavigation = LEARNING_PATHS.map(item => {
+    const pathComplete = item.lessons.filter(entry => learningProgress.lessonComplete(entry.id)).length;
+    return `
     <section class="learning-path ${item.id === lesson.pathId ? 'active' : ''}">
-      <div class="learning-path-title">${svgEsc(item.title)}</div>
+      <div class="learning-path-title"><span>${svgEsc(item.title)}</span><small>${pathComplete}/${item.lessons.length}</small></div>
       ${item.lessons.map(entry => `
         <button class="learning-lesson-link ${entry.id === lesson.id ? 'active' : ''}"
           data-learning-lesson="${svgEsc(entry.id)}" aria-current="${entry.id === lesson.id ? 'step' : 'false'}">
           <span>${svgEsc(entry.title)}</span>
-          <small>${learningProgress.lessonComplete(entry.id) ? 'complete' : 'open'}</small>
+          <small>${learningProgress.lessonComplete(entry.id) ? 'complete' : entry.prerequisites.every(id => completedLessonIds.has(id)) ? 'ready' : 'suggested order'}</small>
         </button>
       `).join('')}
     </section>
-  `).join('');
+  `; }).join('');
   const essayCards = lesson.essayIds.map(id => {
     const essay = ESSAYS[id];
     return `<button class="learning-resource-card" data-learning-essay="${svgEsc(id)}">
@@ -2130,6 +2330,30 @@ function openLearningCenter(lessonId = null) {
   }).join('');
   const previous = adjacentLearningLesson(lesson.id, -1);
   const next = adjacentLearningLesson(lesson.id, 1);
+  const prerequisiteCards = lesson.prerequisites.length
+    ? lesson.prerequisites.map(id => {
+      const prerequisite = learningLessonById(id);
+      const complete = learningProgress.lessonComplete(id);
+      return `<button class="learning-prerequisite ${complete ? 'complete' : ''}" data-learning-lesson="${svgEsc(id)}"><span>${complete ? '✓' : '○'} ${svgEsc(prerequisite?.title || id)}</span><small>${complete ? 'complete' : 'recommended first'}</small></button>`;
+    }).join('')
+    : '<div class="learning-prerequisite complete"><span>Start here</span><small>no prerequisites</small></div>';
+  const experimentSteps = (lesson.experiment?.steps || []).map((entry, index) => {
+    const observed = experimentState.completedSteps.has(entry.id);
+    return `<article class="learning-experiment-step ${observed ? 'complete' : ''}">
+      <div class="learning-experiment-step-head"><span>${index + 1}</span><strong>${svgEsc(entry.title)}</strong><small>${observed ? 'observed' : 'ready'}</small></div>
+      <p>${svgEsc(entry.instruction)}</p>
+      <div class="learning-experiment-question"><span>Notice</span>${svgEsc(entry.question)}</div>
+      ${observed ? `<div class="learning-experiment-takeaway"><span>Takeaway</span>${svgEsc(entry.takeaway)}</div>` : ''}
+      <div class="learning-experiment-step-actions">
+        <button data-learning-run-step="${svgEsc(entry.id)}">Run in Studio</button>
+        <button data-learning-observe-step="${svgEsc(entry.id)}" aria-pressed="${observed}">${observed ? '✓ Observed' : 'Mark observed'}</button>
+      </div>
+    </article>`;
+  }).join('');
+  const connectionCards = (lesson.connections || []).map(connection => {
+    const target = learningLessonById(connection.lessonId);
+    return `<button class="learning-connection-card" data-learning-lesson="${svgEsc(connection.lessonId)}"><span>${svgEsc(connection.label)}</span><small>${svgEsc(target?.title || connection.lessonId)} →</small></button>`;
+  }).join('');
   const host = showLearningModal(`
     <button class="modal-close" data-modal-close aria-label="Close">x</button>
     <div class="learning-center-shell">
@@ -2148,20 +2372,41 @@ function openLearningCenter(lessonId = null) {
         </div>
         <div class="learning-lesson-status">
           <span>Visualization: ${svgEsc(lesson.view)}</span>
+          <span>About ${lesson.estimatedMinutes || 5} minutes</span>
           <span>${quizState?.passedAt ? `Quiz complete · best ${quizState.bestScore}/${quizState.total}` : 'Quiz available'}</span>
+        </div>
+        <h3>Recommended foundation</h3>
+        <div class="learning-prerequisite-grid">${prerequisiteCards}</div>
+        <h3>What you will learn</h3>
+        <ul class="learning-objectives">${(lesson.objectives || []).map(objective => `<li>${svgEsc(objective)}</li>`).join('')}</ul>
+        <div class="learning-activity">
+          <strong>Try it in the Studio</strong>
+          <span>${svgEsc(lesson.activity || 'Open the visualization and compare what changes with what stays mathematically fixed.')}</span>
         </div>
         <div class="modal-actions learning-primary-actions">
           <button data-learning-open-view="${svgEsc(lesson.view)}">Open visualization</button>
           <button data-learning-quiz="${svgEsc(lesson.quizId)}">${quizState?.passedAt ? 'Review quiz' : 'Take quiz'}</button>
           <button data-learning-complete="${svgEsc(lesson.id)}" aria-pressed="${lessonComplete}">${lessonComplete ? 'Mark incomplete' : 'Mark lesson complete'}</button>
         </div>
+        <section class="learning-experiment" aria-labelledby="learning-experiment-title">
+          <div class="learning-experiment-header">
+            <div><span>Guided Studio experiment</span><h3 id="learning-experiment-title">${svgEsc(lesson.experiment?.title || 'Try it yourself')}</h3></div>
+            <strong>${experimentState.completedCount}/${experimentState.total}</strong>
+          </div>
+          <p>${svgEsc(lesson.experiment?.intro || lesson.activity)}</p>
+          <div class="learning-experiment-progress" role="progressbar" aria-label="Experiment progress" aria-valuemin="0" aria-valuemax="${experimentState.total}" aria-valuenow="${experimentState.completedCount}"><span style="width:${experimentState.total ? (experimentState.completedCount / experimentState.total) * 100 : 0}%"></span></div>
+          <div class="learning-experiment-steps">${experimentSteps}</div>
+          <div class="learning-experiment-reflection"><span>Reflect</span>${svgEsc(lesson.experiment?.reflection || '')}</div>
+        </section>
         <h3>Readings</h3>
         <div class="learning-resource-grid">${essayCards}</div>
         <h3>Sources and scope</h3>
         <div class="learning-source-list">${sourceCards}</div>
+        <h3>Connect the ideas</h3>
+        <div class="learning-connection-grid">${connectionCards}</div>
         <div class="learning-lesson-nav">
-          <button data-learning-lesson="${svgEsc(previous.id)}">← ${svgEsc(previous.title)}</button>
-          <button data-learning-lesson="${svgEsc(next.id)}">${svgEsc(next.title)} →</button>
+          ${previous ? `<button data-learning-lesson="${svgEsc(previous.id)}">← ${svgEsc(previous.title)}</button>` : '<span>Start of curriculum</span>'}
+          ${next ? `<button data-learning-lesson="${svgEsc(next.id)}">${svgEsc(next.title)} →</button>` : '<span>Curriculum complete</span>'}
         </div>
       </article>
     </div>
@@ -2178,6 +2423,17 @@ function openLearningCenter(lessonId = null) {
     learningProgress.setLessonComplete(event.currentTarget.dataset.learningComplete, !lessonComplete);
     openLearningCenter(lesson.id);
     refreshPanel();
+  });
+  host.querySelectorAll('[data-learning-run-step]').forEach(button => {
+    button.addEventListener('click', () => applyLearningExperimentStep(lesson.id, button.dataset.learningRunStep));
+  });
+  host.querySelectorAll('[data-learning-observe-step]').forEach(button => {
+    button.addEventListener('click', () => {
+      const stepId = button.dataset.learningObserveStep;
+      learningProgress.setExperimentStepComplete(lesson.id, stepId, !experimentState.completedSteps.has(stepId));
+      openLearningCenter(lesson.id);
+      refreshPanel();
+    });
   });
   host.querySelector('[data-learning-quiz]')?.addEventListener('click', event => startQuizModule(event.currentTarget.dataset.learningQuiz));
   host.querySelectorAll('[data-learning-essay]').forEach(button => {
@@ -2388,7 +2644,7 @@ function openBiographiesModal(focusId = null) {
 // SHORTCUTS array mirrors the keydown handler. Plain modal, no search.
 const SHORTCUTS = [
   { group: 'Views',   items: [
-    { k: '1–6', d: 'Switch view' },
+    { k: '1–7', d: 'Switch view' },
   ]},
   { group: 'Explore', items: [
     { k: 'T',   d: 'Start / stop guided tour' },
@@ -2507,7 +2763,7 @@ function openProofsModal() {
         <div class="decomp-eq">=</div>
         <div class="decomp-term decomp-answer"><span class="decomp-num">248</span><span class="decomp-lbl">dim E₈</span></div>
       </div>
-      <p class="proof-copy">There is also the spinor split: 𝔢₈ = 𝔰𝔬(16) ⊕ S⁺ = 120 + 128 = 248 — which is exactly why E₈ appears in the heterotic string.</p>
+      <p class="proof-copy">There is also the representation-theoretic split 𝔢₈ = 𝔰𝔬(16) ⊕ S⁺ = 120 + 128 = 248. Separately, anomaly cancellation permits E₈ × E₈ as one of the two ten-dimensional heterotic gauge choices; the number 248 alone does not establish that result.</p>
     </div>
   `);
 
@@ -3531,22 +3787,29 @@ window.__app = {
     return exportRecording.exportTransparentPNG({ renderer, camera, scene });
   },
   exportSVG() {
-    const svg = svgForCurrentE8();
+    const svg = svgForCurrentView();
     if (!svg) {
-      showSavedToast('SVG unavailable');
-      return;
+      showSavedToast('SVG is not available for this view');
+      return null;
     }
-    downloadText(svg, 'e8_coxeter.svg', 'image/svg+xml');
+    const name = params.view === 'dynkin' ? `dynkin_${params.dynkin}.svg` : 'e8_coxeter.svg';
+    downloadText(svg, name, 'image/svg+xml');
     showSavedToast('Saved SVG');
+    return svg;
   },
   /** Return the E8 Coxeter diagram as an SVG string (for tests / scripting). */
   getE8Svg() { return svgForCurrentE8(); },
   /** Export the current Platonic/star solid as a Wavefront OBJ 3-D model. */
   exportOBJ() {
-    const obj = objForShape(params.shape);
-    if (!obj) { showSavedToast('OBJ unavailable for this shape'); return; }
-    downloadText(obj, `${params.shape}.obj`, 'text/plain');
-    showSavedToast(`Saved ${params.shape}.obj`);
+    const obj = objForCurrentView();
+    if (!obj) {
+      showSavedToast('OBJ is not available for this view');
+      return null;
+    }
+    const subject = params.view === 'dynkin' ? `dynkin_${params.dynkin}` : params.shape;
+    downloadText(obj, `${subject}.obj`, 'text/plain');
+    showSavedToast(`Saved ${subject}.obj`);
+    return obj;
   },
   /** Export the current view's geometry as portable JSON (any language). */
   exportGeometryJSON() {
@@ -3557,6 +3820,8 @@ window.__app = {
   },
   /** Programmatic access for tests/scripting. */
   getOBJ(name) { return objForShape(name || params.shape); },
+  getCurrentOBJ() { return objForCurrentView(); },
+  getCurrentSVG() { return svgForCurrentView(); },
   getGeometryJSON() { return geometryForView(); },
   togglePresentationMode() {
     params.presentationMode = !params.presentationMode;
@@ -3613,7 +3878,7 @@ window.__app = {
       bgRuntime.setIntensity(params.bgIntensity ?? 0.7);
     }
     cameraController.theta = params.cameraRotation;
-    cameraController.phi = Math.PI / 3;
+    cameraController.phi = params.cameraPhi;
     cameraController.distance = params.cameraDistance;
     cameraController.autoZoomFactor = 1;
     syncCameraTargets();
@@ -3800,14 +4065,23 @@ window.__app = {
       showSavedToast('Hosted share link available after GitHub Pages deployment');
       return null;
     }
-    const url = new URL(location.pathname, location.origin).toString();
+    // Scene links capture the camera pose visible at the moment Share is
+    // pressed, then serialize only public scene state (not bookmarks, layout,
+    // device quality, or learning progress).
+    syncCameraParamsFromController();
+    const baseUrl = new URL(location.pathname, location.origin).toString();
+    const url = buildShareUrl(params, baseUrl);
+    if (url.length > 12000) {
+      showSavedToast('Scene is too large to share as a link');
+      return null;
+    }
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url).then(
-        () => showSavedToast('E8 Studio link copied'),
-        () => window.prompt('Copy the E8 Studio link:', url)
+        () => showSavedToast('Restorable scene link copied'),
+        () => window.prompt('Copy the restorable scene link:', url)
       );
     } else {
-      window.prompt('Copy the E8 Studio link:', url);
+      window.prompt('Copy the restorable scene link:', url);
     }
     return url;
   },
@@ -4449,24 +4723,35 @@ async function main() {
   installFirstRenderWatchdog();
   // Try restoring from URL hash first, then localStorage
   const urlConfig = readUrlConfig();
+  let restoredConfig = null;
   if (urlConfig) {
     applyConfig(params, urlConfig);
+    restoredConfig = urlConfig;
     setStatus('loaded shared config from URL');
   } else {
     const saved = loadConfig();
     if (saved) {
       applyConfig(params, saved);
+      restoredConfig = saved;
       setStatus('restored saved configuration');
     }
   }
   await loadData();
   normalizeParams(params);
+  applyReducedMotionAtStartup(params);
+  cameraController.restore({
+    theta: params.cameraRotation,
+    phi: params.cameraPhi,
+    dist: params.cameraDistance,
+  }, null, null, params);
   document.body.classList.toggle('presentation-mode', !!params.presentationMode);
   document.body.classList.toggle('teaching-mode', !!params.teachingMode);
 
   const touchShellEnabled = syncDesktopTouchShell();
-  if (touchShellEnabled) {
+  if (touchShellEnabled && !restoredConfig) {
     cameraController.distance = Math.max(cameraController.distance, CAMERA_TOUCH_DEFAULT_DISTANCE);
+    syncCameraTargets();
+    syncCameraParamsFromController();
     await new Promise(resolve => requestAnimationFrame(resolve));
   }
 

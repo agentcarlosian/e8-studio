@@ -6,7 +6,7 @@
 
 <p align="center">
   An interactive WebGL studio for exploring the E8 root system,<br>
-  Platonic solids, the 600-cell, and regular four-dimensional polytopes.
+  Dynkin diagrams, Platonic solids, the 600-cell, and regular four-dimensional polytopes.
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
   <strong><a href="https://agentcarlosian.github.io/e8-studio/">Launch E8 Studio</a></strong>
   · <a href="#explore-e8-studio">Explore features</a>
   · <a href="#mathematical-visualization">Mathematical visualization</a>
+  · <a href="CHANGELOG.md">Release notes</a>
   · <a href="https://github.com/agentcarlosian/e8-studio/issues">Issues</a>
 </p>
 
@@ -29,7 +30,7 @@
 
 Click **Launch E8 Studio** and start exploring immediately. The hosted Studio runs entirely in the browser: no installation, account, sign-in, or upload is required. Your settings and learning progress stay in your browser.
 
-### Six interactive views
+### Seven interactive views
 
 | View | What it offers |
 | --- | --- |
@@ -39,6 +40,7 @@ Click **Launch E8 Studio** and start exploring immediately. The hosted Studio ru
 | **600-cell** | Rotate and inspect the 120 vertices of the regular 600-cell, highlight quaternion/conjugacy classes, compare structural subsets, and see its relationship to icosahedral symmetry. |
 | **4D Polytope** | Move through all six convex regular 4-polytopes—from the 5-cell to the 120-cell. Rotate across six independent 4D planes and control the fourth-dimensional perspective depth. |
 | **E8 SDF** | See the roots as a raymarched, illuminated structure with smooth-union geometry, edge connections, ambient occlusion, reflections, and the animated “Living E8” extrusion effect. |
+| **Dynkin** | Compare the E₆, E₇, and E₈ Dynkin diagrams and inspect how their simple roots connect. This focused mathematical reference remains manually selected instead of joining the Auto Model visual showcase. |
 
 ### Shape the visual experience
 
@@ -76,18 +78,19 @@ The educational system is integrated with the visual controls instead of being a
 - Contextual essays explain the object or view currently on screen.
 - Selection notes cover every Platonic solid, regular star polyhedron, and convex regular 4-polytope.
 - Guided learning paths connect geometry, symmetry, E8 roots, the McKay correspondence, and signed-distance rendering.
+- Every lesson includes a three-stage Studio experiment with model-aware setups, observation prompts, revealed takeaways, prerequisite context, and links to related ideas.
 - Quizzes provide explanations rather than only marking an answer right or wrong.
 - A searchable glossary defines the mathematical language used throughout the Studio.
 - Root picking reveals 8D coordinates, opposite roots, and Cartan-neighbor structure.
 - A guided tour moves through views and readings automatically.
-- Daily facts, biographies, a historical timeline, badges, and locally saved lesson progress reward deeper exploration.
+- Daily facts, biographies, a historical timeline, badges, and locally saved lesson and experiment progress reward deeper exploration.
 - Source links and claim labels distinguish established mathematics, historical context, interpretation, and app-designed visualization.
 
 ### Getting around
 
 - **Mouse:** drag to orbit, scroll to zoom, and click supported roots or structures for details.
 - **Touch:** drag to orbit and pinch to zoom; the responsive control drawer keeps the render visible on smaller screens.
-- **Keyboard:** use `1–6` for views, `Space` to pause, `S` for PNG, `T` for the tour, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
+- **Keyboard:** use `1–7` for views, `Space` to pause, `S` for PNG, `T` for the tour, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
 - **Workspaces:** use **View** for geometry and camera controls, **Visuals** for appearance, and **Learn** for orientation, guided paths, references, progress, and interactive mathematics.
 - **Reset and recovery:** camera and view resets stop conflicting animation drivers and return to a known pose.
 
