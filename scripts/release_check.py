@@ -38,7 +38,7 @@ def check_package_scripts() -> None:
 
 def check_docs_contract() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8", errors="ignore").lower()
-    for needle in ["python scripts/verify.py", "six interactive views"]:
+    for needle in ["python scripts/verify.py", "seven interactive views"]:
         if needle not in readme:
             fail(f"README.md is missing {needle!r}")
 
