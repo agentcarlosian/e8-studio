@@ -34,6 +34,13 @@ export const FACT_SOURCES = {
     scope: 'definition of a Coxeter plane and order-h rotational action',
     tier: 'university',
   },
+  'magma-rank2-root-systems': {
+    title: 'Constructing Root Systems',
+    author: 'Computational Algebra Group, University of Sydney',
+    url: 'https://magma.maths.usyd.edu.au/magma/handbook/text/1186',
+    scope: 'finite rank-2 I2(m) root systems, crystallographic cases, Cartan data, and reflection-group construction',
+    tier: 'university',
+  },
   'mckay-michigan-notes': {
     title: 'McKay correspondence lecture notes',
     author: 'University of Michigan',

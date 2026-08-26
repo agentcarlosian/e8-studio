@@ -9,7 +9,7 @@ const STORAGE_KEY = 'e8_studio_config_v1';
 
 // Params we DO want to save (user preferences)
 const PERSISTABLE = new Set([
-  'view', 'shape', 'dynkin', 'poly4d', 'palette', 'colorBy', 'autoSliders',
+  'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'palette', 'colorBy', 'autoSliders',
   'opacity', 'pointScale', 'showVertices', 'rotationSpeed',
   'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'showEdges', 'showRings', 'showPetrie',
   'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
@@ -27,6 +27,7 @@ const PERSISTABLE = new Set([
   'e8ViewMode', 'e8Spin', 'e8Tilt', 'e8Roll', 'e8AutoRotate',
   'e8MorphT', 'e8ProjectionAuto', 'rootHaloDepth',
   'rootDiffusionSpeed', 'showWeylMirrors', 'weylOrbit', 'weylOrbitFast',
+  'rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit', 'rootOrbitSpeed',
   'showInspector', 'compareMode',
   'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
   'seed',
@@ -51,7 +52,7 @@ const SKIP = new Set(['intro', 'paused']);
 // layout, bookmarks, and other personal preferences. It contains only the
 // state required to reconstruct what the sender is looking at.
 const SHAREABLE = new Set([
-  'view', 'shape', 'dynkin', 'poly4d', 'palette', 'colorBy', 'opacity',
+  'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'palette', 'colorBy', 'opacity',
   'pointScale', 'showVertices', 'showEdges', 'showRings', 'showPetrie',
   'rotationSpeed', 'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel',
   'showAmbient', 'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',
@@ -65,6 +66,7 @@ const SHAREABLE = new Set([
   'e8ViewMode', 'e8Spin', 'e8Tilt', 'e8Roll', 'e8AutoRotate', 'e8MorphT',
   'e8Twin600', 'e8ProjectionAuto', 'rootSubset', 'rootHaloDepth',
   'rootDiffusionSpeed', 'showWeylMirrors', 'weylOrbit', 'weylOrbitFast',
+  'rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit', 'rootOrbitSpeed',
   'cartanHighlight', 'h4TwinReveal',
   'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
   'lightAmbient', 'lightKey', 'lightFill', 'lightAccent', 'compareMode',

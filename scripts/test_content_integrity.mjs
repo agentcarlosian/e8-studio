@@ -57,11 +57,12 @@ const indexHtml = readProjectFile('index.html');
 const mainJs = readProjectFile('src/main.js');
 const changelog = readProjectFile('CHANGELOG.md');
 
-assert.match(readme, /### Seven interactive views/, 'README view count');
+assert.match(readme, /### Eight interactive views/, 'README view count');
+assert.match(readme, /\| \*\*Root Lab\*\* \|/, 'README Root Lab coverage');
 assert.match(readme, /\| \*\*Dynkin\*\* \|/, 'README Dynkin view coverage');
-assert.match(readme, /use `1–7` for views/, 'README view shortcut range');
-assert.match(indexHtml, /seven interactive views/, 'social metadata view count');
-assert.match(mainJs, /\{ k: '1–7', d: 'Switch view' \}/, 'in-app view shortcut range');
+assert.match(readme, /use `1–8` for views/, 'README view shortcut range');
+assert.match(indexHtml, /eight interactive views/, 'social metadata view count');
+assert.match(mainJs, /\{ k: '1–8', d: 'Switch view' \}/, 'in-app view shortcut range');
 assert.match(changelog, /## 0\.2\.0 — Studio overhaul/, 'current release notes');
 
 console.log(`Content integrity passed: ${collections.reduce((sum, [, records]) => sum + records.length, 0)} records, ${Object.keys(FACT_SOURCES).length} sources.`);

@@ -14,7 +14,7 @@ assert.ok(LEARNING_PATHS.every(path => path.title && path.description && path.le
 const quizIds = new Set(QUIZ_MODULES.map(quiz => quiz.id));
 const claimTypes = new Set(['established-mathematics', 'interpretation', 'app-designed-visualization', 'rendering-technique']);
 for (const lesson of LEARNING_LESSONS) {
-  assert.ok(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin'].includes(lesson.view), `${lesson.id} view`);
+  assert.ok(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin'].includes(lesson.view), `${lesson.id} view`);
   assert.ok(Number.isInteger(lesson.estimatedMinutes) && lesson.estimatedMinutes > 0, `${lesson.id} estimated time`);
   assert.ok(Array.isArray(lesson.objectives) && lesson.objectives.length >= 2, `${lesson.id} objectives`);
   assert.ok(Array.isArray(lesson.prerequisites), `${lesson.id} prerequisites`);
@@ -42,6 +42,7 @@ assert.equal(learningLessonById(lessonIds[0])?.id, lessonIds[0]);
 assert.equal(adjacentLearningLesson(lessonIds.at(-1), 1), null);
 assert.equal(adjacentLearningLesson(lessonIds[0], -1), null);
 assert.equal(learningLessonForView('dynkin')?.id, 'reading-dynkin');
+assert.equal(learningLessonForView('rootlab')?.id, 'rank-two-reflections');
 assert.equal(learningLessonForView('e8coxeter', new Set(['coxeter-plane']))?.id, 'roots-reflections');
 
 const answerPositions = new Set(QUIZ_MODULES.flatMap(quiz => quiz.questions.map(question => question.answer)));

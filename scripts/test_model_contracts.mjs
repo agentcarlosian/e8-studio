@@ -8,7 +8,7 @@ import {
 import { buildShareUrl, importConfig } from '../src/state/persistence.js';
 
 assert.deepEqual(MODEL_VIEW_ORDER, [
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin',
 ]);
 
 const expectedExports = {
@@ -18,13 +18,16 @@ const expectedExports = {
   sixhundred: ['png', 'data'],
   polytope: ['png', 'data'],
   raymarched: ['png', 'data'],
+  rootlab: ['png', 'data'],
   dynkin: ['png', 'svg', 'obj', 'data'],
 };
 
 for (const view of MODEL_VIEW_ORDER) {
   assert.deepEqual(exportFormatsForView(view), expectedExports[view], `${view} export contract`);
   assert.equal(viewSupportsExport(view, 'png'), true, `${view} supports PNG`);
-  assert.match(modelCanvasLabel(view, { shape: 'icosahedron', poly4d: '24cell', dynkin: 'E8' }), /^Interactive /);
+  assert.match(modelCanvasLabel(view, {
+    shape: 'icosahedron', poly4d: '24cell', rootSystem: 'G2', dynkin: 'E8',
+  }), /^Interactive /);
 }
 
 const scene = {

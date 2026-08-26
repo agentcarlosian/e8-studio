@@ -34,7 +34,7 @@ FX_MODES = ['none', 'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripp
             'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi', 'caustic',
             'iridescent', 'flowfield', 'plasma', 'kaleido6', 'dof', 'nebula',
             'wireframe', 'hologram', 'xray', 'crystal']
-VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']
+VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']
 SDF_FX_MODES = FX_MODES
 
 results: list[tuple[str, bool, str]] = []
@@ -126,7 +126,7 @@ def main() -> int:
             # and background at the ceiling of each tier so this also verifies
             # that the global selector drives the shared capability policy.
             quality_matrix = pg.evaluate("""() => {
-              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin'];
+              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin'];
               const tiers = {
                 low: {fx: 'glow', bg: 'starfield'},
                 medium: {fx: 'trail', bg: 'aurora'},
@@ -160,7 +160,7 @@ def main() -> int:
                            or row["bg"] != {"low": "starfield", "medium": "aurora", "high": "cosmos"}[row["quality"]]
                            or row["hasView"] is not True
                            or row["objectVisible"] is not True]
-            check("all seven models render across Low, Balanced, and High quality",
+            check("all eight models render across Low, Balanced, and High quality",
                   not matrix_fail, str(matrix_fail[:3]))
 
             # Platonic faces must participate in the centralized FX pipeline,
@@ -1003,12 +1003,14 @@ def main() -> int:
                 if (object.isLine || object.isLineSegments || object.isLineLoop) lineDprs.push(dpr);
               });
               const buttons = Array.from(document.querySelectorAll('.ps-view-switch button'));
+              const rootLab = buttons[buttons.length - 2];
               const dynkin = buttons[buttons.length - 1];
               return {
                 native: window.devicePixelRatio,
                 renderer: window.__app.renderer.getPixelRatio(),
                 pointDprs,
                 lineDprs,
+                rootLabColumn: rootLab ? getComputedStyle(rootLab).gridColumnStart : null,
                 dynkinColumn: dynkin ? getComputedStyle(dynkin).gridColumnStart : null,
               };
             }""")
@@ -1021,8 +1023,9 @@ def main() -> int:
                   and all(abs(value - hidpi_metrics["renderer"]) < 1e-6
                           for value in hidpi_metrics["pointDprs"] + hidpi_metrics["lineDprs"]),
                   str(hidpi_metrics))
-            check("Dynkin is centered in the final model row",
-                  hidpi_metrics["dynkinColumn"] == "2", str(hidpi_metrics))
+            check("Root Lab and Dynkin share a centered final model row",
+                  hidpi_metrics["rootLabColumn"] == "2"
+                  and hidpi_metrics["dynkinColumn"] == "4", str(hidpi_metrics))
             hidpi_context.close()
 
             touch_context = browser.new_context(

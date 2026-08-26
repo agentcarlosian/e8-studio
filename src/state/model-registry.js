@@ -6,7 +6,7 @@
 // exports, Learn routing, and tests can agree on what each view represents.
 
 export const MODEL_VIEW_ORDER = Object.freeze([
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin',
 ]);
 
 export const MODEL_REGISTRY = Object.freeze({
@@ -45,6 +45,12 @@ export const MODEL_REGISTRY = Object.freeze({
     shortLabel: 'SDF',
     exports: Object.freeze(['png', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: true, extrude: true, math: false }),
+  }),
+  rootlab: Object.freeze({
+    label: 'Root System Lab',
+    shortLabel: 'Root Lab',
+    exports: Object.freeze(['png', 'data']),
+    controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'rootlab' }),
   }),
   dynkin: Object.freeze({
     label: 'Dynkin Diagram',
@@ -95,6 +101,7 @@ export function modelDisplayName(view, params = {}) {
   if (view === 'platonic') return SHAPE_LABELS[params.shape] || modelRecord(view).label;
   if (view === 'polytope') return POLYTOPE_LABELS[params.poly4d] || modelRecord(view).label;
   if (view === 'dynkin') return `${params.dynkin || 'E8'} Dynkin Diagram`;
+  if (view === 'rootlab') return `${params.rootSystem || 'A2'} Root System`;
   return modelRecord(view).label;
 }
 
@@ -112,6 +119,8 @@ export function modelCanvasLabel(view, params = {}) {
             ? 'shown as a three-dimensional projection of four-dimensional geometry'
             : view === 'dynkin'
               ? 'showing simple-root nodes and their connections'
+              : view === 'rootlab'
+                ? 'showing generated roots, reflection mirrors, reflection chambers, and a Coxeter orbit'
               : 'showing faces, edges, and optional vertex nodes';
   return `Interactive ${subject} visualization, ${detail}. Drag to rotate and scroll to zoom.`;
 }

@@ -6,7 +6,7 @@
 
 <p align="center">
   An interactive WebGL studio for exploring the E8 root system,<br>
-  Dynkin diagrams, Platonic solids, the 600-cell, and regular four-dimensional polytopes.
+  root systems, Dynkin diagrams, Platonic solids, the 600-cell, and regular four-dimensional polytopes.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 Click **Launch E8 Studio** and start exploring immediately. The hosted Studio runs entirely in the browser: no installation, account, sign-in, or upload is required. Your settings and learning progress stay in your browser.
 
-### Seven interactive views
+### Eight interactive views
 
 | View | What it offers |
 | --- | --- |
@@ -40,6 +40,7 @@ Click **Launch E8 Studio** and start exploring immediately. The hosted Studio ru
 | **600-cell** | Rotate and inspect the 120 vertices of the regular 600-cell, highlight quaternion/conjugacy classes, compare structural subsets, and see its relationship to icosahedral symmetry. |
 | **4D Polytope** | Move through all six convex regular 4-polytopes—from the 5-cell to the 120-cell. Rotate across six independent 4D planes and control the fourth-dimensional perspective depth. |
 | **E8 SDF** | See the roots as a raymarched, illuminated structure with smooth-union geometry, edge connections, ambient occlusion, reflections, and the animated “Living E8” extrusion effect. |
+| **Root Lab** | Generate the A₂, B₂, G₂, and H₂/I₂(5) rank-2 root systems from two simple roots. Reveal reflection mirrors, reflection chambers, root lengths, Cartan data, and a Coxeter orbit. |
 | **Dynkin** | Compare the E₆, E₇, and E₈ Dynkin diagrams and inspect how their simple roots connect. This focused mathematical reference remains manually selected instead of joining the Auto Model visual showcase. |
 
 ### Shape the visual experience
@@ -90,7 +91,7 @@ The educational system is integrated with the visual controls instead of being a
 
 - **Mouse:** drag to orbit, scroll to zoom, and click supported roots or structures for details.
 - **Touch:** drag to orbit and pinch to zoom; the responsive control drawer keeps the render visible on smaller screens.
-- **Keyboard:** use `1–7` for views, `Space` to pause, `S` for PNG, `T` for the tour, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
+- **Keyboard:** use `1–8` for views, `Space` to pause, `S` for PNG, `T` for the tour, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
 - **Workspaces:** use **View** for geometry and camera controls, **Visuals** for appearance, and **Learn** for orientation, guided paths, references, progress, and interactive mathematics.
 - **Reset and recovery:** camera and view resets stop conflicting animation drivers and return to a known pose.
 
@@ -102,7 +103,7 @@ E8 Studio separates three things:
 - **Interpretation** — carefully qualified visual connections, including the Studio’s presentation of the McKay correspondence.
 - **Artistic visualization** — lighting, color, Bloom transitions, signed-distance materials, and other explanatory display choices.
 
-Automated tests verify the 240-root E8 Weyl closure, Cartan relations, the eight-by-thirty Coxeter projection, Lie-bracket adjacency, Platonic Euler characteristics, regular 4-polytope counts, and educational-source coverage. The source ledger is maintained in [`src/content/sources.js`](src/content/sources.js).
+Automated tests verify the rank-2 reflection constructions, 240-root E8 Weyl closure, Cartan relations, the eight-by-thirty Coxeter projection, Lie-bracket adjacency, Platonic Euler characteristics, regular 4-polytope counts, and educational-source coverage. The source ledger is maintained in [`src/content/sources.js`](src/content/sources.js).
 
 ## Run locally
 

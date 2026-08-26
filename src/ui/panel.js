@@ -19,6 +19,7 @@ import { BADGE_INFO } from '../content/learning.js';
 import { activeViewModifiers } from '../state/selection-policy.js';
 import { exportFormatsForView, viewCapabilities } from '../state/model-registry.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
+import { generateRank2RootSystem, RANK2_ROOT_SYSTEM_ORDER } from '../math/rank2-roots.js';
 import {
   CURATED_LOOKS,
   FX_BY_ID,
@@ -40,6 +41,10 @@ function panelWorkspace(params) {
 
 function pressed(active) {
   return `aria-pressed="${active ? 'true' : 'false'}"`;
+}
+
+function formatAngle(value) {
+  return `${Number.isInteger(value) ? value : Number(value.toFixed(1))}°`;
 }
 
 // ── Helper: short shape label (consistent across shape picker + compare subset) ──
@@ -115,8 +120,8 @@ function renderViewSection(params, data, uiState = {}) {
 
   // View switcher (always visible)
   html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'dynkin' ? 'Dynkin' : v;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'dynkin' ? 'Dynkin' : v;
     html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
   }
   html += '</div>';
@@ -124,6 +129,34 @@ function renderViewSection(params, data, uiState = {}) {
   // Gallery changes the whole scene, so keep it directly beneath the primary
   // view selector instead of burying it below camera and per-view controls.
   html += renderGalleryControls(params);
+
+  if (params.view === 'rootlab') {
+    const rootSystem = generateRank2RootSystem(params.rootSystem);
+    const matrix = rootSystem.cartanMatrix.map(row => `[${row.join(', ')}]`).join(' ');
+    const lengthSummary = rootSystem.shortRootCount
+      ? `${rootSystem.longRootCount} long · ${rootSystem.shortRootCount} short`
+      : `${rootSystem.longRootCount} equal-length`;
+    html += '<div class="ps-subtitle">Root system</div><div class="seg seg-wrap">';
+    for (const id of RANK2_ROOT_SYSTEM_ORDER) {
+      html += `<button class="${params.rootSystem === id ? 'on' : ''}" ${pressed(params.rootSystem === id)} data-act="setRootSystem" data-arg="${id}" title="Explore the ${id} rank-2 root system">${id.replace('2', '₂')}</button>`;
+    }
+    html += '</div>';
+    html += '<div class="ps-subtitle">Structure</div><div class="seg seg-wrap root-lab-toggles">';
+    html += `<button class="${params.rootShowMirrors ? 'on' : ''}" ${pressed(params.rootShowMirrors)} data-act="toggleRootMirrors" title="Reflection hyperplanes perpendicular to the roots">Mirrors</button>`;
+    html += `<button class="${params.rootShowChambers ? 'on' : ''}" ${pressed(params.rootShowChambers)} data-act="toggleRootChambers" title="Fundamental sectors cut out by the mirrors">Chambers</button>`;
+    html += `<button class="${params.rootShowSimple ? 'on' : ''}" ${pressed(params.rootShowSimple)} data-act="toggleRootSimple" title="The two generating simple roots">Simple roots</button>`;
+    html += `<button class="${params.rootShowOrbit ? 'on' : ''}" ${pressed(params.rootShowOrbit)} data-act="toggleRootOrbit" title="Orbit of a root under the Coxeter element">Coxeter orbit</button>`;
+    html += '</div>';
+    if (params.rootShowOrbit) html += slider('Orbit speed', 'rootOrbitSpeed', params.rootOrbitSpeed ?? 0.7, 0.1, 2, 0.05, value => `${value.toFixed(2)}×`);
+    html += `<div class="root-lab-readout" aria-label="${rootSystem.id} construction facts">
+      <div><strong>${rootSystem.rootCount}</strong><span>roots</span></div>
+      <div><strong>${rootSystem.coxeterNumber}</strong><span>Coxeter h</span></div>
+      <div><strong>${formatAngle(rootSystem.chamberAngleDegrees)}</strong><span>chamber</span></div>
+      <div><strong>${formatAngle(rootSystem.simpleAngleDegrees)}</strong><span>simple angle</span></div>
+    </div>
+    <div class="root-lab-equation"><span>${rootSystem.crystallographic ? 'Cartan' : 'Reflection'}</span><code>${matrix}</code></div>
+    <div class="ps-help root-lab-lengths">${lengthSummary} roots · generated live from two reflections</div>`;
+  }
 
   // Shape selector — only if this view uses shapes
   if (caps.shape) {
@@ -271,7 +304,7 @@ function renderE8Controls(params, data, uiState = {}) {
   html += '</div>';
 
   // Separate passive drawing guides from modes that animate or reinterpret the
-  // projection. The old flat seven-button grid hid that important distinction.
+  // projection. The old flat model grid hid that important distinction.
   html += '<div class="ps-subtitle overlay-title"><span>Overlays</span><button data-act="resetE8Overlays" title="Return overlays to Rings only">Reset</button></div>';
   html += '<div class="overlay-group-label">Structure guides</div>';
   html += '<div class="overlay-structure-grid">';
@@ -550,6 +583,7 @@ function renderMathSection(params, data) {
   const subject = caps.math === 'e8' ? 'the E₈ root system'
     : caps.math === '600' ? 'the 600-cell'
     : caps.math === 'dynkin' ? 'the selected Dynkin diagram'
+    : caps.math === 'rootlab' ? 'the selected rank-2 root system'
     : 'the selected solid';
   let html = `<div class="ps-section" data-section="math"><div class="ps-title">Math lab</div>
     <div class="ps-help learn-math-intro">Interactive details for ${subject}. Change the active View to open a different lab.</div>`;
@@ -665,6 +699,26 @@ function renderMathSection(params, data) {
         </div>
       </div>`;
     }
+  } else if (caps.math === 'rootlab') {
+    const system = generateRank2RootSystem(params.rootSystem);
+    const matrixValue = value => Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    const matrixRows = system.cartanMatrix.map(row => `<tr>${row.map(value => `<td>${matrixValue(value)}</td>`).join('')}</tr>`).join('');
+    html += `<div class="info-box root-lab-info">
+      <span class="info-title">${system.label} · ${system.name}</span>
+      Rank <b>2</b> · ${system.rootCount} roots · Coxeter number <b>${system.coxeterNumber}</b><br>
+      ${system.chamberCount} reflection chambers · family <b>${system.family}</b><br>
+      ${system.crystallographic ? 'Crystallographic' : 'Non-crystallographic'}${system.longToShortRatio > 1 ? ` · long/short = √${Math.round(system.longToShortRatio ** 2)}` : ' · equal root lengths'}
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">What the construction shows</span>
+      <div class="ps-help">${system.description}</div>
+      The two gold simple roots generate every displayed root by repeated reflection. Their mirrors bound a fundamental chamber; composing the two reflections produces the ${system.coxeterNumber}-step orbit.
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">${system.crystallographic ? 'Cartan matrix' : 'Generalized reflection matrix'}</span>
+      <div class="cartan-scroll"><table class="dynkin-cartan" aria-label="${system.id} reflection matrix"><tbody>${matrixRows}</tbody></table></div>
+      ${system.goldenRatio ? `<div class="ps-help">The off-diagonal value is −φ, where φ = ${(system.goldenRatio).toFixed(6)}. This is why H₂ connects naturally to pentagonal and Penrose geometry.</div>` : ''}
+    </div>`;
   } else if (caps.math === 'dynkin') {
     const diagram = data.dynkin?.[params.dynkin];
     const rank = diagram?.nodes?.length || 0;
@@ -787,7 +841,11 @@ function renderLearnSection(params) {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   const learning = (typeof window !== 'undefined' && window.__app?.getLearningState?.()) || null;
-  const curiosity = learning?.curiosity;
+  const rootSystem = params.view === 'rootlab' ? generateRank2RootSystem(params.rootSystem) : null;
+  const curiosity = rootSystem ? {
+    title: 'From two reflections to a root system',
+    body: `The two simple roots of ${rootSystem.label} generate all ${rootSystem.rootCount} roots. Compare A₂, B₂, G₂, and H₂ to see how one angle and one length ratio change the entire symmetry.`,
+  } : learning?.curiosity;
   const summary = learning?.summary || {};
   const daily = learning?.dailyFact;
   const progress = learning?.progress || {};
@@ -797,18 +855,18 @@ function renderLearnSection(params) {
   const earnedBadges = new Set(progress.badges || []);
   const recognizedBadgeCount = BADGE_INFO.filter(badge => earnedBadges.has(badge.id)).length;
   const recommendedLesson = learning?.recommendedLesson;
-  return `
-    <div class="ps-section" data-section="learn">
-      <div class="ps-title">Learn</div>
-      ${curiosity ? `
-        <div class="ps-subtitle">In this view</div>
-        <div class="info-box curiosity-card">
-          <span class="info-title">${escapeHtml(curiosity.title)}</span>
-          <div>${escapeHtml(curiosity.body)}</div>
-          ${recommendedLesson ? `<div class="seg"><button data-act="openLearningCenter">Open ${escapeHtml(recommendedLesson.title)}</button></div>` : ''}
+  const orientation = rootSystem ? `
+      <div class="info-box learn-orientation" data-learn-orientation>
+        <span class="info-title">Rank-2 roots at a glance</span>
+        <div class="learn-fact-strip" aria-label="Key ${rootSystem.id} facts">
+          <div><strong>${rootSystem.rootCount}</strong><span>roots</span></div>
+          <div><strong>${rootSystem.coxeterNumber}</strong><span>Coxeter h</span></div>
+          <div><strong>${rootSystem.chamberCount}</strong><span>chambers</span></div>
         </div>
-      ` : ''}
-
+        <p>A <b>root system</b> is a set of vectors closed under reflection in the mirrors perpendicular to those vectors. In rank 2, the whole construction fits on one plane.</p>
+        <p>${escapeHtml(rootSystem.description)} The moving marker follows one orbit of the Coxeter element—the product of the two simple reflections.</p>
+        <div class="learn-orientation-actions"><button data-act="openE8Explorer">Compare with E₈</button></div>
+      </div>` : `
       <div class="info-box learn-orientation" data-learn-orientation>
         <span class="info-title">E₈ at a glance</span>
         <div class="learn-fact-strip" aria-label="Key E8 facts">
@@ -819,7 +877,20 @@ function renderLearnSection(params) {
         <p>The exceptional Lie algebra E<sub>8</sub> is shown through its 240 <b>root vectors</b>, projected from eight dimensions onto the <b>Coxeter plane</b>.</p>
         <p>Those roots land on <b>eight concentric rings</b>. The Petrie path traces a 30-step orbit; bright roots are an illustrative McKay-source highlight.</p>
         <div class="learn-orientation-actions"><button data-act="openE8Explorer">Explore E₈</button></div>
-      </div>
+      </div>`;
+  return `
+    <div class="ps-section" data-section="learn">
+      <div class="ps-title">Learn</div>
+      ${curiosity ? `
+        <div class="ps-subtitle">In this view</div>
+        <div class="info-box curiosity-card">
+          <span class="info-title">${escapeHtml(curiosity.title)}</span>
+          <div>${escapeHtml(curiosity.body)}</div>
+          ${recommendedLesson && !rootSystem ? `<div class="seg"><button data-act="openLearningCenter">Open ${escapeHtml(recommendedLesson.title)}</button></div>` : ''}
+        </div>
+      ` : ''}
+
+      ${orientation}
 
       <div class="ps-subtitle">Start exploring</div>
       <div class="learn-path-grid" data-learn-paths>

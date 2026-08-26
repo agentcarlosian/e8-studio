@@ -98,6 +98,13 @@ const VIEW_MODIFIER_DEFAULTS = Object.freeze({
     sdfEdges: 0.3,
     e8MorphT: 0,
   }),
+  rootlab: Object.freeze({
+    rootShowMirrors: true,
+    rootShowChambers: true,
+    rootShowSimple: true,
+    rootShowOrbit: true,
+    rootOrbitSpeed: 0.7,
+  }),
 });
 
 function freshCommonDefaults(params = {}) {

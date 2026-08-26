@@ -94,6 +94,7 @@
                 <option value="sdf">E8 SDF</option>
                 <option value="platonic">Platonic solid</option>
                 <option value="poly4d">4D polytope</option>
+                <option value="rootlab">Root system lab</option>
                 <option value="dynkin">Dynkin diagram</option>
               </select>
             </label>
@@ -156,6 +157,41 @@
                 <option value="E6">E6</option>
               </select>
             </label>
+            <div id="rootlab-field" class="model-control-panel hidden" aria-label="Root system controls">
+              <div class="browse-head">
+                <strong>Root system</strong>
+                <output id="root-system-output">A₂</output>
+              </div>
+              <div class="browse-actions root-system-actions" aria-label="Rank-2 root systems">
+                <button type="button" data-root-system="A2">A₂</button>
+                <button type="button" data-root-system="B2">B₂</button>
+                <button type="button" data-root-system="G2">G₂</button>
+                <button type="button" data-root-system="H2">H₂</button>
+              </div>
+              <div class="root-system-facts" aria-label="Active root system facts">
+                <div><strong id="root-fact-count">6</strong><span>roots</span></div>
+                <div><strong id="root-fact-coxeter">3</strong><span>Coxeter h</span></div>
+                <div><strong id="root-fact-chamber">60°</strong><span>chamber</span></div>
+                <div><strong id="root-fact-angle">120°</strong><span>simple angle</span></div>
+              </div>
+              <output id="root-system-matrix" class="root-system-matrix">Cartan [2, −1] [−1, 2]</output>
+              <label class="toggle-row">
+                <span><strong>Reflection mirrors</strong><small>Show the axes that generate the roots.</small></span>
+                <input id="root-mirrors-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Reflection chambers</strong><small>Divide the plane into fundamental sectors.</small></span>
+                <input id="root-chambers-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Simple roots</strong><small>Highlight the two generating roots.</small></span>
+                <input id="root-simple-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Coxeter orbit</strong><small>Trace one root under the paired reflections.</small></span>
+                <input id="root-orbit-toggle" type="checkbox">
+              </label>
+            </div>
             <label class="toggle-row" data-model-context="e8-roots">
               <span>
                 <strong>McKay highlight</strong>

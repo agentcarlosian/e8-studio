@@ -241,9 +241,9 @@ def main() -> int:
             })""")
             model_shortcut_ids = [button["id"] for group in model_shortcuts["groups"] for button in group["buttons"]]
             model_shortcut_group_counts = {group["id"]: len(group["buttons"]) for group in model_shortcuts["groups"]}
-            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 21 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 21 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 25 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 25 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "rootlab": 4, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "root-G2" in model_shortcut_ids and "root-H2" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
             model_options = page.locator("#model-select option").evaluate_all("options => options.map(option => option.value)")
-            check("model selector replaces legacy E8 3D with Bloom and SDF", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "dynkin"], str(model_options))
+            check("model selector replaces legacy E8 3D and includes Root Lab", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "rootlab", "dynkin"], str(model_options))
             fallback_selectors_hidden = page.evaluate("""() => [
                 document.getElementById('model-select').closest('label'),
                 document.getElementById('shape-field'),
@@ -283,6 +283,33 @@ def main() -> int:
                 }
             })""")
             check("model shortcut selects 4D polytope", model_shortcut_poly["state"]["modelMode"] == "poly4d" and model_shortcut_poly["state"]["polytope4d"] == "tesseract" and model_shortcut_poly["controls"]["modelMode"] == "poly4d" and model_shortcut_poly["controls"]["polytope4d"] == "tesseract" and model_shortcut_poly["controls"]["polyVisible"] and model_shortcut_poly["controls"]["shapeHidden"] and model_shortcut_poly["controls"]["activeShortcut"] == "poly-tesseract" and model_shortcut_poly["controls"]["output"] == "Tesseract" and model_shortcut_poly["metrics"]["lastModelShortcutId"] == "poly-tesseract", str(model_shortcut_poly))
+            page.locator('#model-shortcut-groups [data-model-shortcut="root-G2"]').click()
+            model_shortcut_rootlab = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                metrics: window.__mobileApp.getMetrics(),
+                controls: {
+                    modelMode: document.getElementById('model-select').value,
+                    rootVisible: !document.getElementById('rootlab-field').classList.contains('hidden'),
+                    rootOutput: document.getElementById('root-system-output').textContent.trim(),
+                    activeRoot: document.querySelector('#rootlab-field [data-root-system].active')?.dataset.rootSystem,
+                    activeShortcut: document.querySelector('#model-shortcut-groups button.active')?.dataset.modelShortcut,
+                    output: document.getElementById('model-shortcut-output').textContent.trim(),
+                    overlays: [
+                        document.getElementById('root-mirrors-toggle').checked,
+                        document.getElementById('root-chambers-toggle').checked,
+                        document.getElementById('root-simple-toggle').checked,
+                        document.getElementById('root-orbit-toggle').checked,
+                    ],
+                    facts: [
+                        document.getElementById('root-fact-count').textContent.trim(),
+                        document.getElementById('root-fact-coxeter').textContent.trim(),
+                        document.getElementById('root-fact-chamber').textContent.trim(),
+                        document.getElementById('root-fact-angle').textContent.trim(),
+                    ],
+                    matrix: document.getElementById('root-system-matrix').textContent.trim(),
+                }
+            })""")
+            check("model shortcut selects generated G2 Root Lab", model_shortcut_rootlab["state"]["modelMode"] == "rootlab" and model_shortcut_rootlab["state"]["rootSystem"] == "G2" and model_shortcut_rootlab["controls"]["modelMode"] == "rootlab" and model_shortcut_rootlab["controls"]["rootVisible"] and model_shortcut_rootlab["controls"]["rootOutput"] == "G₂" and model_shortcut_rootlab["controls"]["activeRoot"] == "G2" and model_shortcut_rootlab["controls"]["activeShortcut"] == "root-G2" and model_shortcut_rootlab["controls"]["output"] == "G₂ root system" and all(model_shortcut_rootlab["controls"]["overlays"]) and model_shortcut_rootlab["controls"]["facts"] == ["12", "6", "30°", "150°"] and model_shortcut_rootlab["controls"]["matrix"] == "Cartan [2, -3] [-1, 2]", str(model_shortcut_rootlab))
             page.locator('#model-shortcut-groups [data-model-shortcut="dynkin-E6"]').click()
             model_shortcut_dynkin = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -516,7 +543,7 @@ def main() -> int:
                 nextButton: document.getElementById('learn-topic-next').getBoundingClientRect()
             })""")
             learn_ids = [button["id"] for button in learn_panel["buttons"]]
-            expected_lesson_ids = ["auto", "why-five-solids", "into-four-dimensions", "six-hundred-cell", "coxeter-plane", "roots-reflections", "reading-dynkin", "mckay-bridge", "designed-bloom", "distance-fields"]
+            expected_lesson_ids = ["auto", "why-five-solids", "into-four-dimensions", "six-hundred-cell", "rank-two-reflections", "coxeter-plane", "roots-reflections", "reading-dynkin", "mckay-bridge", "designed-bloom", "distance-fields"]
             check("Info section exposes shared curriculum lessons", learn_panel["state"]["learnTopic"] == "auto" and learn_ids == expected_lesson_ids and learn_panel["metrics"]["learnTopicButtonCount"] == len(expected_lesson_ids) and all(button["box"]["height"] >= 40 for button in learn_panel["buttons"]), str(learn_panel))
             check("Learn Auto follows current curriculum scene", learn_panel["output"] == "Auto: Coxeter plane" and any(button["id"] == "auto" and button["active"] and button["pressed"] == "true" for button in learn_panel["buttons"]) and any(button["id"] == "coxeter-plane" and button["effective"] for button in learn_panel["buttons"]) and "Move from the 600-cell" in learn_panel["card"] and "2 scoped sources" in learn_panel["card"] and learn_panel["nextButton"]["height"] >= 40, str(learn_panel))
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -577,7 +604,7 @@ def main() -> int:
                     box: button.getBoundingClientRect()
                 }))
             })""")
-            check("Info section exposes compact guided tour", tour_card["tour"]["count"] == 6 and tour_card["tour"]["index"] == 0 and tour_card["output"] == "Ready" and tour_card["step"] == "1/6" and "E8 Coxeter plane" in tour_card["copy"] and tour_card["metrics"]["mobileTourButtonCount"] == 3 and all(button["box"]["height"] >= 40 for button in tour_card["buttons"]), str(tour_card))
+            check("Info section exposes compact guided tour", tour_card["tour"]["count"] == 7 and tour_card["tour"]["index"] == 0 and tour_card["output"] == "Ready" and tour_card["step"] == "1/7" and "E8 Coxeter plane" in tour_card["copy"] and tour_card["metrics"]["mobileTourButtonCount"] == 3 and all(button["box"]["height"] >= 40 for button in tour_card["buttons"]), str(tour_card))
             check("Tour card keeps start action explicit", any(button["id"] == "mobile-tour-toggle" and button["text"] == "Start" and button["pressed"] == "false" for button in tour_card["buttons"]), str(tour_card["buttons"]))
             check("Tour step buttons are disabled until started", all(button["disabled"] and button["ariaDisabled"] == "true" for button in tour_card["buttons"] if button["id"] in ["mobile-tour-prev", "mobile-tour-next"]), str(tour_card["buttons"]))
             tour_start_before = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -621,7 +648,7 @@ def main() -> int:
                 toggle: document.getElementById('mobile-tour-toggle').textContent.trim(),
                 copy: document.getElementById('mobile-tour-copy').innerText
             })""")
-            check("Tour card reflects paused active step when reopened", tour_open["metrics"]["settingsOpen"] and tour_open["output"] == "Paused" and tour_open["step"] == "2/6" and tour_open["toggle"] == "Stop" and "Designed Bloom" in tour_open["copy"], str(tour_open))
+            check("Tour card reflects paused active step when reopened", tour_open["metrics"]["settingsOpen"] and tour_open["output"] == "Paused" and tour_open["step"] == "2/7" and tour_open["toggle"] == "Stop" and "Designed Bloom" in tour_open["copy"], str(tour_open))
             check("Tour timer pauses while Info sheet is open", tour_open["metrics"]["mobileTourPausedForSettings"] and not tour_open["metrics"]["mobileTourTimerActive"] and tour_open["metrics"]["mobileTourPauseCount"] >= 1, str(tour_open["metrics"]))
             tour_stop_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("debug back closes settings before stopping tour", page.evaluate("() => window.__mobileApp.handleBackNavigation()"))
@@ -1129,6 +1156,55 @@ def main() -> int:
             page.wait_for_function("before => window.__mobileApp.getMetrics().autoModelSwitchCount > before && window.__mobileApp.getState().modelMode === 'poly4d'", arg=poly_auto_before["autoModelSwitchCount"], timeout=4000)
             poly_auto_after = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Auto model sequence includes 4D polytopes", poly_auto_after["lastAutoModelTarget"]["modelMode"] == "poly4d" and poly_auto_after["lastAutoModelTarget"]["polytope4d"] == "600cell" and poly_auto_after["lastPolytope4D"] == "600cell", str(poly_auto_after))
+            page.evaluate("""() => {
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({
+                    modelMode: 'rootlab',
+                    rootSystem: 'G2',
+                    showRootMirrors: true,
+                    showRootChambers: true,
+                    showRootSimple: true,
+                    showRootOrbit: true,
+                    autoModel: false,
+                    autoRotate: false,
+                    selectedRoot: null,
+                    rotation: 0
+                });
+                window.__mobileApp.forceRender();
+            }""")
+            rootlab_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("G2 Root Lab renders its generated reflection system", rootlab_metrics["lastModelMode"] == "rootlab" and rootlab_metrics["lastRootSystem"] == "G2" and rootlab_metrics["lastDrawStats"]["modelVertices"] == 12 and rootlab_metrics["lastDrawStats"]["modelProjectedVertices"] == 12 and rootlab_metrics["lastDrawStats"]["modelEdges"] == 12 and rootlab_metrics["lastDrawStats"]["rootChambers"] == 12 and rootlab_metrics["lastDrawStats"]["mirrorLines"] == 6 and rootlab_metrics["lastDrawStats"]["modelFaceFills"] == 12 and rootlab_metrics["lastDrawStats"]["modelVertexFills"] == 12 and rootlab_metrics["lastDrawStats"]["rootPolygonEdges"] == 12 and rootlab_metrics["lastDrawStats"]["rootBoundaryGuides"] == 1 and rootlab_metrics["lastDrawStats"]["rootOrbitMarker"] == "directional-arrow" and rootlab_metrics["rootLabDrawCount"] >= 1, str(rootlab_metrics["lastDrawStats"]))
+            rootlab_target = page.evaluate("() => window.__mobileApp.getRootLabRootScreenPoint(0)")
+            page.evaluate("""target => {
+                const canvas = document.getElementById('mobile-canvas');
+                const init = { bubbles: true, pointerId: 186, pointerType: 'touch', clientX: target.x, clientY: target.y };
+                canvas.dispatchEvent(new PointerEvent('pointerdown', init));
+                canvas.dispatchEvent(new PointerEvent('pointerup', init));
+            }""", rootlab_target)
+            page.wait_for_timeout(80)
+            rootlab_selection = page.evaluate("""() => {
+                window.__mobileApp.forceRender();
+                return {
+                    state: window.__mobileApp.getState(),
+                    metrics: window.__mobileApp.getMetrics(),
+                    drawer: document.getElementById('root-drawer').innerText,
+                    hidden: document.getElementById('root-drawer').classList.contains('hidden')
+                };
+            }""")
+            check("Root Lab roots open a touch inspector without borrowing E8 selection", rootlab_selection["state"]["selectedRoot"] is None and rootlab_selection["metrics"]["selectedRootLabIndex"] == 0 and rootlab_selection["metrics"]["selectedRootLab"]["simpleIndex"] == 0 and rootlab_selection["metrics"]["selectedRootLab"]["oppositeIndex"] == 6 and not rootlab_selection["hidden"] and "G₂ root #0 (α1)" in rootlab_selection["drawer"] and "equal-length" not in rootlab_selection["drawer"] and "long root" in rootlab_selection["drawer"] and "α =" in rootlab_selection["drawer"] and rootlab_selection["metrics"]["lastDrawStats"]["rootLabSelectionRings"] == 1, str(rootlab_selection))
+            page.locator('#root-drawer [data-root-action="opposite"]').click()
+            rootlab_opposite = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("Root Lab touch inspector navigates to the opposite generated root", rootlab_opposite["selectedRootLabIndex"] == 6 and rootlab_opposite["selectedRootLab"]["oppositeIndex"] == 0, str(rootlab_opposite))
+            check("Root Lab inspector collapses before clearing on Back", page.evaluate("() => window.__mobileApp.handleBackNavigation()") and page.evaluate("() => !window.__mobileApp.getMetrics().rootDrawerExpanded && window.__mobileApp.getMetrics().selectedRootLabIndex === 6"))
+            check("Root Lab inspector clears on the next Back", page.evaluate("() => window.__mobileApp.handleBackNavigation()") and page.evaluate("() => window.__mobileApp.getMetrics().selectedRootLabIndex === null && document.getElementById('root-drawer').classList.contains('hidden')"))
+            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            rootlab_info = page.evaluate("""() => ({
+                selection: document.getElementById('info-selection').innerText,
+                info: document.getElementById('info-copy').textContent,
+                topbar: document.querySelector('.topbar').getAttribute('aria-label'),
+                canvas: document.getElementById('mobile-canvas').getAttribute('aria-label')
+            })""")
+            check("Root Lab labels explain the active construction", "G₂ root system" in rootlab_info["selection"] and "12 roots" in rootlab_info["selection"] and "reflecting two simple roots" in rootlab_info["info"] and "G₂ rank-2 root system" in rootlab_info["topbar"] and "12 roots" in rootlab_info["canvas"], str(rootlab_info))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#model-select").evaluate("el => { el.value = 'dynkin'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             dynkin_select_probe = page.evaluate("""() => ({
@@ -2620,7 +2696,7 @@ def main() -> int:
             page.evaluate("() => window.__mobileApp.setState({ autoRotate: false })")
             check("auto-rotate stops cleanly", not page.evaluate("() => window.__mobileApp.getMetrics().motionActive"))
 
-            page.evaluate("() => window.__mobileApp.setState({ showRings: true, autoRotate: false })")
+            page.evaluate("() => window.__mobileApp.setState({ modelMode: 'e8_2d', e8MorphT: 0, showRings: true, autoRotate: false })")
             page.evaluate(
                 """() => {
                     const canvas = document.getElementById('mobile-canvas');
@@ -2658,7 +2734,7 @@ def main() -> int:
             settled_drag_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("settled drag restores rings", not settled_drag_metrics["interactionActive"] and not settled_drag_metrics["lastDrawStats"]["interactionLiteFrame"] and settled_drag_metrics["lastDrawStats"]["rings"] == 8 and settled_drag_metrics["lastDrawStats"]["ringsSkippedForInteraction"] == 0, str(settled_drag_metrics))
             check("settled drag restores glow halos", settled_drag_metrics["lastDrawStats"]["glowFills"] == settled_drag_metrics["lastDrawStats"]["directPoints"] and settled_drag_metrics["lastDrawStats"]["glowsSkippedForInteraction"] == 0 and settled_drag_metrics["lastDrawStats"]["directPointFills"] == settled_drag_metrics["lastDrawStats"]["directPoints"] * 2, str(settled_drag_metrics["lastDrawStats"]))
-            check("pan release requests settled render", settled_drag_metrics["settledRenderRequestCount"] > active_drag_metrics["settledRenderRequestCount"] and settled_drag_metrics["lastSettledRenderRequestReason"] == "pan-end", str(settled_drag_metrics))
+            check("plane orbit requests a settled render", settled_drag_metrics["settledRenderRequestCount"] > active_drag_metrics["settledRenderRequestCount"] and settled_drag_metrics["lastSettledRenderRequestReason"] == "plane-orbit-end", str(settled_drag_metrics))
 
             page.evaluate("() => { window.__mobileApp.setState({ showRings: true, showContext: true, autoRotate: false, subset: 'icosahedron', selectedRoot: null }); window.__mobileApp.selectRoot(0, { save: false, status: false }); window.__mobileApp.forceRender(); }")
             page.evaluate(
@@ -2700,12 +2776,24 @@ def main() -> int:
             settled_context_draw = settled_context_drag["lastDrawStats"]
             check("settled context drag restores rays", not settled_context_drag["interactionActive"] and not settled_context_draw["interactionLiteFrame"] and settled_context_draw["rays"] == 56 and settled_context_draw["rayStrokes"] == 1 and settled_context_draw["raysSkippedForInteraction"] == 0, str(settled_context_drag))
             check("settled context drag restores glow halos", settled_context_draw["glowFills"] == settled_context_draw["directPoints"] and settled_context_draw["glowsSkippedForInteraction"] == 0 and settled_context_draw["directPointFills"] == settled_context_draw["directPoints"] * 2, str(settled_context_draw))
-            check("context pan release requests settled render", settled_context_drag["settledRenderRequestCount"] > active_context_drag["settledRenderRequestCount"] and settled_context_drag["lastSettledRenderRequestReason"] == "pan-end", str(settled_context_drag))
+            check("context plane orbit requests settled render", settled_context_drag["settledRenderRequestCount"] > active_context_drag["settledRenderRequestCount"] and settled_context_drag["lastSettledRenderRequestReason"] == "plane-orbit-end", str(settled_context_drag))
             page.evaluate("() => window.__mobileApp.clearSelection()")
 
-            before_pan = page.evaluate("() => window.__mobileApp.getState()")
-            page.evaluate(
-                """() => {
+            e8_plane_rotation = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({
+                        modelMode: 'e8_2d',
+                        e8MorphT: 0,
+                        rotation: 0,
+                        cameraTilt: 0.2,
+                        cameraPath: 'orbit',
+                        autoRotate: true,
+                        panX: 13,
+                        panY: -7,
+                        selectedRoot: null
+                    });
+                    app.forceRender();
                     const canvas = document.getElementById('mobile-canvas');
                     const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
                         bubbles: true,
@@ -2715,16 +2803,61 @@ def main() -> int:
                         clientY: y,
                         isPrimary: true,
                     }));
-                    fire('pointerdown', 180, 450);
-                    fire('pointermove', 218, 476);
-                    fire('pointerup', 218, 476);
+                    const cx = window.innerWidth / 2 + 13;
+                    const availableH = Math.max(240, window.innerHeight - 84 - 108);
+                    const cy = 84 + availableH / 2 - 7;
+                    const before = app.getState();
+                    fire('pointerdown', cx + 88, cy);
+                    fire('pointermove', cx, cy + 88);
+                    const during = app.getState();
+                    fire('pointerup', cx, cy + 88);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return { before, during, after: app.getState(), metrics: app.getMetrics() };
                 }"""
             )
-            after_pan = page.evaluate("() => window.__mobileApp.getState()")
-            pan_moved = abs(after_pan["panX"] - before_pan["panX"]) > 20 or abs(after_pan["panY"] - before_pan["panY"]) > 20
-            check("one-finger drag keeps panning the flat E8 canvas", pan_moved, f"{before_pan} -> {after_pan}")
-            drag_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("one-finger drag orbits and tilts the flat E8 plane instead of panning", abs(e8_plane_rotation["during"]["rotation"] - e8_plane_rotation["before"]["rotation"]) > 0.6 and abs(e8_plane_rotation["during"]["cameraTilt"] - e8_plane_rotation["before"]["cameraTilt"]) > 0.45 and e8_plane_rotation["during"]["panX"] == e8_plane_rotation["before"]["panX"] and e8_plane_rotation["during"]["panY"] == e8_plane_rotation["before"]["panY"] and not e8_plane_rotation["during"]["autoRotate"] and e8_plane_rotation["during"]["cameraPath"] == "manual", str(e8_plane_rotation))
+            drag_metrics = e8_plane_rotation["metrics"]
+            check("E8 plane orbit visibly applies depth and settles cleanly", drag_metrics["lastInteractionType"] == "plane-orbit-end" and drag_metrics["lastSettledRenderRequestReason"] == "plane-orbit-end" and abs(drag_metrics["lastDrawStats"]["e8PlanePitch"]) > 0.4, str(drag_metrics))
             check("drag releases input state", not drag_metrics["interactionActive"] and drag_metrics["pointerCount"] == 0, str(drag_metrics))
+
+            rootlab_plane_rotation = page.evaluate(
+                """async () => {
+                    const app = window.__mobileApp;
+                    app.setState({
+                        modelMode: 'rootlab',
+                        rootSystem: 'G2',
+                        rotation: 0,
+                        cameraTilt: 0.2,
+                        cameraPath: 'orbit',
+                        autoRotate: true,
+                        panX: -9,
+                        panY: 6,
+                        selectedRoot: null
+                    });
+                    app.forceRender();
+                    const canvas = document.getElementById('mobile-canvas');
+                    const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+                        bubbles: true,
+                        pointerId: 70,
+                        pointerType: 'touch',
+                        clientX: x,
+                        clientY: y,
+                        isPrimary: true,
+                    }));
+                    const cx = window.innerWidth / 2 - 9;
+                    const availableH = Math.max(240, window.innerHeight - 84 - 108);
+                    const cy = 84 + availableH / 2 + 6;
+                    const before = app.getState();
+                    fire('pointerdown', cx + 82, cy);
+                    fire('pointermove', cx, cy - 82);
+                    const during = app.getState();
+                    fire('pointerup', cx, cy - 82);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    return { before, during, after: app.getState(), metrics: app.getMetrics() };
+                }"""
+            )
+            check("one-finger drag orbits and tilts Root Lab instead of panning", abs(rootlab_plane_rotation["during"]["rotation"] - rootlab_plane_rotation["before"]["rotation"]) > 0.55 and abs(rootlab_plane_rotation["during"]["cameraTilt"] - rootlab_plane_rotation["before"]["cameraTilt"]) > 0.4 and rootlab_plane_rotation["during"]["panX"] == rootlab_plane_rotation["before"]["panX"] and rootlab_plane_rotation["during"]["panY"] == rootlab_plane_rotation["before"]["panY"] and not rootlab_plane_rotation["during"]["autoRotate"] and rootlab_plane_rotation["during"]["cameraPath"] == "manual", str(rootlab_plane_rotation))
+            check("Root Lab plane orbit visibly applies depth and keeps a complete diagram", rootlab_plane_rotation["metrics"]["lastInteractionType"] == "plane-orbit-end" and rootlab_plane_rotation["metrics"]["lastSettledRenderRequestReason"] == "plane-orbit-end" and rootlab_plane_rotation["metrics"]["lastDrawStats"]["modelMode"] == "rootlab" and rootlab_plane_rotation["metrics"]["lastDrawStats"]["modelVertices"] == 12 and abs(rootlab_plane_rotation["metrics"]["lastDrawStats"]["rootPlanePitch"]) > 0.4, str(rootlab_plane_rotation["metrics"]))
 
             platonic_orbit = page.evaluate(
                 """async () => {

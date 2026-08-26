@@ -59,6 +59,7 @@ JS_FILES    = [
     ROOT / 'src' / 'math' / 'cartan.js',
     ROOT / 'src' / 'math' / 'weyl.js',
     ROOT / 'src' / 'math' / 'brackets.js',
+    ROOT / 'src' / 'math' / 'rank2-roots.js',
     ROOT / 'src' / 'views' / 'platonic.view.js',
     ROOT / 'src' / 'views' / 'dynkin.view.js',
     ROOT / 'src' / 'views' / 'polytope4d.view.js',
@@ -66,6 +67,7 @@ JS_FILES    = [
     ROOT / 'src' / 'views' / 'e8coxeter.view.js',
     ROOT / 'src' / 'views' / 'bloom.view.js',
     ROOT / 'src' / 'views' / 'raymarched-e8.view.js',
+    ROOT / 'src' / 'views' / 'rootlab.view.js',
     ROOT / 'src' / 'main.js',
 ]
 

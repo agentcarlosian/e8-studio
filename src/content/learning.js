@@ -370,6 +370,31 @@ export const QUIZ_MODULES = [
     ],
   },
   {
+    id: 'rank-two-roots',
+    title: 'Rank-2 Root Systems',
+    rewardId: 'aurora-proof',
+    questions: [
+      {
+        prompt: 'A finite root system is closed under reflections in...',
+        choices: ['its root hyperplanes', 'an arbitrary screen axis', 'only the longest root'],
+        answer: 0,
+        explanation: 'Reflecting the system across the hyperplane perpendicular to any root preserves the root set.',
+      },
+      {
+        prompt: 'Which rank-2 system has 12 roots with long-to-short length ratio square root of three?',
+        choices: ['G2', 'A2', 'H2'],
+        answer: 0,
+        explanation: 'G2 consists of two interlaced six-root sets with the long-to-short ratio square root of three.',
+      },
+      {
+        prompt: 'Why is H2 different from A2, B2, and G2?',
+        choices: ['It is non-crystallographic', 'It has no reflections', 'It is rank 8'],
+        answer: 0,
+        explanation: 'H2 is a finite fivefold Coxeter root system, but its Cartan data is not integral and therefore is not crystallographic.',
+      },
+    ],
+  },
+  {
     id: 'e8-roots',
     title: 'E8 Roots',
     rewardId: 'aurora-proof',
@@ -557,7 +582,7 @@ export const LEARNING_CONTENT_PROVENANCE = {
   },
   quizzes: {
     'platonic-foundations': ['mathworld-platonic-solids'], 'sixhundred-basics': ['mathworld-600-cell'],
-    'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'e8-roots': ['aim-e8-technical'],
+    'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'rank-two-roots': ['magma-rank2-root-systems'], 'e8-roots': ['aim-e8-technical'],
     'dynkin-diagrams': ['aim-e8-technical', 'mckay-michigan-notes'],
     'mckay-correspondence': ['mckay-michigan-notes'], 'bloom-morph': ['mit-e8-plane', 'mathworld-600-cell'],
     '4d-polytopes': ['mathworld-schlafli-symbol', 'mathworld-120-cell'], 'e8-sdf': ['hart-sphere-tracing'],
@@ -565,7 +590,7 @@ export const LEARNING_CONTENT_PROVENANCE = {
   curiosity: {
     bloom: ['mit-e8-plane'], platonic: ['mathworld-platonic-solids'], e8coxeter: ['mit-e8-plane'],
     sixhundred: ['mathworld-600-cell', 'mckay-michigan-notes'], polytope: ['mathworld-schlafli-symbol'],
-    raymarched: ['hart-sphere-tracing'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
+    raymarched: ['hart-sphere-tracing'], rootlab: ['magma-rank2-root-systems'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
   },
 };
 
