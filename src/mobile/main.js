@@ -610,7 +610,7 @@ let curriculumLessons = [];
 let learningProgress = loadLearningProgress();
 const LEGACY_LEARN_TOPIC_MAP = {
   e8: 'coxeter-plane', solids: 'why-five-solids', mckay: 'mckay-bridge',
-  poly4d: 'into-four-dimensions', dynkin: 'roots-reflections',
+  poly4d: 'into-four-dimensions', dynkin: 'reading-dynkin',
 };
 
 function installMobileCurriculum(curriculum) {
@@ -1137,7 +1137,15 @@ function normalizeLearningProgress(value) {
       completedAt: typeof entry.completedAt === 'string' ? entry.completedAt : null,
     };
   }
-  return { ...source, lessons };
+  const experiments = {};
+  for (const [id, entry] of Object.entries(source.experiments && typeof source.experiments === 'object' ? source.experiments : {})) {
+    if (!id || !entry || typeof entry !== 'object') continue;
+    experiments[id] = {
+      completedSteps: [...new Set((Array.isArray(entry.completedSteps) ? entry.completedSteps : []).filter(stepId => typeof stepId === 'string'))],
+      updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
+    };
+  }
+  return { ...source, lessons, experiments };
 }
 
 function loadLearningProgress() {
@@ -1162,6 +1170,60 @@ function setMobileLessonComplete(lessonId, complete = true) {
   }
   syncLearnPanel();
   showStatus(complete ? 'Lesson complete' : 'Lesson reopened');
+  return true;
+}
+
+function mobileExperimentState(lessonId) {
+  const lesson = curriculumLessons.find(entry => entry.id === lessonId);
+  const steps = lesson?.experiment?.steps || [];
+  const completedSteps = new Set(learningProgress.experiments?.[lessonId]?.completedSteps || []);
+  return {
+    lesson,
+    steps,
+    completedSteps,
+    completedCount: steps.filter(entry => completedSteps.has(entry.id)).length,
+    nextStep: steps.find(entry => !completedSteps.has(entry.id)) || steps.at(-1) || null,
+  };
+}
+
+function setMobileExperimentStepComplete(lessonId, stepId, complete = true) {
+  const experiment = mobileExperimentState(lessonId);
+  if (!experiment.steps.some(entry => entry.id === stepId)) return false;
+  learningProgress = normalizeLearningProgress(learningProgress);
+  const completedSteps = new Set(learningProgress.experiments?.[lessonId]?.completedSteps || []);
+  complete ? completedSteps.add(stepId) : completedSteps.delete(stepId);
+  learningProgress.experiments[lessonId] = { completedSteps: [...completedSteps], updatedAt: new Date().toISOString() };
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(learningProgress));
+  } catch (error) {
+    recordError(error);
+    return false;
+  }
+  syncLearnPanel();
+  showStatus(complete ? 'Observation saved' : 'Observation reopened');
+  return true;
+}
+
+function applyMobileExperimentStep(lessonId, stepId) {
+  const experiment = mobileExperimentState(lessonId);
+  const entry = experiment.steps.find(step => step.id === stepId);
+  if (!entry?.action) return false;
+  const modelByView = {
+    bloom: 'bloom', platonic: 'platonic', e8coxeter: 'e8_2d', sixhundred: 'poly4d',
+    polytope: 'poly4d', raymarched: 'sdf', dynkin: 'dynkin',
+  };
+  const source = entry.action.params || {};
+  const patch = { modelMode: modelByView[entry.action.view || experiment.lesson?.view] || state.modelMode };
+  if (entry.action.view === 'sixhundred') patch.polytope4d = '600cell';
+  if (SUPPORTED_SHAPES.has(source.shape)) patch.shape = source.shape;
+  if (SUPPORTED_POLYTOPES4D.has(source.poly4d)) patch.polytope4d = source.poly4d;
+  if (SUPPORTED_DYNKIN_DIAGRAMS.has(source.dynkin)) patch.dynkinDiagram = source.dynkin;
+  for (const key of ['showRings', 'showPetrie', 'showEdges', 'autoRotate', 'bloomAmount', 'bloomAuto', 'sdfSphereR', 'sdfBlend']) {
+    if (Object.hasOwn(source, key)) patch[key] = source[key];
+  }
+  setManualModelState(patch, `learn-experiment-${lessonId}-${stepId}`);
+  syncControls(`learn-experiment-${lessonId}-${stepId}`);
+  showStatus(`Try: ${entry.title}`);
   return true;
 }
 
@@ -1758,6 +1820,14 @@ function handleInfoAction(action) {
   if (action === 'toggle-lesson-complete') {
     const lessonId = activeLearnTopicId();
     return setMobileLessonComplete(lessonId, !learningProgress.lessons?.[lessonId]);
+  }
+  if (action === 'apply-experiment-step' || action === 'toggle-experiment-step') {
+    const lessonId = activeLearnTopicId();
+    const experiment = mobileExperimentState(lessonId);
+    const entry = experiment.nextStep;
+    if (!entry) return false;
+    if (action === 'apply-experiment-step') return applyMobileExperimentStep(lessonId, entry.id);
+    return setMobileExperimentStepComplete(lessonId, entry.id, !experiment.completedSteps.has(entry.id));
   }
   if (action === 'toggle-tour') return toggleMobileTour();
   if (action === 'start-tour') return startMobileTour();
@@ -4289,7 +4359,7 @@ function sceneLearnTopicId() {
   if (state.modelMode === 'sdf') return 'distance-fields';
   if (state.modelMode === 'platonic') return 'why-five-solids';
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
-  if (state.modelMode === 'dynkin') return 'roots-reflections';
+  if (state.modelMode === 'dynkin') return 'reading-dynkin';
   return 'coxeter-plane';
 }
 
@@ -4319,6 +4389,10 @@ function learnTopicRecord(id) {
     const selectedDetail = lesson.id === 'roots-reflections' && state.selectedRoot != null
       ? ` Selected root #${state.selectedRoot} is available in the root drawer.`
       : '';
+    const objectiveDetail = lesson.objectives?.length
+      ? ` Goal: ${lesson.objectives.join(' ')}`
+      : '';
+    const activityDetail = lesson.activity ? ` Try it: ${lesson.activity}` : '';
     const claimLabels = {
       'established-mathematics': 'Established mathematics',
       interpretation: 'Interpretation',
@@ -4329,7 +4403,7 @@ function learnTopicRecord(id) {
       ...topic,
       title: lesson.title,
       body: path?.description || 'Shared E8 Studio curriculum lesson.',
-      detail: `${claimLabels[lesson.claimType] || lesson.claimType}: ${lesson.claimNote} ${readingCount} reading${readingCount === 1 ? '' : 's'} · ${lesson.quiz?.title || 'quiz'}. ${sourceDetail}${selectedDetail}`,
+      detail: `${claimLabels[lesson.claimType] || lesson.claimType}: ${lesson.claimNote}${objectiveDetail}${activityDetail} ${readingCount} reading${readingCount === 1 ? '' : 's'} · ${lesson.quiz?.title || 'quiz'}. ${sourceDetail}${selectedDetail}`,
     };
   }
   const source = activeMckaySource();
@@ -4419,7 +4493,18 @@ function syncLearnPanel() {
     });
   }
   const lessonComplete = !!learningProgress.lessons?.[activeId];
-  els.learnTopicCard.innerHTML = `<strong>${escapeHtml(record.title)}</strong><small>${escapeHtml(record.body)}</small><small>${escapeHtml(record.detail)}</small><div class="learn-topic-foot"><button type="button" data-info-action="toggle-lesson-complete" aria-pressed="${lessonComplete}">${lessonComplete ? 'Completed' : 'Mark complete'}</button><button id="learn-topic-next" type="button" data-info-action="next-learn-topic" aria-label="Next learn topic">Next</button></div>`;
+  const experiment = mobileExperimentState(activeId);
+  const currentStep = experiment.nextStep;
+  const stepObserved = currentStep ? experiment.completedSteps.has(currentStep.id) : false;
+  const experimentHtml = currentStep ? `<div class="mobile-learn-experiment">
+    <div class="mobile-learn-experiment-head"><span>Guided experiment</span><strong>${experiment.completedCount}/${experiment.steps.length}</strong></div>
+    <b>${escapeHtml(currentStep.title)}</b>
+    <small>${escapeHtml(currentStep.instruction)}</small>
+    <div class="mobile-learn-question"><span>Notice</span>${escapeHtml(currentStep.question)}</div>
+    ${stepObserved ? `<div class="mobile-learn-takeaway"><span>Takeaway</span>${escapeHtml(currentStep.takeaway)}</div>` : ''}
+    <div class="mobile-learn-actions"><button type="button" data-info-action="apply-experiment-step">Try in view</button><button type="button" data-info-action="toggle-experiment-step" aria-pressed="${stepObserved}">${stepObserved ? 'Observed' : 'Mark observed'}</button></div>
+  </div>` : '';
+  els.learnTopicCard.innerHTML = `<strong>${escapeHtml(record.title)}</strong><small>${escapeHtml(record.body)}</small><small>${escapeHtml(record.detail)}</small>${experimentHtml}<div class="learn-topic-foot"><button type="button" data-info-action="toggle-lesson-complete" aria-pressed="${lessonComplete}">${lessonComplete ? 'Completed' : 'Mark complete'}</button><button id="learn-topic-next" type="button" data-info-action="next-learn-topic" aria-label="Next learn topic">Next</button></div>`;
   metrics.learnTopicSyncCount++;
   metrics.lastLearnTopic = activeId;
   metrics.lastLearnTopicConfigured = configured;

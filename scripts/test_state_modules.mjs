@@ -5,7 +5,12 @@ import {
   createGalleryBaseline,
   galleryPresetById,
 } from '../src/state/gallery.js';
-import { CameraController } from '../src/state/camera.js';
+import {
+  CameraController,
+  autoZoomBounds,
+  autoZoomDistance,
+  autoZoomPhaseForDistance,
+} from '../src/state/camera.js';
 import { planViewTransition } from '../src/state/view-transition.js';
 import { activeViewModifiers, createViewModifierReset } from '../src/state/selection-policy.js';
 import { PRESETS, applyPreset } from '../src/state/presets.js';
@@ -92,6 +97,17 @@ assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
 
+for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'dynkin']) {
+  const { near, far } = autoZoomBounds(view);
+  const speed = 2;
+  const halfSweep = Math.PI / (0.22 * speed);
+  assert.ok(Math.abs(autoZoomDistance(0, speed, -Math.PI / 2, view) - far) < 1e-9);
+  assert.ok(Math.abs(autoZoomDistance(halfSweep, speed, -Math.PI / 2, view) - near) < 1e-9);
+  assert.ok(Math.abs(autoZoomDistance(halfSweep * 2, speed, -Math.PI / 2, view) - far) < 1e-9);
+  const phase = autoZoomPhaseForDistance(6, view);
+  assert.ok(Math.abs(autoZoomDistance(0, speed, phase, view) - Math.min(far, 6)) < 1e-9);
+}
+
 const learning = new LearningProgressService({
   quiz: {},
   unlocked: { backgrounds: [] },
@@ -99,7 +115,7 @@ const learning = new LearningProgressService({
   postcardsCreated: 0,
   explorationBadges: [],
 });
-assert.equal(learning.summary().quizTotal, 8);
+assert.equal(learning.summary().quizTotal, 9);
 assert.equal(learning.quizById('e8-roots')?.id, 'e8-roots');
 learning.recordPostcard('postcard-prime');
 assert.equal(learning.progress.postcardsCreated, 1);

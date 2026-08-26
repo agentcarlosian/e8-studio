@@ -880,8 +880,9 @@ def main() -> int:
                   restored is not None and abs(restored["dpr"] - restored["native"]) < 1e-6,
                   str(restored))
 
-            # ---- Auto zoom must traverse a broad but bounded useful range ----
-            zoom_start = pg.evaluate("""() => {
+            # ---- Auto zoom control must activate; its complete bounded curve
+            # is covered deterministically by test_state_modules.mjs. ----
+            zoom_state = pg.evaluate("""() => {
               window.__app.resetCamera();
               window.__app.setParam('cameraPath', 'manual');
               window.__app.setParam('cameraMode', 'orbit');
@@ -889,17 +890,18 @@ def main() -> int:
               window.__app.setParam('cameraOrbit', true);
               window.__app.setParam('cameraSpeed', 2);
               window.__app.setParam('autoZoom', true);
-              return window.__app.camera.position.length();
+              return {
+                enabled: window.__app.params.autoZoom,
+                distance: window.__app.camera.position.length(),
+              };
             }""")
-            pg.wait_for_timeout(1800)
-            zoom_end = pg.evaluate("() => window.__app.camera.position.length()")
             pg.evaluate("""() => {
               window.__app.setParam('autoZoom', false);
               window.__app.setParam('cameraOrbit', false);
             }""")
-            check("auto zoom traverses the full bounded range",
-                  0.44 <= zoom_end <= 12.01 and abs(zoom_end - zoom_start) > 0.25,
-                  f"{zoom_start:.3f} -> {zoom_end:.3f}")
+            check("auto zoom activates with a valid bounded camera distance",
+                  bool(zoom_state["enabled"]) and 0.44 <= zoom_state["distance"] <= 12.01,
+                  str(zoom_state))
 
             # ---- 6. Persisted actions actually update localStorage ----
             pg.evaluate("""() => {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import html
 import json
+import math
 import os
 import re
 import socket
@@ -59,6 +60,41 @@ def check_web_build() -> None:
             fail(f"Vite web build is missing canonical data/{name}.json")
 
 
+def check_dependency_alignment() -> None:
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    versions = {
+        "three": package.get("dependencies", {}).get("three"),
+        "chroma-js": package.get("dependencies", {}).get("chroma-js"),
+        "simplex-noise": package.get("dependencies", {}).get("simplex-noise"),
+    }
+    expected_urls = {
+        "three.module.js": f"https://cdn.jsdelivr.net/npm/three@{versions['three']}/build/three.module.js",
+        "three.core.js": f"https://cdn.jsdelivr.net/npm/three@{versions['three']}/build/three.core.js",
+        "chroma-js.js": f"https://cdn.jsdelivr.net/npm/chroma-js@{versions['chroma-js']}/+esm",
+        "simplex-noise.js": f"https://cdn.jsdelivr.net/npm/simplex-noise@{versions['simplex-noise']}/+esm",
+    }
+    sources = json.loads((ROOT / "vendor" / "sources.json").read_text(encoding="utf-8"))
+    if sources != expected_urls:
+        fail(f"Vendored dependency sources do not match package.json: {sources} != {expected_urls}")
+    direct_urls = {key: value for key, value in expected_urls.items() if key != "three.core.js"}
+    for path in [ROOT / "index.html", ROOT / "scripts" / "build.py", ROOT / "scripts" / "build_offline.py"]:
+        text = path.read_text(encoding="utf-8")
+        required_urls = expected_urls if path.name == "build_offline.py" else direct_urls
+        for url in required_urls.values():
+            if url not in text:
+                fail(f"{path.relative_to(ROOT)} does not pin {url}")
+
+
+def check_standalone_build() -> None:
+    run([sys.executable, "scripts/build_singlefile.py"])
+    standalone = ROOT / "dist" / "e8-studio.html"
+    if not standalone.exists() or standalone.stat().st_size < 1_000_000:
+        fail("Desktop standalone build is missing or unexpectedly small")
+    text = standalone.read_text(encoding="utf-8")
+    if "__standaloneImportThree" not in text:
+        fail("Desktop standalone does not embed Three.js and its shared core")
+
+
 def check_js_syntax() -> None:
     for path in sorted((ROOT / "src").rglob("*.js")):
         run(["node", "--check", str(path)])
@@ -74,6 +110,7 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_curriculum.mjs"])
     run(["node", "scripts/test_progress.mjs"])
     run(["node", "scripts/test_content_integrity.mjs"])
+    run(["node", "scripts/test_model_contracts.mjs"])
 
 
 def check_python_syntax() -> None:
@@ -862,6 +899,72 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     for mode, visual in sdf_effect_contract["visualDiffs"].items():
         if visual["meanRgbDelta"] < 0.35 or visual["changed"] < 20:
             fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")
+    export_contract = page.evaluate("""() => {
+      const formats = {};
+      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']) {
+        window.__app.switchView(view);
+        window.__app.setPanelMode('style');
+        formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
+          .map(button => button.textContent.trim());
+      }
+      window.__app.switchView('dynkin');
+      window.__app.setDynkin('E8');
+      const geometry = window.__app.getGeometryJSON();
+      return {
+        formats,
+        dynkin: {
+          kind: geometry?.kind,
+          rank: geometry?.rank,
+          nodes: geometry?.nodes?.length,
+          obj: window.__app.getCurrentOBJ(),
+          svg: window.__app.getCurrentSVG(),
+        },
+      };
+    }""")
+    expected_export_formats = {
+        "bloom": ["PNG", "Data"],
+        "platonic": ["PNG", "OBJ", "Data"],
+        "e8coxeter": ["PNG", "SVG", "Data"],
+        "sixhundred": ["PNG", "Data"],
+        "polytope": ["PNG", "Data"],
+        "raymarched": ["PNG", "Data"],
+        "dynkin": ["PNG", "SVG", "OBJ", "Data"],
+    }
+    if export_contract["formats"] != expected_export_formats:
+        fail(f"View-aware export buttons drifted: {export_contract['formats']}")
+    dynkin_export = export_contract["dynkin"]
+    if (dynkin_export["kind"] != "dynkin-diagram" or dynkin_export["rank"] != 8
+            or dynkin_export["nodes"] != 8 or "o dynkin_E8" not in dynkin_export["obj"]
+            or "E8 Dynkin diagram" not in dynkin_export["svg"]):
+        fail(f"Dynkin export contract failed: {dynkin_export}")
+
+    dynkin_learn = page.evaluate("""() => {
+      window.__app.switchView('dynkin');
+      window.__app.setDynkin('E8');
+      window.__app.setPanelMode('learn');
+      const contextual = document.querySelector('[data-section="learn"] .curiosity-card');
+      const generic = document.querySelector('[data-learn-orientation]');
+      return {
+        contextualTitle: contextual?.querySelector('.info-title')?.textContent,
+        contextualFirst: !!contextual && !!generic
+          && contextual.getBoundingClientRect().top < generic.getBoundingClientRect().top,
+        recommended: contextual?.querySelector('[data-act="openLearningCenter"]')?.textContent,
+        cartanCells: document.querySelectorAll('.dynkin-cartan td').length,
+        canvasLabel: document.getElementById('canvas')?.getAttribute('aria-label'),
+      };
+    }""")
+    if (dynkin_learn["contextualTitle"] != "Curiosity: a diagram is compressed geometry"
+            or not dynkin_learn["contextualFirst"]
+            or "Reading Dynkin diagrams" not in (dynkin_learn["recommended"] or "")
+            or dynkin_learn["cartanCells"] != 64
+            or "E8 Dynkin Diagram" not in (dynkin_learn["canvasLabel"] or "")):
+        fail(f"Contextual Dynkin Learn contract failed: {dynkin_learn}")
+    page.evaluate("window.__app.openLearningCenter()")
+    page.wait_for_selector(".learning-center-dialog", timeout=5000)
+    if page.locator(".learning-center-content h2").text_content() != "Reading Dynkin diagrams":
+        fail("Dynkin did not open its mapped curriculum lesson")
+    page.click("[data-modal-close]")
+
     page.evaluate("window.__app.switchView('e8coxeter')")
     page.wait_for_timeout(300)
 
@@ -870,9 +973,19 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       snapshotButtons: document.querySelectorAll('[data-act="shareSnapshot"]').length,
       url: window.__app.sharePage(),
     })""")
-    expected_share_url = page.url.split('#', 1)[0].split('?', 1)[0]
-    if share_contract != {"pageButtons": 1, "snapshotButtons": 1, "url": expected_share_url}:
+    if (share_contract["pageButtons"] != 1 or share_contract["snapshotButtons"] != 1
+            or not share_contract["url"] or "#scene=v1." not in share_contract["url"]):
         fail(f"Hosted share/snapshot contract failed: {share_contract}")
+    shared_scene = page.evaluate("""url => {
+      const encoded = new URL(url).hash.slice('#scene=v1.'.length)
+        .replaceAll('-', '+').replaceAll('_', '/');
+      const padded = encoded + '='.repeat((4 - encoded.length % 4) % 4);
+      return JSON.parse(decodeURIComponent(escape(atob(padded))));
+    }""", share_contract["url"])
+    if (shared_scene.get("view") != "e8coxeter"
+            or not all(key in shared_scene for key in ["cameraDistance", "cameraRotation", "cameraPhi"])
+            or "cameraBookmarks" in shared_scene or "layout" in shared_scene):
+        fail(f"Share link did not contain a restorable, privacy-scoped scene: {shared_scene}")
 
     learning_open_ms = page.evaluate("""() => {
       const started = performance.now();
@@ -892,7 +1005,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
           claim: document.querySelector('.learning-claim-note strong')?.textContent,
         })"""
     )
-    if learning_center["paths"] != 4 or learning_center["lessons"] < 8 or learning_center["title"] != "Why only five?" or learning_center["sources"] < 1 or learning_center["claim"] != "Established mathematics":
+    if learning_center["paths"] != 4 or learning_center["lessons"] < 9 or learning_center["title"] != "The Coxeter plane" or learning_center["sources"] < 1 or learning_center["claim"] != "Established mathematics":
         fail(f"Learning Center initial curriculum failed: {learning_center}")
     lesson_navigation_ms = page.evaluate("""() => {
       const started = performance.now();
@@ -983,6 +1096,50 @@ def smoke_mobile(browser, base_url: str) -> None:
     page.close()
 
 
+def exercise_scene_persistence(browser, base_url: str) -> None:
+    page, page_errors, console_errors = open_checked_page(
+        browser, base_url + "/index.html", label="scene-persistence"
+    )
+    pose = {"theta": -1.4, "phi": 0.42, "distance": 2.75}
+    page.add_init_script(
+        script=f"""
+          const pose = {json.dumps(pose)};
+          localStorage.setItem('e8_studio_config_v1', JSON.stringify({{
+            view: 'dynkin', dynkin: 'E8', palette: 'rainbow',
+            cameraRotation: pose.theta, cameraPhi: pose.phi,
+            cameraDistance: pose.distance,
+          }}));
+        """,
+    )
+    page.reload(wait_until="commit")
+    page.wait_for_function("() => !!(window.__app?.currentView && window.__app.startupMetrics?.firstFrameMs !== null)", timeout=30000)
+    restored = page.evaluate("""() => ({
+      view: window.__app.params.view,
+      dynkin: window.__app.params.dynkin,
+      theta: window.__app.params.cameraRotation,
+      phi: window.__app.params.cameraPhi,
+      distance: window.__app.params.cameraDistance,
+      position: window.__app.camera.position.toArray(),
+    })""")
+    expected_position = [
+        pose["distance"] * math.sin(pose["phi"]) * math.sin(pose["theta"]),
+        pose["distance"] * math.cos(pose["phi"]),
+        pose["distance"] * math.sin(pose["phi"]) * math.cos(pose["theta"]),
+    ]
+    if restored["view"] != "dynkin" or restored["dynkin"] != "E8":
+        fail(f"Scene persistence restored the wrong model: {restored}")
+    for key, expected in [("theta", pose["theta"]), ("phi", pose["phi"]), ("distance", pose["distance"])]:
+        if abs(restored[key] - expected) > 1e-6:
+            fail(f"Camera persistence lost {key}: {restored}")
+    if any(abs(actual - expected) > 1e-5 for actual, expected in zip(restored["position"], expected_position)):
+        fail(f"Camera persistence did not apply to the rendered camera: {restored}")
+    canvas_label = page.locator("#canvas").get_attribute("aria-label") or ""
+    if "E8 Dynkin Diagram" not in canvas_label:
+        fail(f"Canvas accessibility label did not follow the restored model: {canvas_label}")
+    assert_clean_browser_errors(page_errors, console_errors, "scene-persistence")
+    page.close()
+
+
 def exercise_weyl_chamber(page, page_errors: list[str], console_errors: list[str], label: str) -> None:
     page.evaluate("window.__app.applyGalleryPreset && window.__app.applyGalleryPreset('weyl-chamber')")
     page.wait_for_timeout(1800)
@@ -1061,6 +1218,7 @@ def smoke_browser() -> None:
             browser = p.chromium.launch(**launch_args)
             try:
                 smoke_dev(browser, base_url)
+                exercise_scene_persistence(browser, base_url)
                 tablet, tablet_page_errors, tablet_console_errors = open_checked_page(
                     browser, base_url + "/index.html", label="dev-tablet", viewport={"width": 900, "height": 800}
                 )
@@ -1079,10 +1237,13 @@ def smoke_browser() -> None:
                 exercise_weyl_chamber(page, page_errors, console_errors, "web-dist-http-weyl")
                 exercise_gallery_reset(page, page_errors, console_errors, "web-dist-http-gallery-reset")
                 page.close()
-                file_url = (ROOT / "dist" / "index.html").resolve().as_uri()
-                page, page_errors, console_errors = open_checked_page(browser, file_url, label="dist-file")
-                exercise_weyl_chamber(page, page_errors, console_errors, "dist-file-weyl")
-                page.close()
+                standalone = ROOT / "dist" / "e8-studio.html"
+                if standalone.exists():
+                    page, page_errors, console_errors = open_checked_page(
+                        browser, standalone.resolve().as_uri(), label="standalone-file"
+                    )
+                    exercise_weyl_chamber(page, page_errors, console_errors, "standalone-file-weyl")
+                    page.close()
             finally:
                 browser.close()
     finally:
@@ -1136,6 +1297,8 @@ def main() -> int:
     checks = [
         ("build", check_build),
         ("web build", check_web_build),
+        ("dependency alignment", check_dependency_alignment),
+        ("desktop standalone build", check_standalone_build),
         ("js syntax", check_js_syntax),
         ("lifecycle contracts", check_lifecycle_contracts),
         ("python syntax", check_python_syntax),

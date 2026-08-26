@@ -17,6 +17,7 @@ import { THEMES, THEME_LABELS } from './theme.js';
 import { CODE_ART_SHADERS, TOUR_STOPS } from '../content/essays.js';
 import { BADGE_INFO } from '../content/learning.js';
 import { activeViewModifiers } from '../state/selection-policy.js';
+import { exportFormatsForView, viewCapabilities } from '../state/model-registry.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
 import {
   CURATED_LOOKS,
@@ -89,17 +90,6 @@ function renderShapeMorphDisclosure(params, uiState = {}) {
   return html;
 }
 
-// ── Helper: which params each view uses ──
-const VIEW_CAPABILITIES = {
-  bloom:      { shape: true,  rotate: true,  lighting: false, bloom: true,  e8: false, poly: false, sdf: false, extrude: true, math: false },
-  platonic:   { shape: true,  rotate: true,  lighting: true,  bloom: false, e8: false, poly: false, sdf: false, extrude: true, math: 'platonic' },
-  e8coxeter:  { shape: true,  rotate: true,  lighting: false, bloom: false, e8: true,  poly: false, sdf: false, extrude: true, math: 'e8', coloring: true },
-  sixhundred: { shape: true,  rotate: true,  lighting: true,  bloom: false, e8: false, poly: false, sdf: false, extrude: true, math: '600' },
-  polytope:   { shape: false, rotate: true,  lighting: true,  bloom: false, e8: false, poly: true,  sdf: false, extrude: true, math: false },
-  raymarched: { shape: false, rotate: true,  lighting: false, bloom: false, e8: false, poly: false, sdf: true, extrude: true, math: false },
-  dynkin:     { shape: false, rotate: true,  lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: false },
-};
-
 function renderGalleryControls(params) {
   const gallery = (typeof window !== 'undefined' && window.__app?.getGalleryPresets?.()) || [];
   if (!gallery.length) return '';
@@ -120,7 +110,7 @@ function renderGalleryControls(params) {
 
 // ── Section 1: VIEW ──
 function renderViewSection(params, data, uiState = {}) {
-  const caps = VIEW_CAPABILITIES[params.view] || {};
+  const caps = viewCapabilities(params.view);
   let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
 
   // View switcher (always visible)
@@ -422,7 +412,7 @@ function renderPolytopeControls(params, data) {
 
 // ── Section 2: VISUALS ──
 function renderStyleSection(params, data, uiState = {}) {
-  const caps = VIEW_CAPABILITIES[params.view] || {};
+  const caps = viewCapabilities(params.view);
   const quality = params.reducedMode ? 'low' : (params.mobileQuality || 'high');
   let html = '<div class="ps-section" data-section="style"><div class="ps-title">Visuals</div>';
 
@@ -540,11 +530,12 @@ function renderStyleSection(params, data, uiState = {}) {
   }
   html += '</div>';
 
+  const exportFormats = exportFormatsForView(params.view);
   html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
-  html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution PNG image">PNG</button>';
-  html += '<button data-act="exportSVG" title="Scalable vector diagram (E₈ Coxeter)">SVG</button>';
-  html += '<button data-act="exportOBJ" title="3D model of the current solid">OBJ</button>';
-  html += '<button data-act="exportGeometryJSON" title="Raw geometry as JSON">Data</button>';
+  if (exportFormats.includes('png')) html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution image of this view">PNG</button>';
+  if (exportFormats.includes('svg')) html += '<button data-act="exportSVG" title="Scalable vector diagram of this view">SVG</button>';
+  if (exportFormats.includes('obj')) html += '<button data-act="exportOBJ" title="Wavefront geometry for this view">OBJ</button>';
+  if (exportFormats.includes('data')) html += '<button data-act="exportGeometryJSON" title="Canonical model data as JSON">Data</button>';
   html += '</div>';
 
   html += '</div>';
@@ -553,11 +544,12 @@ function renderStyleSection(params, data, uiState = {}) {
 
 // ── Section 3: MATH ──
 function renderMathSection(params, data) {
-  const caps = VIEW_CAPABILITIES[params.view] || {};
+  const caps = viewCapabilities(params.view);
   if (!caps.math) return '';  // no math section for this view
 
   const subject = caps.math === 'e8' ? 'the E₈ root system'
     : caps.math === '600' ? 'the 600-cell'
+    : caps.math === 'dynkin' ? 'the selected Dynkin diagram'
     : 'the selected solid';
   let html = `<div class="ps-section" data-section="math"><div class="ps-title">Math lab</div>
     <div class="ps-help learn-math-intro">Interactive details for ${subject}. Change the active View to open a different lab.</div>`;
@@ -673,15 +665,36 @@ function renderMathSection(params, data) {
         </div>
       </div>`;
     }
+  } else if (caps.math === 'dynkin') {
+    const diagram = data.dynkin?.[params.dynkin];
+    const rank = diagram?.nodes?.length || 0;
+    const edgeSet = new Set((diagram?.edges || []).flatMap(([a, b]) => [`${a}:${b}`, `${b}:${a}`]));
+    const degrees = Array.from({ length: rank }, (_, node) =>
+      (diagram?.edges || []).filter(edge => edge.includes(node)).length);
+    const branchNode = degrees.findIndex(degree => degree >= 3);
+    const matrixRows = Array.from({ length: rank }, (_, row) =>
+      `<tr>${Array.from({ length: rank }, (_, column) => {
+        const value = row === column ? 2 : edgeSet.has(`${row}:${column}`) ? -1 : 0;
+        return `<td>${value}</td>`;
+      }).join('')}</tr>`).join('');
+    html += `<div class="info-box">
+      <span class="info-title">${escapeHtml(diagram?.name || params.dynkin)} finite diagram</span>
+      Rank <b>${rank}</b> · ${diagram?.edges?.length || 0} bonds · simply-laced<br>
+      ${branchNode >= 0 ? `Branch node: <b>α${branchNode + 1}</b> (degree ${degrees[branchNode]})` : 'Unbranched chain'}
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">Cartan matrix from the graph</span>
+      <div class="ps-help">2 on the diagonal, −1 across a bond, and 0 otherwise.</div>
+      <div class="cartan-scroll"><table class="dynkin-cartan" aria-label="${escapeHtml(params.dynkin)} Cartan matrix"><tbody>${matrixRows}</tbody></table></div>
+    </div>`;
   } else if (caps.math === '600') {
-    const angles = ['0°', '72°', '120°', '144°', '180°', '216°', '240°', '288°', '360°'];
     const sizes = [1, 12, 20, 12, 30, 12, 20, 12, 1];
-    const labels = ['identity', 'icosa', 'dodeca', 'icosa', 'icosidodeca', 'icosa', 'dodeca', 'icosa', 'antipode'];
-    html += '<div class="info-box"><span class="info-title">Conjugacy classes</span>';
-    for (let c = 0; c < angles.length; c++) {
+    const labels = ['identity', 'class A', 'class B', 'class C', 'class D', 'class E', 'class F', 'class G', 'central antipode'];
+    html += '<div class="info-box"><span class="info-title">Binary icosahedral conjugacy classes</span><div class="ps-help">Quaternion and SO(3) angles use a double-cover convention, so this view labels classes by size instead of conflating the two angles.</div>';
+    for (let c = 0; c < sizes.length; c++) {
       html += `<div class="class-row">
         <span class="class-dot" style="background:${classSwatch(c)}"></span>
-        <span class="class-label"><b>${angles[c]}</b> · ${labels[c]}</span>
+        <span class="class-label"><b>C${c + 1}</b> · ${labels[c]}</span>
         <span class="class-size">${sizes[c]}</span>
       </div>`;
     }
@@ -782,9 +795,20 @@ function renderLearnSection(params) {
   const quizzes = learning?.quizzes || [];
   const rewards = learning?.rewards || [];
   const earnedBadges = new Set(progress.badges || []);
+  const recognizedBadgeCount = BADGE_INFO.filter(badge => earnedBadges.has(badge.id)).length;
+  const recommendedLesson = learning?.recommendedLesson;
   return `
     <div class="ps-section" data-section="learn">
       <div class="ps-title">Learn</div>
+      ${curiosity ? `
+        <div class="ps-subtitle">In this view</div>
+        <div class="info-box curiosity-card">
+          <span class="info-title">${escapeHtml(curiosity.title)}</span>
+          <div>${escapeHtml(curiosity.body)}</div>
+          ${recommendedLesson ? `<div class="seg"><button data-act="openLearningCenter">Open ${escapeHtml(recommendedLesson.title)}</button></div>` : ''}
+        </div>
+      ` : ''}
+
       <div class="info-box learn-orientation" data-learn-orientation>
         <span class="info-title">E₈ at a glance</span>
         <div class="learn-fact-strip" aria-label="Key E8 facts">
@@ -800,7 +824,7 @@ function renderLearnSection(params) {
       <div class="ps-subtitle">Start exploring</div>
       <div class="learn-path-grid" data-learn-paths>
         <button class="learn-path-card primary" data-act="openLearningCenter">
-          <span>Curriculum</span><small>Four guided learning paths</small>
+          <span>${recommendedLesson ? `Continue: ${escapeHtml(recommendedLesson.title)}` : 'Curriculum'}</span><small>${summary.lessonsComplete || 0}/${summary.lessonsTotal || 0} lessons · ${summary.experimentsComplete || 0}/${summary.experimentsTotal || 0} experiments</small>
         </button>
         <button class="learn-path-card" data-act="toggleTour">
           <span>Guided tour</span><small>${TOUR_STOPS.length} scenes · ${mins}m ${secs}s</small>
@@ -809,14 +833,6 @@ function renderLearnSection(params) {
           <span>Interactive proofs</span><small>Build the ideas step by step</small>
         </button>
       </div>
-
-      ${curiosity ? `
-        <div class="ps-subtitle">In this view</div>
-        <div class="info-box curiosity-card">
-          <span class="info-title">${escapeHtml(curiosity.title)}</span>
-          <div>${escapeHtml(curiosity.body)}</div>
-        </div>
-      ` : ''}
 
       ${daily ? `
         <div class="ps-subtitle">Today's discovery</div>
@@ -835,12 +851,13 @@ function renderLearnSection(params) {
       </div>
 
       <details class="learn-disclosure" data-learn-disclosure="progress">
-        <summary><span>Progress &amp; challenges</span><small>${summary.quizPassed || 0}/${summary.quizTotal || 0} quizzes · ${earnedBadges.size}/${BADGE_INFO.length} badges</small></summary>
+        <summary><span>Progress &amp; challenges</span><small>${summary.quizPassed || 0}/${summary.quizTotal || 0} quizzes · ${recognizedBadgeCount}/${BADGE_INFO.length} badges</small></summary>
         <div class="learn-disclosure-body">
           <div class="learn-progress-stats">
             <div><strong>${summary.streak || 0}</strong><span>day streak</span></div>
+            <div><strong>${summary.lessonsComplete || 0}/${summary.lessonsTotal || 0}</strong><span>lessons</span></div>
+            <div><strong>${summary.experimentsComplete || 0}/${summary.experimentsTotal || 0}</strong><span>experiments</span></div>
             <div><strong>${summary.quizPassed || 0}</strong><span>quizzes</span></div>
-            <div><strong>${summary.postcardsCreated || 0}</strong><span>postcards</span></div>
           </div>
           <div class="ps-subtitle">Quizzes</div>
           <div class="quiz-grid">

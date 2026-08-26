@@ -30,7 +30,7 @@ const PERSISTABLE = new Set([
   'showInspector', 'compareMode',
   'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
   'seed',
-  'cameraSpeed', 'cameraDistance', 'cameraRotation',
+  'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',
   'cameraBookmarks', 'compareShape', 'rootSubset', 'presentationMode', 'teachingMode',
   'adaptivePixelRatio',
   'showStarfield', // legacy — kept for backward-compat reads
@@ -47,6 +47,30 @@ const PERSISTABLE = new Set([
 // restore a stale 'intro: false' from an older session's localStorage.
 const SKIP = new Set(['intro', 'paused']);
 
+// A scene link intentionally excludes device policy, local progress, panel
+// layout, bookmarks, and other personal preferences. It contains only the
+// state required to reconstruct what the sender is looking at.
+const SHAREABLE = new Set([
+  'view', 'shape', 'dynkin', 'poly4d', 'palette', 'colorBy', 'opacity',
+  'pointScale', 'showVertices', 'showEdges', 'showRings', 'showPetrie',
+  'rotationSpeed', 'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel',
+  'showAmbient', 'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',
+  'cameraPath', 'cameraMode',
+  'fxMode', 'fxIntensity', 'autoFx', 'fxShiftInterval',
+  'bgMode', 'bgIntensity', 'bloomAmount', 'bloomAuto', 'bloomSpeed',
+  'bloomMandelbox', 'bloomMandelboxScale', 'bloomMandelboxIters', 'bloomMandelboxMix',
+  'shiftMode', 'shiftSpeed', 'shapeTwist', 'shapeSpike', 'shapeJitter',
+  'morph4d', 'polyProjectionVersion', 'polyRotXY', 'polyRotZW', 'polyRotXZ',
+  'polyRotYW', 'polyRotXW', 'polyRotYZ', 'polyAutoRotate', 'polyRotationSpeed',
+  'e8ViewMode', 'e8Spin', 'e8Tilt', 'e8Roll', 'e8AutoRotate', 'e8MorphT',
+  'e8Twin600', 'e8ProjectionAuto', 'rootSubset', 'rootHaloDepth',
+  'rootDiffusionSpeed', 'showWeylMirrors', 'weylOrbit', 'weylOrbitFast',
+  'cartanHighlight', 'h4TwinReveal',
+  'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
+  'lightAmbient', 'lightKey', 'lightFill', 'lightAccent', 'compareMode',
+  'compareShape', 'seed',
+]);
+
 let saveTimer = null;
 let pendingSave = null;
 let onLoadCallback = null;
@@ -62,10 +86,10 @@ function writePendingSave() {
   }
 }
 
-function configSnapshot(params) {
+function configSnapshot(params, allowList = PERSISTABLE) {
   const toSave = {};
   for (const k of Object.keys(params)) {
-    if (!SKIP.has(k) && PERSISTABLE.has(k)) toSave[k] = params[k];
+    if (!SKIP.has(k) && allowList.has(k)) toSave[k] = params[k];
   }
   return JSON.parse(JSON.stringify(toSave));
 }
@@ -117,6 +141,16 @@ export function exportConfig(params) {
   return b64;
 }
 
+/** Export only scene state suitable for a public, restorable URL. */
+export function exportSceneConfig(params) {
+  const toSave = configSnapshot(params, SHAREABLE);
+  const json = JSON.stringify(toSave);
+  return btoa(unescape(encodeURIComponent(json)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 /** Import config from a base64 string. Returns null on parse error. */
 export function importConfig(s) {
   try {
@@ -133,9 +167,11 @@ export function importConfig(s) {
 
 /** Build a shareable URL with the config embedded in the hash. */
 export function buildShareUrl(params, baseUrl) {
-  const code = exportConfig(params);
+  const code = exportSceneConfig(params);
   const u = new URL(baseUrl || window.location.href);
-  u.hash = 'config=' + code;
+  // Version the scene schema so a future migration can coexist with links
+  // already shared from this release.
+  u.hash = 'scene=v1.' + code;
   return u.toString();
 }
 
@@ -143,8 +179,11 @@ export function buildShareUrl(params, baseUrl) {
 export function readUrlConfig() {
   if (typeof window === 'undefined') return null;
   const h = window.location.hash;
-  if (!h || !h.startsWith('#config=')) return null;
-  return importConfig(h.slice('#config='.length));
+  if (!h) return null;
+  if (h.startsWith('#scene=v1.')) return importConfig(h.slice('#scene=v1.'.length));
+  // Backward compatibility with the original unversioned config links.
+  if (h.startsWith('#config=')) return importConfig(h.slice('#config='.length));
+  return null;
 }
 
 /** Auto-save: call once with current params, and again whenever they change. */
@@ -153,9 +192,10 @@ export function startAutoSave(getParams) {
   if (typeof window === 'undefined') return;
   // Save on visibility change (mobile) and unload
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveConfig(getParams());
+    if (document.visibilityState === 'hidden') saveConfig(getParams(), { immediate: true });
   });
-  window.addEventListener('beforeunload', () => saveConfig(getParams()));
+  window.addEventListener('pagehide', () => saveConfig(getParams(), { immediate: true }));
+  window.addEventListener('beforeunload', () => saveConfig(getParams(), { immediate: true }));
 }
 
 // Imported config can come from an UNTRUSTED source — the `#config=` share-link

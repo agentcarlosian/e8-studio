@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { ESSAYS, ESSAY_PROVENANCE } from '../src/content/essays.js';
 import { BIOGRAPHIES, TIMELINE, DAILY_FACTS, QUIZ_MODULES, CURIOUS_CARDS, LEARNING_CONTENT_PROVENANCE } from '../src/content/learning.js';
 import { GLOSSARY } from '../src/content/glossary.js';
@@ -41,6 +42,26 @@ for (const stale of [
   'non-associativity is exactly what makes',
   'one of the few gauge groups quantum mechanics permits',
   'The 3-sphere has genus 0, so the planar bound',
+  'q = (cos θ, sin θ',
+  'size makes the theory anomaly-free',
+  '4D counterparts are the Lorentzian reflection groups',
+  'exactly this 120 + 128 split',
 ]) assert.ok(!shippedCopy.includes(stale), `removed disputed claim: ${stale}`);
+
+assert.ok(CURIOUS_CARDS.dynkin, 'Dynkin has contextual curiosity content');
+assert.ok(QUIZ_MODULES.some(quiz => quiz.id === 'dynkin-diagrams'), 'Dynkin has a dedicated quiz');
+
+const readProjectFile = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const readme = readProjectFile('README.md');
+const indexHtml = readProjectFile('index.html');
+const mainJs = readProjectFile('src/main.js');
+const changelog = readProjectFile('CHANGELOG.md');
+
+assert.match(readme, /### Seven interactive views/, 'README view count');
+assert.match(readme, /\| \*\*Dynkin\*\* \|/, 'README Dynkin view coverage');
+assert.match(readme, /use `1–7` for views/, 'README view shortcut range');
+assert.match(indexHtml, /seven interactive views/, 'social metadata view count');
+assert.match(mainJs, /\{ k: '1–7', d: 'Switch view' \}/, 'in-app view shortcut range');
+assert.match(changelog, /## 0\.2\.0 — Studio overhaul/, 'current release notes');
 
 console.log(`Content integrity passed: ${collections.reduce((sum, [, records]) => sum + records.length, 0)} records, ${Object.keys(FACT_SOURCES).length} sources.`);

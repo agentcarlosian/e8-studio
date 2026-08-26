@@ -130,6 +130,7 @@ export function createViewSelectionReset(targetView, params = {}) {
     ...patch,
     cameraDistance: 6,
     cameraRotation: Math.PI / 6,
+    cameraPhi: Math.PI / 3,
   };
 }
 

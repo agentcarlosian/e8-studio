@@ -12,6 +12,7 @@ const DEFAULT_PROGRESS = {
   badges: [],
   quiz: {},
   lessons: {},
+  experiments: {},
   daily: {
     lastCompletedDate: null,
     streak: 0,
@@ -25,14 +26,15 @@ function cloneDefault() {
   return JSON.parse(JSON.stringify(DEFAULT_PROGRESS));
 }
 
-function todayKey(date = new Date()) {
-  return date instanceof Date ? date.toISOString().slice(0, 10) : String(date).slice(0, 10);
+export function localDateKey(date = new Date()) {
+  if (!(date instanceof Date)) return String(date).slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function yesterdayKey(date = new Date()) {
   const d = date instanceof Date ? new Date(date) : new Date(String(date));
   d.setDate(d.getDate() - 1);
-  return todayKey(d);
+  return localDateKey(d);
 }
 
 function uniqStrings(values) {
@@ -53,6 +55,14 @@ export function normalizeProgress(value) {
       };
     }
   }
+  const experiments = {};
+  for (const [lessonId, entry] of Object.entries(p.experiments && typeof p.experiments === 'object' ? p.experiments : {})) {
+    if (typeof lessonId !== 'string' || !lessonId || !entry || typeof entry !== 'object') continue;
+    experiments[lessonId] = {
+      completedSteps: uniqStrings(entry.completedSteps),
+      updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
+    };
+  }
   return {
     unlocked: {
       backgrounds: uniqStrings([
@@ -63,6 +73,7 @@ export function normalizeProgress(value) {
     badges: uniqStrings(p.badges),
     quiz: p.quiz && typeof p.quiz === 'object' ? p.quiz : {},
     lessons,
+    experiments,
     daily: {
       lastCompletedDate: typeof daily.lastCompletedDate === 'string' ? daily.lastCompletedDate : null,
       streak: Number.isFinite(Number(daily.streak)) ? Math.max(0, Math.floor(Number(daily.streak))) : 0,
@@ -71,6 +82,20 @@ export function normalizeProgress(value) {
     postcardsCreated: Number.isFinite(Number(p.postcardsCreated)) ? Math.max(0, Math.floor(Number(p.postcardsCreated))) : 0,
     firstLaunchComplete: !!p.firstLaunchComplete,
   };
+}
+
+export function setExperimentStepComplete(progress, lessonId, stepId, complete = true, updatedAt = new Date().toISOString()) {
+  const next = normalizeProgress(progress);
+  if (!lessonId || typeof lessonId !== 'string' || !stepId || typeof stepId !== 'string') return next;
+  const record = next.experiments[lessonId] || { completedSteps: [], updatedAt: null };
+  const completedSteps = new Set(record.completedSteps);
+  if (complete) completedSteps.add(stepId);
+  else completedSteps.delete(stepId);
+  next.experiments[lessonId] = {
+    completedSteps: [...completedSteps],
+    updatedAt: typeof updatedAt === 'string' ? updatedAt : null,
+  };
+  return saveProgress(next);
 }
 
 export function setLessonComplete(progress, lessonId, complete = true, completedAt = new Date().toISOString()) {
@@ -142,7 +167,7 @@ export function recordQuizResult(progress, moduleId, score, total, rewardId) {
 
 export function claimDailyProgress(progress, fact, date = new Date()) {
   const next = normalizeProgress(progress);
-  const today = todayKey(date);
+  const today = localDateKey(date);
   if (next.daily.lastCompletedDate === today) {
     return { progress: next, claimed: false, alreadyClaimed: true };
   }

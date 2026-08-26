@@ -26,6 +26,7 @@ JS_FILES    = [
     ROOT / 'src' / 'state' / 'progress.js',
     ROOT / 'src' / 'state' / 'selection-policy.js',
     ROOT / 'src' / 'state' / 'view-transition.js',
+    ROOT / 'src' / 'state' / 'model-registry.js',
     ROOT / 'src' / 'state' / 'presets.js',
     ROOT / 'src' / 'state' / 'gallery.js',
     ROOT / 'src' / 'state' / 'camera.js',
@@ -228,8 +229,8 @@ def main():
             sys.exit('ERROR: Could not find module script tag in index.html')
     new_script = (
         '<script type="module">\n'
-        'import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js";\n'
-        'import chroma from "https://cdn.jsdelivr.net/npm/chroma-js@2.4.2/+esm";\n'
+        'import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js";\n'
+        'import chroma from "https://cdn.jsdelivr.net/npm/chroma-js@3.2.0/+esm";\n'
         'import * as simplexNoise from "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm";\n'
         'window.__modules = window.__modules || {};\n'
         'window.__modules.THREE = THREE;\n'

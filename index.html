@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=1280, initial-scale=1.0, viewport-fit=cover">
 <title>E8 Studio</title>
-<meta name="description" content="An interactive WebGL studio for exploring the E8 root system, Platonic solids, the 600-cell, and regular four-dimensional polytopes.">
+<meta name="description" content="An interactive WebGL studio for exploring E8 roots, Dynkin diagrams, Platonic solids, the 600-cell, and regular four-dimensional polytopes.">
 <meta name="theme-color" content="#07070c">
 <meta property="og:type" content="website">
 <meta property="og:title" content="E8 Studio">
-<meta property="og:description" content="Explore E8, Platonic solids, the 600-cell, and regular 4D polytopes in six interactive views.">
+<meta property="og:description" content="Explore E8, Dynkin diagrams, Platonic solids, the 600-cell, and regular 4D polytopes in seven interactive views.">
 <meta property="og:url" content="https://agentcarlosian.github.io/e8-studio/">
 <meta property="og:image" content="https://agentcarlosian.github.io/e8-studio/media/social-preview.jpg">
 <meta property="og:image:alt" content="A colorful generative E8 Studio visualization">
@@ -24,7 +24,7 @@
      CSS-injection risk is low). Works for dev (http), dist, and Electron. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'sha256-PJiBqUz33LsW+0UrCJ2xZwOyoPiuooGc4pkcgyKnK2E=' 'sha256-R9G1c3kieaWHYV5kOMM3cXvcboJRePgNQR2Ife/QnkM=' 'sha256-DZTUBQlKlzoatWsJFKg/A9VV3gqwjdaNvwoiyB8tLhE=' https://cdn.jsdelivr.net file:;
+  script-src 'self' 'sha256-+LpcqZdz7hP04xHTxJcjsMcXIg0GIZ2lS++yWpv1iH4=' 'sha256-R9G1c3kieaWHYV5kOMM3cXvcboJRePgNQR2Ife/QnkM=' 'sha256-DZTUBQlKlzoatWsJFKg/A9VV3gqwjdaNvwoiyB8tLhE=' https://cdn.jsdelivr.net file:;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com data: file:;
   img-src 'self' data: blob: file:;
@@ -36,15 +36,15 @@
 ">
 <script>if (location.protocol === 'file:' && !location.pathname.replaceAll('\\', '/').includes('/dist/')) location.replace(new URL('dist/e8-studio.html', location.href));</script>
 
-<!-- three.js (r170), chroma-js (2.4), simplex-noise (4.0). Versions are pinned
+<!-- Three.js (0.185.1), chroma-js (3.2.0), simplex-noise (4.0.3). Versions are pinned
      exactly; the committed offline build (scripts/build_offline.py → vendor/)
      is the supply-chain-safe path that avoids CDN fetches entirely. -->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-    "chroma-js": "https://cdn.jsdelivr.net/npm/chroma-js@2.4.2/+esm",
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/",
+    "chroma-js": "https://cdn.jsdelivr.net/npm/chroma-js@3.2.0/+esm",
     "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/+esm"
   }
 }

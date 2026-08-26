@@ -516,7 +516,7 @@ def main() -> int:
                 nextButton: document.getElementById('learn-topic-next').getBoundingClientRect()
             })""")
             learn_ids = [button["id"] for button in learn_panel["buttons"]]
-            expected_lesson_ids = ["auto", "why-five-solids", "into-four-dimensions", "six-hundred-cell", "coxeter-plane", "roots-reflections", "mckay-bridge", "designed-bloom", "distance-fields"]
+            expected_lesson_ids = ["auto", "why-five-solids", "into-four-dimensions", "six-hundred-cell", "coxeter-plane", "roots-reflections", "reading-dynkin", "mckay-bridge", "designed-bloom", "distance-fields"]
             check("Info section exposes shared curriculum lessons", learn_panel["state"]["learnTopic"] == "auto" and learn_ids == expected_lesson_ids and learn_panel["metrics"]["learnTopicButtonCount"] == len(expected_lesson_ids) and all(button["box"]["height"] >= 40 for button in learn_panel["buttons"]), str(learn_panel))
             check("Learn Auto follows current curriculum scene", learn_panel["output"] == "Auto: Coxeter plane" and any(button["id"] == "auto" and button["active"] and button["pressed"] == "true" for button in learn_panel["buttons"]) and any(button["id"] == "coxeter-plane" and button["effective"] for button in learn_panel["buttons"]) and "Move from the 600-cell" in learn_panel["card"] and "2 scoped sources" in learn_panel["card"] and learn_panel["nextButton"]["height"] >= 40, str(learn_panel))
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")

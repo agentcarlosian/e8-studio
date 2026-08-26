@@ -187,7 +187,7 @@ export const GLOSSARY = [
     term: 'Quaternion (ℍ)',
     group: 'Algebra',
     short: 'The 4-dimensional normed division algebra; encodes 3D rotation.',
-    long: 'A unit quaternion q = (cos θ, sin θ·v̂) encodes a rotation by θ about axis v̂. The 120 unit quaternions of the binary icosahedral group are the vertices of the 600-cell. Composing 3D rotations is multiplying quaternions.',
+    long: 'A spatial rotation through angle θ about axis v̂ can be represented by the unit quaternion q = (cos(θ/2), sin(θ/2)·v̂), acting by conjugation; q and −q represent the same rotation. The 120 unit quaternions of the binary icosahedral group are the vertices of the 600-cell. Composing rotations corresponds to multiplying their representing quaternions.',
     related: ['octonion', 'sixhundred-cell', 'binary-polyhedral-group'],
   },
   {
