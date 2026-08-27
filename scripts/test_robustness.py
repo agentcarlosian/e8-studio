@@ -34,7 +34,7 @@ FX_MODES = ['none', 'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripp
             'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi', 'caustic',
             'iridescent', 'flowfield', 'plasma', 'kaleido6', 'dof', 'nebula',
             'wireframe', 'hologram', 'xray', 'crystal']
-VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']
+VIEWS = ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']
 SDF_FX_MODES = FX_MODES
 
 results: list[tuple[str, bool, str]] = []
@@ -109,7 +109,7 @@ def main() -> int:
                 if active_view != view:
                     shader_fail.append(f"{view}: switch landed on {active_view}")
                     continue
-                compatible_modes = SDF_FX_MODES if view == 'raymarched' else FX_MODES
+                compatible_modes = ['none'] if view == 'quasicrystal' else (SDF_FX_MODES if view == 'raymarched' else FX_MODES)
                 for mode in compatible_modes:
                     before = len(console_errs)
                     pg.evaluate("(m) => window.__app.setFX(m)", mode)
@@ -126,7 +126,7 @@ def main() -> int:
             # and background at the ceiling of each tier so this also verifies
             # that the global selector drives the shared capability policy.
             quality_matrix = pg.evaluate("""() => {
-              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin'];
+              const views = ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin'];
               const tiers = {
                 low: {fx: 'glow', bg: 'starfield'},
                 medium: {fx: 'trail', bg: 'aurora'},
@@ -156,12 +156,55 @@ def main() -> int:
             }""")
             matrix_fail = [row for row in quality_matrix if
                            row["activeView"] != row["view"]
-                           or row["fx"] != {"low": "glow", "medium": "trail", "high": "voronoi"}[row["quality"]]
+                           or row["fx"] != ('none' if row["view"] == 'quasicrystal' else {"low": "glow", "medium": "trail", "high": "voronoi"}[row["quality"]])
                            or row["bg"] != {"low": "starfield", "medium": "aurora", "high": "cosmos"}[row["quality"]]
                            or row["hasView"] is not True
                            or row["objectVisible"] is not True]
             check("all nine models render across Low, Balanced, and High quality",
                   not matrix_fail, str(matrix_fail[:3]))
+
+            quasi_clean = pg.evaluate("""() => {
+              window.__app.switchView('quasicrystal');
+              window.__app.setPanelMode('scene');
+              const haloButtonBefore = document.querySelector('[data-section="view"] [data-act="toggleQuasiPointHalos"]');
+              const pointMaterial = window.__app.currentView.object3d.getObjectByName('QuasicrystalPoints')?.material;
+              const haloStartsOn = window.__app.params.quasiPointHalos === true
+                && haloButtonBefore?.classList.contains('on')
+                && pointMaterial?.uniforms?.uShowRim?.value === 1;
+              window.__app.toggleQuasiPointHalos();
+              window.__app.currentView.update(0.016, performance.now() / 1000, window.__app.params);
+              const haloTurnsOff = window.__app.params.quasiPointHalos === false
+                && document.querySelector('[data-section="view"] [data-act="toggleQuasiPointHalos"]')?.classList.contains('on') === false
+                && pointMaterial?.uniforms?.uShowRim?.value === 0;
+              window.__app.toggleQuasiPointHalos();
+              window.__app.currentView.update(0.016, performance.now() / 1000, window.__app.params);
+              const haloReturns = window.__app.params.quasiPointHalos === true
+                && pointMaterial?.uniforms?.uShowRim?.value === 1;
+              window.__app.setPanelMode('style');
+              const fxMaterials = [];
+              window.__app.currentView.object3d.traverse(object => {
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                for (const material of materials) {
+                  if (material?.uniforms?.uFXMode) fxMaterials.push(material);
+                }
+              });
+              return {
+                fxMode: window.__app.params.fxMode,
+                fxButtons: document.querySelectorAll('[data-section="style"] [data-act="setFX"]').length,
+                cleanCopy: document.querySelector('[data-section="style"]')?.textContent.includes('Effects are disabled in the Quasicrystal Lab'),
+                fxMaterials: fxMaterials.length,
+                haloStartsOn,
+                haloTurnsOff,
+                haloReturns,
+              };
+            }""")
+            check("Quasicrystal Lab uses its lightweight effects-free desktop path",
+                  quasi_clean["fxMode"] == "none" and quasi_clean["fxButtons"] == 0
+                  and quasi_clean["cleanCopy"] is True and quasi_clean["fxMaterials"] == 0
+                  and quasi_clean["haloStartsOn"] is True and quasi_clean["haloTurnsOff"] is True
+                  and quasi_clean["haloReturns"] is True,
+                  str(quasi_clean))
+            pg.evaluate("() => window.__app.setPanelMode('scene')")
 
             # Platonic faces must participate in the centralized FX pipeline,
             # and star polyhedra must retain their non-depth-writing material

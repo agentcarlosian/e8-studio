@@ -48,6 +48,13 @@ export const FACT_SOURCES = {
     scope: 'pentagrids as five rotated line families and their dual construction of non-periodic rhombus tilings',
     tier: 'primary-paper',
   },
+  'richard-strungaru-cut-project': {
+    title: 'A short guide to pure point diffraction in cut-and-project sets',
+    author: 'Christoph Richard and Nicolae Strungaru',
+    url: 'https://arxiv.org/abs/1606.08831',
+    scope: 'cut-and-project sets, acceptance windows, Fourier modules, and pure-point diffraction',
+    tier: 'primary-paper',
+  },
   'mckay-michigan-notes': {
     title: 'McKay correspondence lecture notes',
     author: 'University of Michigan',

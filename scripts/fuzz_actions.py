@@ -3,7 +3,7 @@
 # All actions the user can take via the panel
 ACTIONS = [
     ('view', 'bloom'), ('view', 'platonic'), ('view', 'e8coxeter'),
-    ('view', 'sixhundred'), ('view', 'polytope'), ('view', 'raymarched'),
+    ('view', 'quasicrystal'), ('view', 'polytope'), ('view', 'raymarched'),
     ('palette', 'gold'), ('palette', 'ember'), ('palette', 'rainbow'),
     ('palette', 'aurora'), ('palette', 'neon'), ('palette', 'fire'),
     ('fx', 'glow'), ('fx', 'pulse'), ('fx', 'trail'), ('fx', 'chromatic'),
@@ -21,7 +21,6 @@ ACTIONS = [
     ('layout', 'presentation'),
     ('shape', 'tetrahedron'), ('shape', 'cube'), ('shape', 'octahedron'),
     ('shape', 'dodecahedron'), ('shape', 'icosahedron'),
-    ('stack', 'single'), ('stack', 'dual'), ('stack', 'all5'), ('stack', 'nested'),
     ('blend', 'spectrum'), ('blend', 'sector'), ('blend', 'radial'),
     ('blend', 'mirror'), ('blend', 'random'),
     # E8-native colorings (the project's own color-by-structure control)
@@ -98,7 +97,6 @@ ACTION_SCRIPT = {
     'theme':         lambda a: f"window.__app.setTheme('{a[1]}')",
     'layout':        lambda a: f"window.__app.setLayout('{a[1]}')",
     'shape':         lambda a: f"window.__app.setShape('{a[1]}')",
-    'stack':         lambda a: f"window.__app.setStackMode('{a[1]}')",
     'blend':         lambda a: f"window.__app.setBlendMode('{a[1]}')",
     'colorBy':       lambda a: f"window.__app.setColorBy('{a[1]}')",
     'sliderAuto':    lambda a: f"window.__app.toggleSliderAuto('{a[1]}')",

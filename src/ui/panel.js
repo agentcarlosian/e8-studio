@@ -21,6 +21,7 @@ import { exportFormatsForView, viewCapabilities } from '../state/model-registry.
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEM_ORDER } from '../math/rank2-roots.js';
 import { COXETER_TILING_ORDER, generateCoxeterTiling } from '../math/coxeter-tilings.js';
+import { generateE8Quasicrystal, QUASICRYSTAL_REACHES } from '../math/e8-quasicrystal.js';
 import {
   CURATED_LOOKS,
   FX_BY_ID,
@@ -123,8 +124,8 @@ function renderViewSection(params, data, uiState = {}) {
 
   // View switcher (always visible)
   html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'tiling' ? 'Tilings' : v === 'dynkin' ? 'Dynkin' : v;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'quasicrystal' ? 'Quasi' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'tiling' ? 'Tilings' : v === 'dynkin' ? 'Dynkin' : v;
     html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
   }
   html += '</div>';
@@ -132,6 +133,44 @@ function renderViewSection(params, data, uiState = {}) {
   // Gallery changes the whole scene, so keep it directly beneath the primary
   // view selector instead of burying it below camera and per-view controls.
   html += renderGalleryControls(params);
+
+  if (params.view === 'quasicrystal') {
+    const patch = generateE8Quasicrystal(data.e8, {
+      maxNormSq: params.quasiReach,
+      windowRadius: params.quasiWindow,
+      phason: params.quasiPhason,
+      includeDiffraction: false,
+      includeEdges: false,
+    });
+    const modeLabels = { pattern: 'Pattern', window: 'Window', diffraction: 'Diffraction' };
+    html += '<div class="ps-subtitle">Projection</div><div class="seg seg-wrap">';
+    for (const mode of ['pattern', 'window', 'diffraction']) {
+      html += `<button class="${params.quasiMode === mode ? 'on' : ''}" ${pressed(params.quasiMode === mode)} data-act="setQuasiMode" data-arg="${mode}" title="${modeLabels[mode]} view of the cut-and-project construction">${modeLabels[mode]}</button>`;
+    }
+    html += '</div>';
+    html += '<div class="ps-subtitle">Lattice reach</div><div class="seg">';
+    for (const reach of QUASICRYSTAL_REACHES) {
+      html += `<button class="${params.quasiReach === reach ? 'on' : ''}" ${pressed(params.quasiReach === reach)} data-act="setQuasiReach" data-arg="${reach}" title="Enumerate E8 lattice points through squared norm ${reach}">‖x‖² ≤ ${reach}</button>`;
+    }
+    html += '</div>';
+    html += '<div class="ps-subtitle">Layers</div><div class="seg seg-wrap">';
+    html += `<button class="${params.quasiShowPoints ? 'on' : ''}" ${pressed(params.quasiShowPoints)} data-act="toggleQuasiPoints" title="Accepted E8 lattice points">Points</button>`;
+    html += `<button class="${params.quasiPointHalos ? 'on' : ''}" ${pressed(params.quasiPointHalos)} data-act="toggleQuasiPointHalos" title="Luminous annular rims around projected points">Point halos</button>`;
+    html += `<button class="${params.quasiShowLinks ? 'on' : ''}" ${pressed(params.quasiShowLinks)} data-act="toggleQuasiLinks" title="Local proximity graph in the projected patch" ${params.quasiMode === 'pattern' ? '' : 'disabled'}>Links</button>`;
+    html += `<button class="${params.quasiShowGuide ? 'on' : ''}" ${pressed(params.quasiShowGuide)} data-act="toggleQuasiGuide" title="30-fold axes, acceptance window, or reciprocal rings">Guide</button>`;
+    html += '</div>';
+    html += slider('Window', 'quasiWindow', params.quasiWindow ?? 1.42, 0.8, 2.4, 0.02, value => value.toFixed(2));
+    html += slider('Phason', 'quasiPhason', params.quasiPhason ?? 0, -1.2, 1.2, 0.02, value => value.toFixed(2));
+    html += slider('Relief', 'quasiRelief', params.quasiRelief ?? 0.08, 0, 0.32, 0.01, value => value.toFixed(2));
+    html += `<div class="root-lab-readout" aria-label="E8 cut-and-project facts">
+      <div><strong>${patch.pointCount}</strong><span>accepted</span></div>
+      <div><strong>${patch.candidateCount}</strong><span>tested</span></div>
+      <div><strong>2 + 6</strong><span>dimensions</span></div>
+      <div><strong>30</strong><span>fold order</span></div>
+    </div>
+    <div class="root-lab-equation"><span>Cut rule</span><code>‖x⊥ − w‖ ≤ ${patch.windowRadius.toFixed(2)}</code></div>
+    <div class="ps-help root-lab-lengths">Project E8 lattice points into the Coxeter plane; keep only those whose hidden six-dimensional component falls inside the movable window.</div>`;
+  }
 
   if (params.view === 'rootlab') {
     const rootSystem = generateRank2RootSystem(params.rootSystem);
@@ -539,24 +578,28 @@ function renderStyleSection(params, data, uiState = {}) {
     html += '</div>';
   }
 
-  html += '<div class="ps-subtitle">Effects</div><div class="ps-help">Effects supported by this view are shown here. Cost badges indicate approximate GPU work.</div>';
-  html += '<div class="fx-catalog-grid">';
-  for (const item of effectsForView(params.view, quality, { includeUnavailable: true })) {
-    const available = effectAvailableForQuality(item.id, quality);
-    const unavailableTitle = available ? item.description : `${item.description} Requires a higher quality tier.`;
-    html += `<button class="fx-catalog-item ${params.fxMode === item.id ? 'on' : ''} ${available ? '' : 'unavailable'}"
-      ${pressed(params.fxMode === item.id)} data-act="setFX" data-arg="${item.id}" title="${unavailableTitle}" ${available ? '' : 'disabled'}>
-      <span>${item.label}</span><small class="fx-cost fx-cost-${item.cost}">${item.cost}</small>
-    </button>`;
-  }
-  html += '</div>';
-  html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
-  html += toggle('FX shift', !!params.autoFx, 'toggleFXShift');
-  if (params.autoFx) {
-    html += slider('FX interval', 'fxShiftInterval', params.fxShiftInterval ?? 3.2, 2, 20, 0.2, v => `${v.toFixed(1)}s`);
-  }
-  if (params.view === 'raymarched') {
-    html += '<div class="ps-help">All catalog effects use native raymarched surface treatments in SDF view.</div>';
+  if (params.view === 'quasicrystal') {
+    html += '<div class="ps-subtitle">Clean render</div><div class="ps-help">Effects are disabled in the Quasicrystal Lab. Its lightweight point-and-link renderer keeps the full E8 patch responsive; palettes and color shift remain available.</div>';
+  } else {
+    html += '<div class="ps-subtitle">Effects</div><div class="ps-help">Effects supported by this view are shown here. Cost badges indicate approximate GPU work.</div>';
+    html += '<div class="fx-catalog-grid">';
+    for (const item of effectsForView(params.view, quality, { includeUnavailable: true })) {
+      const available = effectAvailableForQuality(item.id, quality);
+      const unavailableTitle = available ? item.description : `${item.description} Requires a higher quality tier.`;
+      html += `<button class="fx-catalog-item ${params.fxMode === item.id ? 'on' : ''} ${available ? '' : 'unavailable'}"
+        ${pressed(params.fxMode === item.id)} data-act="setFX" data-arg="${item.id}" title="${unavailableTitle}" ${available ? '' : 'disabled'}>
+        <span>${item.label}</span><small class="fx-cost fx-cost-${item.cost}">${item.cost}</small>
+      </button>`;
+    }
+    html += '</div>';
+    html += slider('Strength', 'fxIntensity', params.fxIntensity ?? 0.5, 0, 1, 0.05, v => Math.round(v * 100) + '%');
+    html += toggle('FX shift', !!params.autoFx, 'toggleFXShift');
+    if (params.autoFx) {
+      html += slider('FX interval', 'fxShiftInterval', params.fxShiftInterval ?? 3.2, 2, 20, 0.2, v => `${v.toFixed(1)}s`);
+    }
+    if (params.view === 'raymarched') {
+      html += '<div class="ps-help">All catalog effects use native raymarched surface treatments in SDF view.</div>';
+    }
   }
 
   if (params.view !== 'raymarched') {
@@ -573,18 +616,20 @@ function renderStyleSection(params, data, uiState = {}) {
     html += slider('Accent', 'lightAccent', params.lightAccent ?? 1.0, 0, 3, 0.05, v => v.toFixed(2));
   }
 
-  // The six curated looks are shortcuts into the effect catalog. Keeping them
-  // near the bottom makes them optional accelerators rather than the hierarchy.
-  html += '<div class="ps-subtitle">Quick looks</div>';
-  html += '<div class="look-grid">';
-  for (const look of CURATED_LOOKS) {
-    if (!effectAvailableForView(params.view, look.mode, quality)) continue;
-    const item = FX_BY_ID[look.mode];
-    html += `<button class="look-card ${params.fxMode === look.mode ? 'on' : ''}" ${pressed(params.fxMode === look.mode)} data-act="setFX" data-arg="${look.mode}" title="${item.description}">
-      <span>${look.label}</span><small>${look.description}</small>
-    </button>`;
+  if (params.view !== 'quasicrystal') {
+    // The six curated looks are shortcuts into the effect catalog. Keeping them
+    // near the bottom makes them optional accelerators rather than the hierarchy.
+    html += '<div class="ps-subtitle">Quick looks</div>';
+    html += '<div class="look-grid">';
+    for (const look of CURATED_LOOKS) {
+      if (!effectAvailableForView(params.view, look.mode, quality)) continue;
+      const item = FX_BY_ID[look.mode];
+      html += `<button class="look-card ${params.fxMode === look.mode ? 'on' : ''}" ${pressed(params.fxMode === look.mode)} data-act="setFX" data-arg="${look.mode}" title="${item.description}">
+        <span>${look.label}</span><small>${look.description}</small>
+      </button>`;
+    }
+    html += '</div>';
   }
-  html += '</div>';
 
   // Theme affects the interface chrome rather than the artwork, so it comes
   // after all scene-facing appearance controls.
@@ -617,6 +662,7 @@ function renderMathSection(params, data) {
     : caps.math === 'dynkin' ? 'the selected Dynkin diagram'
     : caps.math === 'rootlab' ? 'the selected rank-2 root system'
     : caps.math === 'tiling' ? 'the selected Coxeter multigrid'
+    : caps.math === 'quasicrystal' ? 'the E8 cut-and-project construction'
     : 'the selected solid';
   let html = `<div class="ps-section" data-section="math"><div class="ps-title">Math lab</div>
     <div class="ps-help learn-math-intro">Interactive details for ${subject}. Change the active View to open a different lab.</div>`;
@@ -771,6 +817,31 @@ function renderMathSection(params, data) {
       <span class="info-title">Why symmetry does not force repetition</span>
       Local rotational order describes the patches around points; periodicity asks whether one translation repeats the entire plane. ${tiling.periodic ? 'The three-family A₂ construction has both.' : `The ${tiling.familyCount}-family ${tiling.label} field keeps its local order without a global repeating translation.`}
       ${tiling.goldenRatio ? `<div class="ps-help">H₂ produces 36° and 72° rhombi. Their diagonal relationships contain φ ≈ ${tiling.goldenRatio.toFixed(6)}, connecting the pentagrid to Penrose geometry.</div>` : ''}
+    </div>`;
+  } else if (caps.math === 'quasicrystal') {
+    const patch = generateE8Quasicrystal(data.e8, {
+      maxNormSq: params.quasiReach,
+      windowRadius: params.quasiWindow,
+      phason: params.quasiPhason,
+      includeDiffraction: false,
+      includeEdges: false,
+    });
+    html += `<div class="info-box root-lab-info">
+      <span class="info-title">E8 cut-and-project set</span>
+      Source lattice <b>8D</b> · visible plane <b>2D</b> · hidden space <b>6D</b><br>
+      ${patch.pointCount} accepted from ${patch.candidateCount} finite candidates · <b>30-fold</b> Coxeter order
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">How the cut works</span>
+      <div class="ps-help">Every E8 lattice point splits into a visible Coxeter-plane component x∥ and a perpendicular component x⊥. The Studio draws x∥ only when x⊥ lies inside the acceptance window.</div>
+      Moving the Phason control translates that hidden window. Points enter and leave the visible patch without turning the result into a periodic lattice.
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">Three readings of one construction</span>
+      <b>Pattern</b> shows accepted points and a display-only local proximity graph.<br>
+      <b>Window</b> shows two readable coordinates of the six-dimensional acceptance test.<br>
+      <b>Diffraction</b> evaluates reciprocal candidates from E8's 240-root shell; bright peaks expose long-range order.
+      <div class="ps-help">The spherical acceptance window is an explicit Studio visualization choice, not a claim of a unique canonical E8 quasicrystal window.</div>
     </div>`;
   } else if (caps.math === 'dynkin') {
     const diagram = data.dynkin?.[params.dynkin];

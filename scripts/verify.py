@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUMMARY_DIR = ROOT / "dist" / "verify"
 WEB_DIST = ROOT / "dist" / "web"
-VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "rootlab", "tiling", "dynkin"]
+VIEWS = ["bloom", "platonic", "e8coxeter", "quasicrystal", "polytope", "raymarched", "rootlab", "tiling", "dynkin"]
 FX_MODES = ["none", "glow", "pulse", "trail", "chromatic", "kaleidoscope", "ripple",
             "spiral", "fog", "heat", "edge-glow", "aura", "voronoi", "caustic",
             "iridescent", "flowfield", "plasma", "kaleido6", "dof", "nebula",
@@ -104,6 +104,7 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_state_modules.mjs"])
     run(["node", "scripts/test_rank2_roots.mjs"])
     run(["node", "scripts/test_coxeter_tilings.mjs"])
+    run(["node", "scripts/test_e8_quasicrystal.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
     run(["node", "scripts/test_recording_recovery.mjs"])
@@ -907,7 +908,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")
     export_contract = page.evaluate("""() => {
       const formats = {};
-      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
+      for (const view of ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
         formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
@@ -931,7 +932,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         "bloom": ["PNG", "Data"],
         "platonic": ["PNG", "OBJ", "Data"],
         "e8coxeter": ["PNG", "SVG", "Data"],
-        "sixhundred": ["PNG", "Data"],
+        "quasicrystal": ["PNG", "Data"],
         "polytope": ["PNG", "Data"],
         "raymarched": ["PNG", "Data"],
         "rootlab": ["PNG", "Data"],

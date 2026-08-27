@@ -8,14 +8,14 @@ import {
 import { buildShareUrl, importConfig } from '../src/state/persistence.js';
 
 assert.deepEqual(MODEL_VIEW_ORDER, [
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
 ]);
 
 const expectedExports = {
   bloom: ['png', 'data'],
   platonic: ['png', 'obj', 'data'],
   e8coxeter: ['png', 'svg', 'data'],
-  sixhundred: ['png', 'data'],
+  quasicrystal: ['png', 'data'],
   polytope: ['png', 'data'],
   raymarched: ['png', 'data'],
   rootlab: ['png', 'data'],

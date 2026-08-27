@@ -14,7 +14,7 @@ assert.ok(LEARNING_PATHS.every(path => path.title && path.description && path.le
 const quizIds = new Set(QUIZ_MODULES.map(quiz => quiz.id));
 const claimTypes = new Set(['established-mathematics', 'interpretation', 'app-designed-visualization', 'rendering-technique']);
 for (const lesson of LEARNING_LESSONS) {
-  assert.ok(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin'].includes(lesson.view), `${lesson.id} view`);
+  assert.ok(['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin'].includes(lesson.view), `${lesson.id} view`);
   assert.ok(Number.isInteger(lesson.estimatedMinutes) && lesson.estimatedMinutes > 0, `${lesson.id} estimated time`);
   assert.ok(lesson.shortAnswer?.length >= 100, `${lesson.id} direct short answer`);
   assert.ok(Array.isArray(lesson.keyIdeas) && lesson.keyIdeas.length >= 2, `${lesson.id} key ideas`);
@@ -54,6 +54,7 @@ assert.equal(adjacentLearningLesson(lessonIds[0], -1), null);
 assert.equal(learningLessonForView('dynkin')?.id, 'reading-dynkin');
 assert.equal(learningLessonForView('rootlab')?.id, 'rank-two-reflections');
 assert.equal(learningLessonForView('tiling')?.id, 'coxeter-multigrids');
+assert.equal(learningLessonForView('quasicrystal')?.id, 'e8-cut-project');
 assert.equal(learningLessonForView('e8coxeter')?.id, 'meet-e8');
 assert.equal(learningLessonForView('e8coxeter', new Set(['meet-e8', 'coxeter-plane']))?.id, 'roots-reflections');
 

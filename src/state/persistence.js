@@ -10,6 +10,8 @@ const STORAGE_KEY = 'e8_studio_config_v1';
 // Params we DO want to save (user preferences)
 const PERSISTABLE = new Set([
   'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'tilingSystem', 'palette', 'colorBy', 'autoSliders',
+  'quasiMode', 'quasiReach', 'quasiWindow', 'quasiPhason', 'quasiRelief',
+  'quasiShowPoints', 'quasiPointHalos', 'quasiShowLinks', 'quasiShowGuide',
   'opacity', 'pointScale', 'showVertices', 'rotationSpeed',
   'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'showEdges', 'showRings', 'showPetrie',
   'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
@@ -55,6 +57,8 @@ const SKIP = new Set(['intro', 'paused']);
 // state required to reconstruct what the sender is looking at.
 const SHAREABLE = new Set([
   'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'palette', 'colorBy', 'opacity',
+  'quasiMode', 'quasiReach', 'quasiWindow', 'quasiPhason', 'quasiRelief',
+  'quasiShowPoints', 'quasiPointHalos', 'quasiShowLinks', 'quasiShowGuide',
   'pointScale', 'showVertices', 'showEdges', 'showRings', 'showPetrie',
   'rotationSpeed', 'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel',
   'showAmbient', 'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',

@@ -40,7 +40,7 @@ def main() -> int:
                 {"view": "bloom", "label": "bloom"},
                 {"view": "platonic", "label": "platonic"},
                 {"view": "e8coxeter", "label": "E₈"},
-                {"view": "sixhundred", "label": "600"},
+                {"view": "quasicrystal", "label": "Quasi"},
                 {"view": "polytope", "label": "4D"},
                 {"view": "raymarched", "label": "SDF"},
                 {"view": "rootlab", "label": "Roots"},
@@ -315,7 +315,7 @@ def main() -> int:
                 canCancel: typeof window.__app.cancelExportClip === 'function',
               };
             }""")
-            assert services["quizTotal"] == 11 and services["hasDailyFact"], services
+            assert services["quizTotal"] == 12 and services["hasDailyFact"], services
             assert services["progressIsPublic"], services
             assert services["postcard"] == {"width": 1080, "height": 1920}, services
             assert services["canRecord"] and services["canCancel"], services

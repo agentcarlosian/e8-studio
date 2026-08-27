@@ -25,6 +25,12 @@ What it does:
 import sys, json, threading, time
 from functools import partial
 from pathlib import Path
+
+# Keep the human-readable status symbols portable on Windows consoles whose
+# inherited code page cannot encode them (for example CP1252 in CI shells).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from verify import ROOT
@@ -81,7 +87,7 @@ with sync_playwright() as p:
 
     # 1. Cycle every view
     print("\n=== 1. Cycle views ===")
-    for v in ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched']:
+    for v in ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched']:
         check(f"switchView({v})", lambda v=v: (page.evaluate(f"() => window.__app.switchView('{v}')"), page.wait_for_timeout(400)))
 
     # 2. FX modes

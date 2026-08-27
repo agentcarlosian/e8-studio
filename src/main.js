@@ -56,13 +56,14 @@ import { createE8CoxeterView } from './views/e8coxeter.view.js';
 import { createPlatonicView } from './views/platonic.view.js';
 import { createDynkinView } from './views/dynkin.view.js';
 import { createPolytope4DView } from './views/polytope4d.view.js';
-import { createSixHundredView } from './views/sixhundred.view.js';
 import { createBloomView } from './views/bloom.view.js';
 import { createRaymarchedView } from './views/raymarched-e8.view.js';
 import { createRootLabView } from './views/rootlab.view.js';
 import { createTilingView } from './views/tiling.view.js';
+import { createQuasicrystalView } from './views/quasicrystal.view.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEMS } from './math/rank2-roots.js';
 import { COXETER_TILINGS, generateCoxeterTiling } from './math/coxeter-tilings.js';
+import { generateE8Quasicrystal, QUASICRYSTAL_REACHES } from './math/e8-quasicrystal.js';
 
 // Raycaster for hover tooltips
 const raycaster = new THREE.Raycaster();
@@ -142,7 +143,7 @@ const VIEWS = [
   { id: 'bloom',       label: 'Bloom',       factory: createBloomView,     primary: true },
   { id: 'platonic',    label: 'Platonic',    factory: createPlatonicView,  primary: true },
   { id: 'e8coxeter',   label: 'E₈ Coxeter',  factory: createE8CoxeterView, primary: true },
-  { id: 'sixhundred',  label: '600-cell',    factory: createSixHundredView, primary: true },
+  { id: 'quasicrystal', label: 'Quasicrystal', factory: createQuasicrystalView, primary: true },
   { id: 'polytope',    label: '4D Polytope', factory: createPolytope4DView, primary: true },
   { id: 'raymarched',  label: 'E₈ SDF',      factory: createRaymarchedView, primary: true },
   // Secondary view: visible in the More menu and View workspace without
@@ -155,7 +156,7 @@ const VIEWS = [
 const AUTO_MODEL_SEQUENCE = Object.freeze([
   { view: 'e8coxeter' },
   { view: 'bloom', shape: 'icosahedron' },
-  { view: 'sixhundred' },
+  { view: 'quasicrystal' },
   { view: 'raymarched' },
   ...['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron',
     'stellated_dodecahedron', 'great_dodecahedron', 'great_icosahedron',
@@ -1018,6 +1019,13 @@ function initThree() {
 
 // ---------- View router ----------
 function switchView(id, options = {}) {
+  // The dedicated 600-cell tile was removed because the same model already
+  // lives in 4D. Preserve old bookmarks, scene links, and saved actions by
+  // routing that legacy view to the canonical 4D selection.
+  if (id === 'sixhundred') {
+    params.poly4d = '600cell';
+    id = 'polytope';
+  }
   // Any user-initiated view switch cancels the intro animation
   params.intro = false;
   const def = VIEWS.find(v => v.id === id);
@@ -1158,6 +1166,24 @@ function updateOverlays(viewId) {
     tr.innerHTML = `${tiling.order}-fold local order<br>${tiling.periodic ? '<b>periodic lattice</b>' : '<b>quasiperiodic field</b>'}`;
     bl.innerHTML = `tile angles ${angleSummary}<br>${tiling.name}`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>dual multigrid: <b>${tiling.label}</b>`;
+  } else if (viewId === 'quasicrystal') {
+    const patch = generateE8Quasicrystal(DATA.e8, {
+      maxNormSq: params.quasiReach,
+      windowRadius: params.quasiWindow,
+      phason: params.quasiPhason,
+      // The corner readout only needs counts and projection metadata. The
+      // active view builds its own visible links or diffraction peaks, so
+      // repeating both calculations here made every slider step needlessly
+      // expensive on lower-power desktops.
+      includeDiffraction: false,
+      includeEdges: false,
+    });
+    const modeLabel = params.quasiMode === 'window' ? 'internal window'
+      : params.quasiMode === 'diffraction' ? 'reciprocal peaks' : 'projected pattern';
+    tl.innerHTML = `<b>E8 QUASICRYSTAL</b><br>${patch.pointCount} accepted · ${patch.candidateCount} tested`;
+    tr.innerHTML = `<b>8D → 2D + 6D</b><br>30-fold Coxeter symmetry`;
+    bl.innerHTML = `window r = ${patch.windowRadius.toFixed(2)} · phason ${patch.phason.toFixed(2)}<br>${modeLabel}`;
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br><b>cut-and-project set</b>`;
   } else if (viewId === 'polytope') {
     const p = DATA.polytopes4d[params.poly4d];
     tl.innerHTML = `<b>${params.poly4d.toUpperCase()}</b><br>${p.verts.length} verts · ${p.edges.length} edges`;
@@ -1283,6 +1309,15 @@ function defaultParams() {
     tilingShowVertices: false,
     tilingAnimate: true,
     tilingFlowSpeed: 0.55,
+    quasiMode: 'pattern',
+    quasiReach: 8,
+    quasiWindow: 1.42,
+    quasiPhason: 0,
+    quasiRelief: 0.08,
+    quasiShowPoints: true,
+    quasiPointHalos: true,
+    quasiShowLinks: true,
+    quasiShowGuide: true,
     palette: 'gold',
     opacity: 0.9,
     rotationSpeed: 0.003,
@@ -1455,6 +1490,8 @@ function paramEnums() {
     dynkin: new Set(['E6', 'E7', 'E8']),
     rootSystem: new Set(Object.keys(RANK2_ROOT_SYSTEMS)),
     tilingSystem: new Set(Object.keys(COXETER_TILINGS)),
+    quasiMode: new Set(['pattern', 'window', 'diffraction']),
+    quasiReach: new Set(QUASICRYSTAL_REACHES),
     rootSubset: new Set(['icosahedron', 'dodecahedron', 'simple_roots']),
   };
   return _paramEnums;
@@ -1463,6 +1500,10 @@ function paramEnums() {
 function normalizeParams(target) {
   const E = paramEnums();
 
+  if (target.view === 'sixhundred') {
+    target.view = 'polytope';
+    target.poly4d = '600cell';
+  }
   if (!E.view.has(target.view)) target.view = 'e8coxeter';
   if (!E.shape.has(target.shape)) target.shape = 'icosahedron';
   if (!E.poly.has(target.poly4d)) target.poly4d = '24cell';
@@ -1491,6 +1532,9 @@ function normalizeParams(target) {
   if (!E.dynkin.has(target.dynkin)) target.dynkin = 'E8';
   if (!E.rootSystem.has(target.rootSystem)) target.rootSystem = 'A2';
   if (!E.tilingSystem.has(target.tilingSystem)) target.tilingSystem = 'H2';
+  if (!E.quasiMode.has(target.quasiMode)) target.quasiMode = 'pattern';
+  target.quasiReach = Number(target.quasiReach);
+  if (!E.quasiReach.has(target.quasiReach)) target.quasiReach = 8;
   if (!E.rootSubset.has(target.rootSubset)) target.rootSubset = 'icosahedron';
   if (typeof target.reducedMode !== 'boolean') target.reducedMode = false;
   // Migrate the original combined Create workspace to the focused View tab.
@@ -1525,6 +1569,9 @@ function normalizeParams(target) {
   for (const key of ['tilingShowGrid', 'tilingShowRoots', 'tilingShowVertices']) {
     if (typeof target[key] !== 'boolean') target[key] = false;
   }
+  for (const key of ['quasiShowPoints', 'quasiPointHalos', 'quasiShowLinks', 'quasiShowGuide']) {
+    if (typeof target[key] !== 'boolean') target[key] = true;
+  }
   if (!['instant', 'standard'].includes(target.firstVisualMode)) target.firstVisualMode = 'standard';
   if (typeof target.activeUnlock !== 'string') target.activeUnlock = '';
 
@@ -1556,6 +1603,9 @@ function normalizeParams(target) {
   target.tilingDensity = Math.round(clampNumber(target.tilingDensity, 2, 8, 5));
   target.tilingRelief = clampNumber(target.tilingRelief, 0, 0.45, 0.1);
   target.tilingFlowSpeed = clampNumber(target.tilingFlowSpeed, 0.1, 2, 0.55);
+  target.quasiWindow = clampNumber(target.quasiWindow, 0.8, 2.4, 1.42);
+  target.quasiPhason = clampNumber(target.quasiPhason, -1.2, 1.2, 0);
+  target.quasiRelief = clampNumber(target.quasiRelief, 0, 0.32, 0.08);
   target.cameraSpeed = clampNumber(target.cameraSpeed, 0.1, 5, 1.0);
   target.cameraDistance = clampNumber(target.cameraDistance, 0.45, 12, CAMERA_DEFAULT_DISTANCE);
   target.cameraRotation = clampNumber(target.cameraRotation, -Math.PI, Math.PI, Math.PI / 6);
@@ -1991,6 +2041,39 @@ function geometryForView() {
       edges: tiling.edges.map(edge => edge.points),
     };
   }
+  if (v === 'quasicrystal') {
+    const patch = generateE8Quasicrystal(DATA.e8, {
+      maxNormSq: params.quasiReach,
+      windowRadius: params.quasiWindow,
+      phason: params.quasiPhason,
+    });
+    return {
+      ...meta,
+      kind: patch.kind,
+      label: patch.label,
+      sourceDimension: patch.sourceDimension,
+      physicalDimension: patch.physicalDimension,
+      internalDimension: patch.internalDimension,
+      symmetryOrder: patch.symmetryOrder,
+      maxNormSq: patch.maxNormSq,
+      windowRadius: patch.windowRadius,
+      phason: patch.phason,
+      projectionBasis: patch.projectionBasis,
+      points: patch.points.map(point => ({
+        lattice: point.coords,
+        projected: point.projected,
+        internalRadius: point.shiftedInternalRadius,
+        normSq: point.normSq,
+        coset: point.coset,
+      })),
+      edges: patch.edges,
+      diffraction: patch.diffraction.map(peak => ({
+        projected: peak.projected,
+        intensity: peak.intensity,
+        strength: peak.strength,
+      })),
+    };
+  }
   if (v === 'e8coxeter' || v === 'raymarched' || v === 'bloom') {
     const e8 = DATA.e8;
     return e8 && { ...meta, kind: 'e8-root-system', dimension: 8, count: 240,
@@ -2412,6 +2495,7 @@ function openLearningCenter(lessonId = null) {
     raymarched: 'E₈ SDF',
     rootlab: 'Root Lab',
     tiling: 'Tiling Lab',
+    quasicrystal: 'Quasicrystal Lab',
     dynkin: 'Dynkin diagrams',
   })[lesson.view] || lesson.view;
   const claimLabels = {
@@ -2991,7 +3075,7 @@ function openProofsModal() {
 // (Live per-preset canvas thumbnails would need offscreen renders — palette
 // swatches are instant and give each preset's color identity at a glance.)
 function openPresetBrowserModal() {
-  const VIEW_LABELS = { bloom:'Bloom', platonic:'Platonic', e8coxeter:'E₈', sixhundred:'600-cell', polytope:'4D', raymarched:'SDF' };
+  const VIEW_LABELS = { bloom:'Bloom', platonic:'Platonic', e8coxeter:'E₈', quasicrystal:'Quasicrystal', sixhundred:'600-cell', polytope:'4D', raymarched:'SDF' };
   const cards = GALLERY_PRESETS.map(p => {
     const s = p.settings || {};
     const paletteName = s.palette || 'gold';
@@ -3555,6 +3639,22 @@ window.__app = {
     refreshPanel();
     updateOverlays(params.view);
   },
+  setQuasiMode(mode) {
+    params.autoModel = false;
+    updateParam('quasiMode', mode, { refresh: false });
+    refreshPanel();
+    updateOverlays(params.view);
+  },
+  setQuasiReach(reach) {
+    params.autoModel = false;
+    updateParam('quasiReach', Number(reach), { refresh: false });
+    refreshPanel();
+    updateOverlays(params.view);
+  },
+  toggleQuasiPoints() { updateParam('quasiShowPoints', !params.quasiShowPoints); },
+  toggleQuasiPointHalos() { updateParam('quasiPointHalos', !params.quasiPointHalos); },
+  toggleQuasiLinks() { updateParam('quasiShowLinks', !params.quasiShowLinks); },
+  toggleQuasiGuide() { updateParam('quasiShowGuide', !params.quasiShowGuide); },
   setTilingSystem(systemId) {
     params.autoModel = false;
     updateParam('tilingSystem', systemId, { refresh: false });
@@ -4313,7 +4413,7 @@ window.__app = {
   surprise() {
     const PALETTES = Object.keys(PALETTE_PRESETS);
     const SHAPES = ['tetrahedron','cube','octahedron','dodecahedron','icosahedron'];
-    const VIEWS_ARR = ['e8coxeter','sixhundred','platonic','polytope','bloom','raymarched'];
+    const VIEWS_ARR = ['e8coxeter','quasicrystal','platonic','polytope','bloom','raymarched'];
     // Filter out 'random' from shift presets — that mode is broken (changes
     // palette every frame) and never plays well with surprise. Bug fixed
     // 2026-06-25.

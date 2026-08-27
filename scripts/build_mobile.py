@@ -24,6 +24,7 @@ MOBILE_CSS = ROOT / "src" / "mobile" / "style.css"
 MOBILE_JS = ROOT / "src" / "mobile" / "main.js"
 RANK2_JS = ROOT / "src" / "math" / "rank2-roots.js"
 TILING_JS = ROOT / "src" / "math" / "coxeter-tilings.js"
+QUASICRYSTAL_JS = ROOT / "src" / "math" / "e8-quasicrystal.js"
 PROTECTED_DIST_ARTIFACTS = [
     ROOT / "dist" / "e8-studio.html",
     ROOT / "dist" / "e8-studio-mobile-v2.html",
@@ -42,6 +43,7 @@ MOBILE_SCRIPT_RE = re.compile(r'<script\s+type="module"\s+src="src/mobile/main\.
 RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/rank2-roots\.js['\"];?\s*", re.M | re.S)
 TILING_RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\./rank2-roots\.js['\"];?\s*", re.M | re.S)
 TILING_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/coxeter-tilings\.js['\"];?\s*", re.M | re.S)
+QUASICRYSTAL_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/e8-quasicrystal\.js['\"];?\s*", re.M | re.S)
 
 
 def bundled_mobile_js() -> str:
@@ -51,14 +53,19 @@ def bundled_mobile_js() -> str:
     if tiling_rank2_count != 1:
         raise SystemExit("ERROR: Could not inline the tiling module's rank-2 dependency")
     tiling = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", tiling)
+    quasicrystal = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", QUASICRYSTAL_JS.read_text(encoding="utf-8"))
+    quasicrystal = "const { QUASICRYSTAL_REACHES, generateE8Quasicrystal, quasicrystalReliefHeight } = (() => {\n" + quasicrystal + "\nreturn { QUASICRYSTAL_REACHES, generateE8Quasicrystal, quasicrystalReliefHeight };\n})();"
     mobile = MOBILE_JS.read_text(encoding="utf-8")
     mobile, rank2_count = RANK2_IMPORT_RE.subn("", mobile, count=1)
     mobile, tiling_count = TILING_IMPORT_RE.subn("", mobile, count=1)
+    mobile, quasicrystal_count = QUASICRYSTAL_IMPORT_RE.subn("", mobile, count=1)
     if rank2_count != 1:
         raise SystemExit("ERROR: Could not inline the rank-2 root-system module")
     if tiling_count != 1:
         raise SystemExit("ERROR: Could not inline the Coxeter tiling module")
-    return rank2 + "\n\n" + tiling + "\n\n" + mobile
+    if quasicrystal_count != 1:
+        raise SystemExit("ERROR: Could not inline the E8 quasicrystal module")
+    return rank2 + "\n\n" + tiling + "\n\n" + quasicrystal + "\n\n" + mobile
 
 def inline_mobile_data() -> str:
     payload = {
@@ -131,7 +138,7 @@ def main() -> int:
     html = re.sub(r"\s*frame-ancestors[^;]*;", "", html)
     DIST_INDEX.write_text(html, encoding="utf-8", newline="\n")
     print(f"Mobile V2 dist written: {DIST_INDEX.relative_to(ROOT)} ({DIST_INDEX.stat().st_size:,} bytes)")
-    print("Mobile bundle uses Canvas 2D + raw WebGL E8 chords/SDF, inlined E8 data, and no PWA service worker.")
+    print("Mobile bundle uses Canvas 2D + raw WebGL E8 chords/Quasicrystal/SDF, inlined E8 data, and no PWA service worker.")
     return 0
 
 

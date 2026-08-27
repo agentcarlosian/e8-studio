@@ -221,6 +221,10 @@ export const CURIOUS_CARDS = {
     title: 'Curiosity: crossings become tiles',
     body: 'Root directions become parallel-line families, and dualizing their crossings turns reflection symmetry into periodic or quasiperiodic rhombi.',
   },
+  quasicrystal: {
+    title: 'Curiosity: six hidden dimensions choose the points',
+    body: 'The E8 Quasicrystal Lab keeps a projected lattice point only when its other six coordinates land inside an acceptance window.',
+  },
   dynkin: {
     title: 'Curiosity: a diagram is compressed geometry',
     body: 'Each node represents a simple root. For simply-laced E6, E7, and E8, a bond means the two roots meet at 120°, so a small graph records the full Cartan matrix.',
@@ -459,6 +463,31 @@ export const QUIZ_MODULES = [
     ],
   },
   {
+    id: 'e8-quasicrystals',
+    title: 'E8 Cut-and-Project',
+    rewardId: 'aurora-proof',
+    questions: [
+      {
+        prompt: 'In the E8 Quasicrystal Lab, which coordinates decide whether a projected point is accepted?',
+        choices: ['the six hidden-space coordinates', 'only its screen color', 'a random frame counter'],
+        answer: 0,
+        explanation: 'Each E8 lattice point splits into two visible and six hidden coordinates; the hidden coordinate is tested against the acceptance window.',
+      },
+      {
+        prompt: 'What does a phason shift move in this construction?',
+        choices: ['the acceptance window through hidden space', 'the browser window on the desktop', 'every lattice point to a random position'],
+        answer: 0,
+        explanation: 'The higher-dimensional lattice stays fixed while the window is displaced in hidden space, changing which points are accepted.',
+      },
+      {
+        prompt: 'Why can the Diffraction reading show sharp peaks without a repeating 2D translation?',
+        choices: ['cut-and-project order creates coherent Fourier amplitudes', 'the dots are secretly a square lattice', 'the shader invents unrelated stars'],
+        answer: 0,
+        explanation: 'Regular cut-and-project sets have long-range quasiperiodic order, so coherent phases reinforce on a discrete Fourier module.',
+      },
+    ],
+  },
+  {
     id: 'mckay-correspondence',
     title: 'McKay Correspondence',
     rewardId: 'coxeter-night',
@@ -624,6 +653,7 @@ export const LEARNING_CONTENT_PROVENANCE = {
     'platonic-foundations': ['mathworld-platonic-solids'], 'sixhundred-basics': ['mathworld-600-cell'],
     'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'rank-two-roots': ['magma-rank2-root-systems'],
     'coxeter-multigrids': ['magma-rank2-root-systems', 'debruijn-pentagrids'], 'e8-roots': ['aim-e8-technical'],
+    'e8-quasicrystals': ['aim-e8-technical', 'mit-e8-plane', 'richard-strungaru-cut-project'],
     'dynkin-diagrams': ['aim-e8-technical', 'mckay-michigan-notes'],
     'mckay-correspondence': ['mckay-michigan-notes'], 'bloom-morph': ['mit-e8-plane', 'mathworld-600-cell'],
     '4d-polytopes': ['mathworld-schlafli-symbol', 'mathworld-120-cell'], 'e8-sdf': ['hart-sphere-tracing'],
@@ -631,7 +661,8 @@ export const LEARNING_CONTENT_PROVENANCE = {
   curiosity: {
     bloom: ['mit-e8-plane'], platonic: ['mathworld-platonic-solids'], e8coxeter: ['mit-e8-plane'],
     sixhundred: ['mathworld-600-cell', 'mckay-michigan-notes'], polytope: ['mathworld-schlafli-symbol'],
-    raymarched: ['hart-sphere-tracing'], rootlab: ['magma-rank2-root-systems'], tiling: ['magma-rank2-root-systems', 'debruijn-pentagrids'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
+    raymarched: ['hart-sphere-tracing'], rootlab: ['magma-rank2-root-systems'], tiling: ['magma-rank2-root-systems', 'debruijn-pentagrids'],
+    quasicrystal: ['aim-e8-technical', 'mit-e8-plane', 'richard-strungaru-cut-project'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
   },
 };
 
