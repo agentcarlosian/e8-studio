@@ -693,7 +693,20 @@ def main() -> int:
                 camera: [camera.x, camera.y, camera.z],
               };
             }""")
-            pg.wait_for_timeout(300)
+            # Wait for the behavior we are testing instead of assuming a busy
+            # headless runner will deliver animation frames within 300 ms.
+            # Integer polling uses a timer rather than requestAnimationFrame,
+            # so the assertion itself remains responsive when rendering is
+            # temporarily throttled.
+            pg.wait_for_function("""before => {
+              const rotation = window.__app.currentView.object3d.rotation;
+              const camera = window.__app.camera.position;
+              const modelDelta = [rotation.x, rotation.y, rotation.z]
+                .reduce((sum, value, index) => sum + Math.abs(value - before.rotation[index]), 0);
+              const cameraDelta = [camera.x, camera.y, camera.z]
+                .reduce((sum, value, index) => sum + Math.abs(value - before.camera[index]), 0);
+              return modelDelta > 0.001 && cameraDelta > 0.001;
+            }""", arg=motion_before, polling=100, timeout=10000)
             motion_after = pg.evaluate("""() => {
               const rotation = window.__app.currentView.object3d.rotation;
               const camera = window.__app.camera.position;

@@ -38,6 +38,9 @@ def main() -> int:
     commit_epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
     built_at = datetime.fromtimestamp(commit_epoch, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
+    # Keep generated educational data in sync even when this release entry
+    # point is invoked directly rather than through the broader verifier.
+    run("node", "scripts/generate_curriculum.mjs")
     run("node", "scripts/generate_stellations.mjs")
     run(sys.executable, "scripts/build_offline.py")
     run(sys.executable, "scripts/build_singlefile.py")
