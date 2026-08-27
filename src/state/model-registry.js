@@ -6,7 +6,7 @@
 // exports, Learn routing, and tests can agree on what each view represents.
 
 export const MODEL_VIEW_ORDER = Object.freeze([
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
 ]);
 
 export const MODEL_REGISTRY = Object.freeze({
@@ -52,6 +52,12 @@ export const MODEL_REGISTRY = Object.freeze({
     exports: Object.freeze(['png', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'rootlab' }),
   }),
+  tiling: Object.freeze({
+    label: 'Coxeter Tiling Lab',
+    shortLabel: 'Tilings',
+    exports: Object.freeze(['png', 'data']),
+    controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'tiling' }),
+  }),
   dynkin: Object.freeze({
     label: 'Dynkin Diagram',
     shortLabel: 'Dynkin',
@@ -81,6 +87,13 @@ const POLYTOPE_LABELS = Object.freeze({
   '600cell': '600-cell',
 });
 
+const TILING_LABELS = Object.freeze({
+  A2: 'Hexagonal lozenge lattice (A2)',
+  B2: 'Octagonal multigrid (B2)',
+  G2: 'Dodecagonal multigrid (G2)',
+  H2: 'Penrose pentagrid (H2)',
+});
+
 export function modelRecord(view) {
   return MODEL_REGISTRY[view] || MODEL_REGISTRY.e8coxeter;
 }
@@ -102,6 +115,7 @@ export function modelDisplayName(view, params = {}) {
   if (view === 'polytope') return POLYTOPE_LABELS[params.poly4d] || modelRecord(view).label;
   if (view === 'dynkin') return `${params.dynkin || 'E8'} Dynkin Diagram`;
   if (view === 'rootlab') return `${params.rootSystem || 'A2'} Root System`;
+  if (view === 'tiling') return TILING_LABELS[params.tilingSystem] || TILING_LABELS.H2;
   return modelRecord(view).label;
 }
 
@@ -121,6 +135,8 @@ export function modelCanvasLabel(view, params = {}) {
               ? 'showing simple-root nodes and their connections'
               : view === 'rootlab'
                 ? 'showing generated roots, reflection mirrors, reflection chambers, and a Coxeter orbit'
+              : view === 'tiling'
+                ? 'showing a dual multigrid of rhombus tiles generated from rank-2 root directions'
               : 'showing faces, edges, and optional vertex nodes';
   return `Interactive ${subject} visualization, ${detail}. Drag to rotate and scroll to zoom.`;
 }

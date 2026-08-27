@@ -20,10 +20,13 @@ MOBILE_HTML = ROOT / "mobile.html"
 MOBILE_CSS = ROOT / "src" / "mobile" / "style.css"
 MOBILE_JS = ROOT / "src" / "mobile" / "main.js"
 RANK2_JS = ROOT / "src" / "math" / "rank2-roots.js"
+TILING_JS = ROOT / "src" / "math" / "coxeter-tilings.js"
 
 CSS_LINK_RE = re.compile(r'<link\s+rel="stylesheet"\s+href="src/mobile/style\.css"\s*>')
 MOBILE_SCRIPT_RE = re.compile(r'<script\s+type="module"\s+src="src/mobile/main\.js"></script>')
 RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/rank2-roots\.js['\"];?\s*", re.M | re.S)
+TILING_RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\./rank2-roots\.js['\"];?\s*", re.M | re.S)
+TILING_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/coxeter-tilings\.js['\"];?\s*", re.M | re.S)
 LOAD_DATA_RE = re.compile(
     r"async function loadData\(\) \{\n"
     r"  if \(window\.MOBILE_DATA\) return window\.MOBILE_DATA;\n"
@@ -51,11 +54,19 @@ def inline_mobile_data() -> str:
 
 def bundled_mobile_js() -> str:
     rank2 = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", RANK2_JS.read_text(encoding="utf-8"))
+    tiling = TILING_JS.read_text(encoding="utf-8")
+    tiling, tiling_rank2_count = TILING_RANK2_IMPORT_RE.subn("", tiling, count=1)
+    if tiling_rank2_count != 1:
+        raise SystemExit("ERROR: Could not inline the tiling module's rank-2 dependency")
+    tiling = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", tiling)
     mobile = MOBILE_JS.read_text(encoding="utf-8")
-    mobile, count = RANK2_IMPORT_RE.subn("", mobile, count=1)
-    if count != 1:
+    mobile, rank2_count = RANK2_IMPORT_RE.subn("", mobile, count=1)
+    mobile, tiling_count = TILING_IMPORT_RE.subn("", mobile, count=1)
+    if rank2_count != 1:
         raise SystemExit("ERROR: Could not inline the rank-2 root-system module")
-    return rank2 + "\n\n" + mobile
+    if tiling_count != 1:
+        raise SystemExit("ERROR: Could not inline the Coxeter tiling module")
+    return rank2 + "\n\n" + tiling + "\n\n" + mobile
 
 
 def remove_data_fetch_fallback(js: str) -> str:

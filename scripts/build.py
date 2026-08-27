@@ -44,7 +44,6 @@ JS_FILES    = [
     ROOT / 'src' / 'ui' / 'backgrounds.js',
     ROOT / 'src' / 'ui' / 'panel.js',
     ROOT / 'src' / 'ui' / 'theme.js',
-    ROOT / 'src' / 'ui' / 'tour.js',
     ROOT / 'src' / 'content' / 'glossary.js',
     ROOT / 'src' / 'content' / 'sources.js',
     ROOT / 'src' / 'ui' / 'essays.js',
@@ -60,6 +59,7 @@ JS_FILES    = [
     ROOT / 'src' / 'math' / 'weyl.js',
     ROOT / 'src' / 'math' / 'brackets.js',
     ROOT / 'src' / 'math' / 'rank2-roots.js',
+    ROOT / 'src' / 'math' / 'coxeter-tilings.js',
     ROOT / 'src' / 'views' / 'platonic.view.js',
     ROOT / 'src' / 'views' / 'dynkin.view.js',
     ROOT / 'src' / 'views' / 'polytope4d.view.js',
@@ -68,6 +68,7 @@ JS_FILES    = [
     ROOT / 'src' / 'views' / 'bloom.view.js',
     ROOT / 'src' / 'views' / 'raymarched-e8.view.js',
     ROOT / 'src' / 'views' / 'rootlab.view.js',
+    ROOT / 'src' / 'views' / 'tiling.view.js',
     ROOT / 'src' / 'main.js',
 ]
 

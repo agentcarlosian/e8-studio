@@ -91,6 +91,13 @@ export class EssayPanel {
     this.render();
   }
 
+  close() {
+    if (!this.open) return false;
+    this.open = false;
+    this.render();
+    return true;
+  }
+
   next() {
     const ids = ESSAY_CONTEXTS[this.lastView] || [];
     this.index = (this.index + 1) % Math.max(1, ids.length);
@@ -131,12 +138,6 @@ export class EssayPanel {
 
   render() {
     if (!this.host) return;
-    // Mirror open state onto <body> so CSS can reposition the tour bar (it
-    // centers in the canvas when the essay is closed, and shifts left to
-    // leave room for the right-docked essay when open).
-    if (typeof document !== 'undefined' && document.body) {
-      document.body.classList.toggle('essay-open', this.open);
-    }
     if (!this.open) {
       this.host.innerHTML = `<button class="essay-toggle" title="Show essays (I)">ⓘ</button>`;
       const btn = this.host.querySelector('.essay-toggle');
@@ -155,7 +156,7 @@ export class EssayPanel {
     this.host.innerHTML = `
       <div class="essay-panel">
         <div class="essay-header">
-          <button class="essay-toggle" title="Hide (I)" data-act="toggleEssay">ⓘ</button>
+          <button class="essay-close" title="Close reading" data-act="closeEssay">Close reading</button>
           <div class="essay-nav">
             <button data-act="essayPrev" title="Previous (←)" ${ids.length <= 1 ? 'disabled' : ''}>‹</button>
             <span class="essay-counter">${ids.length > 0 ? (this.index + 1) + ' / ' + ids.length : '0 / 0'}</span>

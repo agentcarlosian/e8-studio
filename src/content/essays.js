@@ -332,6 +332,24 @@ Instead the shader uses *polynomial smooth minimum* (smin): a softened min that 
 Between the spheres, 64 "edge cylinders" highlight the strongest Cartan connections — the same neighbour graph as the Coxeter view, but rendered as glowing rods that catch the anisotropic specular. Together the smin-blended spheres and the edge cylinders give E₈ its body: not just a graph, but a sculpture.`,
   },
 
+  coxeter_multigrids: {
+    title: 'From roots to rhombi',
+    body: `A rank-2 root system supplies a set of evenly spaced directions. The Tiling Lab turns each direction into a family of parallel lines. Whenever two lines from different families cross, the dual construction places a rhombus whose sides follow those two families.
+
+The Multigrid overlay shows the generating lines; the filled surface shows their dual. A₂ uses three line families and produces the familiar periodic lozenge lattice. B₂ and G₂ expose fourfold and sixfold directional structure. H₂ uses five directions separated by 36° and produces the two golden-ratio rhombus shapes associated with a Penrose-style pentagrid.
+
+The Studio draws a finite, deterministic window of this construction. Color, relief, cropping, and animation are display choices rather than extra mathematical dimensions.`,
+  },
+
+  quasiperiodic_order: {
+    title: 'Order without repetition',
+    body: `Periodic tilings repeat after a translation: slide the whole pattern by the right distance and every tile matches again. Quasiperiodic tilings have long-range organization and recurring local patches, but no nonzero translation reproduces the complete infinite pattern.
+
+That distinction explains why H₂ can look highly ordered without behaving like the A₂ lattice. Its fivefold directional rhythm is visible around the center, while the rhombi do not settle into a repeating rectangular unit cell. The golden ratio φ appears in the fivefold geometry and in the relationship between the acute 36° and 72° rhombus classes.
+
+Turn on Multigrid, compare A₂ with H₂, and look for the difference between local rotational order and global translational repetition.`,
+  },
+
   // ── Round 13: the 120-cell, completing the regular 4-polytope set ──
 
   the_120cell: {
@@ -344,9 +362,6 @@ Together the 5-cell, tesseract, 16-cell, 24-cell, 600-cell, and 120-cell exhaust
   },
 };
 
-// ── Tour mode ───────────────────────────────────────────────────────────
-// The Tour auto-cycles through views, narrating each with essays + transitions.
-// Triggered by pressing T or clicking "Start tour" in the panel.
 // Claim-level provenance for every essay shipped in the UI. The integrity
 // suite requires exact coverage and complete source records.
 export const ESSAY_PROVENANCE = {
@@ -383,6 +398,8 @@ export const ESSAY_PROVENANCE = {
   four_color_polytopes: ['app-designed-visualization', ['mathworld-600-cell'], '600-cell geometry is sourced; the four-color partition and animation are Studio display choices.'],
   sdf_raymarching: ['rendering-technique', ['hart-sphere-tracing'], 'Sphere tracing and signed distance bounds are established; the scene composition is app-designed.'],
   sdf_smooth_union: ['rendering-technique', ['hart-sphere-tracing'], 'Distance operations motivate the renderer; blend parameters and selected rods are app-designed.'],
+  coxeter_multigrids: ['established-mathematics', ['magma-rank2-root-systems', 'debruijn-pentagrids'], 'Root directions and pentagrid duality are established; finite cropping, relief, colors, and motion are Studio choices.'],
+  quasiperiodic_order: ['established-mathematics', ['debruijn-pentagrids'], 'The periodic-versus-non-periodic comparison follows the pentagrid construction; wording is introductory and the rendered window is finite.'],
   the_120cell: ['established-mathematics', ['mathworld-120-cell'], 'Element counts, duality, and Schläfli symbol are established; the projection is app-designed.'],
 };
 
@@ -392,40 +409,6 @@ for (const [id, essay] of Object.entries(ESSAYS)) {
   essay.sourceIds = sourceIds || essay.sourceIds || [];
   essay.scopeNote = scopeNote;
 }
-
-export const TOUR_STOPS = [
-  // Each stop has: view to switch to, time to spend (seconds), essay to narrate,
-  // optional params to set during the stop.
-  { view: 'platonic',    seconds: 18, essay: 'platonic_duals',      params: { shape: 'tetrahedron', fxMode: 'none', palette: 'gold' },
-    // Cycle through the five solids so each dual pair is shown in turn.
-    // Order matches the essay: tetra (self-dual), cube↔octa, dodeca↔icosa.
-    // Cycle through each dual pair one solid at a time.
-    cycle: { param: 'shape', intervalMs: 3000, values: ['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron'] } },
-  { view: 'platonic',    seconds: 8,  essay: 'platonic_phi',        params: { shape: 'dodecahedron', fxMode: 'glow', fxIntensity: 0.4 } },
-  { view: 'bloom',       seconds: 10, essay: 'bloom_morph',         params: { bloomAmount: 0, fxMode: 'pulse', bloomAuto: true } },
-  { view: 'bloom',       seconds: 9,  essay: 'e8_mckay',            params: { bloomAmount: 0.75, fxMode: 'glow', palette: 'aurora' } },
-  { view: 'sixhundred',  seconds: 10, essay: 'sixhundred_overview', params: { shape: 'icosahedron', fxMode: 'glow', autoRotate: true } },
-  { view: 'sixhundred',  seconds: 8,  essay: 'sixhundred_conjugacy', params: { sixhundredClass: 4 } },
-  { view: 'e8coxeter',   seconds: 20, essay: 'e8_overview',         params: { e8ViewMode: 'coxeter', showRings: true, palette: 'petrie' },
-    // Cycle through the projection modes so each is visible in turn.
-    cycle: { param: 'e8ViewMode', intervalMs: 4000, values: ['coxeter', 'petrie', 'h4', 'ortho3d'] } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'coxeter',             params: { showPetrie: true, palette: 'petrie' } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'petrie_polygon',      params: { showPetrie: true, autoRotate: true } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'octonions',           params: { palette: 'cosmic', fxMode: 'aura' } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'why_248',             params: { palette: 'aurora', fxMode: 'glow' } },
-  { view: 'bloom',       seconds: 10, essay: 'mandelbox_intro',     params: { bloomMandelbox: true, bloomMandelboxScale: 2.618 } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'moonshine',           params: { palette: 'sunset', fxMode: 'kaleido6' } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'bourbaki_e8',         params: { palette: 'mono' } },
-  // ── Round 9 tour stops: new geometry + new FX ──
-  { view: 'platonic',    seconds: 10, essay: 'kepler_poinsot',      params: { shape: 'stellated_dodecahedron', palette: 'amber', fxMode: 'crystal' } },
-  { view: 'platonic',    seconds: 8,  essay: 'schlafli_symbols',    params: { shape: 'great_icosahedron', palette: 'neon', fxMode: 'hologram' } },
-  { view: 'polytope',    seconds: 22, essay: 'rotation_planes_4d',  params: { poly4d: '5cell', polyAutoRotate: true, palette: 'cosmic' },
-    // Cycle through the six regular 4-polytopes (now including the 120-cell).
-    cycle: { param: 'poly4d', intervalMs: 3500, values: ['5cell', 'tesseract', '16cell', '24cell', '600cell', '120cell'] } },
-  // ── Round 12 tour stop: the SDF view (a real shaded solid, not points) ──
-  { view: 'raymarched',  seconds: 11, essay: 'sdf_raymarching',     params: { palette: 'mono', sdfBloom: 0.65, sdfEdges: 0.55, sdfAniso: 0.8, autoRotate: true } },
-  { view: 'e8coxeter',   seconds: 8,  essay: 'e8_string_theory',    params: { palette: 'aurora', fxMode: 'aura' } },
-];
 
 // ── Code-art gallery ────────────────────────────────────────────────────
 // Small GLSL fragment-shader one-liners with copy-to-clipboard. Each is a
@@ -598,6 +581,7 @@ export const ESSAY_CONTEXTS = {
   ],
   polytope: ['e8_dim', 'affine_e8', 'rotation_planes_4d', 'schlafli_symbols', 'the_120cell'],
   raymarched: ['sdf_raymarching', 'sdf_smooth_union', 'e8_overview'],
+  tiling: ['coxeter_multigrids', 'quasiperiodic_order', 'simple_roots'],
   dynkin: ['dynkin', 'simple_roots'],
 };
 

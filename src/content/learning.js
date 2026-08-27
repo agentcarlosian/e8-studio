@@ -180,7 +180,6 @@ export const BADGE_INFO = [
   { id: 'created:first-postcard',    kind: 'created', name: 'First Postcard', description: 'Created your first postcard.' },
   // Exploration (activity-based, no quiz needed)
   { id: 'explore:all-views',         kind: 'explore', name: 'Grand Tour',        description: 'Visited all six primary views.' },
-  { id: 'explore:tour-complete',     kind: 'explore', name: 'Guided',            description: 'Finished the guided tour.' },
   { id: 'explore:essay-reader',      kind: 'explore', name: 'Reader',            description: 'Opened 5 distinct essays.' },
   { id: 'explore:exporter',          kind: 'explore', name: 'Exporter',          description: 'Used any export (PNG, SVG, OBJ, or JSON).' },
   { id: 'explore:command-palette',   kind: 'explore', name: 'Power User',        description: 'Opened the command palette (⌘K).' },
@@ -213,6 +212,14 @@ export const CURIOUS_CARDS = {
   raymarched: {
     title: 'Curiosity: an E8 field',
     body: 'The SDF view treats the roots as a field of distance surfaces, making E8 feel less like a diagram and more like a material.',
+  },
+  rootlab: {
+    title: 'Curiosity: two roots can generate a system',
+    body: 'Repeated reflections of two simple roots close into the finite A2, B2, G2, or H2 root systems.',
+  },
+  tiling: {
+    title: 'Curiosity: crossings become tiles',
+    body: 'Root directions become parallel-line families, and dualizing their crossings turns reflection symmetry into periodic or quasiperiodic rhombi.',
   },
   dynkin: {
     title: 'Curiosity: a diagram is compressed geometry',
@@ -262,6 +269,13 @@ export const DAILY_FACTS = [
     body: 'A verified 30-step Coxeter orbit follows edges of the E8 root polytope. In the canonical Coxeter projection its points lie at equal 12-degree angular intervals on one of the eight circles.',
     presetId: 'weyl-chamber',
     rewardId: 'coxeter-night',
+  },
+  {
+    id: 'daily-quasiperiodic',
+    title: 'One beautiful fact: order without repetition',
+    body: 'A Penrose-style rhombus tiling has recurring local patches and long-range fivefold organization, but no nonzero translation repeats the entire infinite pattern.',
+    presetId: 'penrose-aurora',
+    rewardId: 'postcard-prime',
   },
   {
     id: 'daily-moonshine',
@@ -391,6 +405,31 @@ export const QUIZ_MODULES = [
         choices: ['It is non-crystallographic', 'It has no reflections', 'It is rank 8'],
         answer: 0,
         explanation: 'H2 is a finite fivefold Coxeter root system, but its Cartan data is not integral and therefore is not crystallographic.',
+      },
+    ],
+  },
+  {
+    id: 'coxeter-multigrids',
+    title: 'Roots to Quasicrystals',
+    rewardId: 'postcard-prime',
+    questions: [
+      {
+        prompt: 'In the Tiling Lab, each rhombus is dual to...',
+        choices: ['a crossing of two grid lines', 'one isolated root point', 'a random screen pixel'],
+        answer: 0,
+        explanation: 'Two line families meet at a crossing; their directions become the sides of the dual rhombus.',
+      },
+      {
+        prompt: 'Which system gives the five-family Penrose-style construction?',
+        choices: ['H2', 'A2', 'B2'],
+        answer: 0,
+        explanation: 'H2 supplies five unoriented directions and the 36°/72° rhombi of a pentagrid construction.',
+      },
+      {
+        prompt: 'Quasiperiodic means the pattern...',
+        choices: ['has long-range order without a repeating translation', 'contains no recurring local patches', 'is visually random'],
+        answer: 0,
+        explanation: 'Quasiperiodic order repeats local motifs but has no nonzero translation that repeats the entire infinite tiling.',
       },
     ],
   },
@@ -577,12 +616,14 @@ export const LEARNING_CONTENT_PROVENANCE = {
     'daily-roots-240': ['mit-e8-plane'], 'daily-duals': ['mathworld-platonic-solids'],
     'daily-600': ['mathworld-600-cell'], 'daily-mckay': ['mckay-michigan-notes'],
     'daily-octonions': ['baez-octonions'], 'daily-petrie': ['stembridge-coxeter-planes'],
+    'daily-quasiperiodic': ['debruijn-pentagrids'],
     'daily-moonshine': ['mactutor-borcherds'], 'daily-schlafli': ['mathworld-schlafli-symbol'],
     'daily-weyl-order': ['aim-e8-technical'], 'daily-248': ['aim-e8-technical', 'gross-heterotic-string'],
   },
   quizzes: {
     'platonic-foundations': ['mathworld-platonic-solids'], 'sixhundred-basics': ['mathworld-600-cell'],
-    'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'rank-two-roots': ['magma-rank2-root-systems'], 'e8-roots': ['aim-e8-technical'],
+    'coxeter-plane': ['mit-e8-plane', 'stembridge-coxeter-planes'], 'rank-two-roots': ['magma-rank2-root-systems'],
+    'coxeter-multigrids': ['magma-rank2-root-systems', 'debruijn-pentagrids'], 'e8-roots': ['aim-e8-technical'],
     'dynkin-diagrams': ['aim-e8-technical', 'mckay-michigan-notes'],
     'mckay-correspondence': ['mckay-michigan-notes'], 'bloom-morph': ['mit-e8-plane', 'mathworld-600-cell'],
     '4d-polytopes': ['mathworld-schlafli-symbol', 'mathworld-120-cell'], 'e8-sdf': ['hart-sphere-tracing'],
@@ -590,7 +631,7 @@ export const LEARNING_CONTENT_PROVENANCE = {
   curiosity: {
     bloom: ['mit-e8-plane'], platonic: ['mathworld-platonic-solids'], e8coxeter: ['mit-e8-plane'],
     sixhundred: ['mathworld-600-cell', 'mckay-michigan-notes'], polytope: ['mathworld-schlafli-symbol'],
-    raymarched: ['hart-sphere-tracing'], rootlab: ['magma-rank2-root-systems'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
+    raymarched: ['hart-sphere-tracing'], rootlab: ['magma-rank2-root-systems'], tiling: ['magma-rank2-root-systems', 'debruijn-pentagrids'], dynkin: ['aim-e8-technical', 'mckay-michigan-notes'],
   },
 };
 

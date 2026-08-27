@@ -17,11 +17,10 @@ What it does:
   12. Toggles bloom mandelbox + tweens scale/iters/mix
   13. Triggers surprise() a few times
   14. Tries essay navigation (next/prev/setEssayById)
-  15. Toggles tour on/off
-  16. Clicks the canvas (root picker)
-  17. Toggles every panel toggle (autoRotate, autoZoom, Petrie, rings, etc.)
-  18. Saves config (reload page, confirm persistence)
-  19. Tries command palette
+  15. Clicks the canvas (root picker)
+  16. Toggles every panel toggle (autoRotate, autoZoom, Petrie, rings, etc.)
+  17. Saves config (reload page, confirm persistence)
+  18. Tries command palette
 """
 import sys, json, threading, time
 from functools import partial
@@ -163,14 +162,8 @@ with sync_playwright() as p:
     check("essayNext", lambda: page.evaluate("() => window.__app.essayNext()") or page.wait_for_timeout(100))
     check("essayPrev", lambda: page.evaluate("() => window.__app.essayPrev()") or page.wait_for_timeout(100))
 
-    # 15. Tour
-    print("\n=== 15. Tour ===")
-    check("tourStart", lambda: page.evaluate("() => window.__app.tourStart()") or page.wait_for_timeout(400))
-    page.wait_for_timeout(500)
-    check("tourStop", lambda: page.evaluate("() => window.__app.tourStop()") or page.wait_for_timeout(200))
-
-    # 16. Canvas click (root picker)
-    print("\n=== 16. Canvas click (root picker) ===")
+    # 15. Canvas click (root picker)
+    print("\n=== 15. Canvas click (root picker) ===")
     page.evaluate("() => window.__app.switchView('e8coxeter')")
     page.wait_for_timeout(400)
     page.mouse.click(640, 400)

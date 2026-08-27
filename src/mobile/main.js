@@ -4,6 +4,11 @@ import {
   coxeterOrbit,
   generateRank2RootSystem,
 } from '../math/rank2-roots.js';
+import {
+  COXETER_TILING_ORDER,
+  COXETER_TILINGS,
+  generateCoxeterTiling,
+} from '../math/coxeter-tilings.js';
 
 const STORAGE_KEY = 'e8_mobile_v2_config';
 const PROGRESS_KEY = 'e8_progress_v1';
@@ -17,6 +22,16 @@ const DEFAULT_STATE = {
   polytope4d: '24cell',
   dynkinDiagram: 'E8',
   rootSystem: 'A2',
+  tilingSystem: 'H2',
+  tilingDensity: 5,
+  tilingRelief: 0.08,
+  tilingShowTiles: true,
+  tilingShowEdges: true,
+  tilingShowGrid: false,
+  tilingShowRoots: false,
+  tilingShowVertices: false,
+  tilingAnimate: true,
+  tilingFlowSpeed: 0.55,
   learnTopic: 'auto',
   palette: 'gold',
   background: 'void',
@@ -231,9 +246,9 @@ const RENDER_PALETTES = Object.fromEntries(
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
-const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'rootlab', 'dynkin']);
+const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'rootlab', 'tiling', 'dynkin']);
 const TOUCH_ORBIT_MODEL_MODES = new Set(['bloom', 'sdf', 'platonic', 'poly4d']);
-const TOUCH_PLANE_ROTATE_MODEL_MODES = new Set(['e8_2d', 'rootlab']);
+const TOUCH_PLANE_ROTATE_MODEL_MODES = new Set(['e8_2d', 'rootlab', 'tiling']);
 const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
 const STAR_SHAPES = new Set([
   'stellated_dodecahedron',
@@ -258,6 +273,7 @@ const MODEL_LABELS = {
   platonic: 'Solid',
   poly4d: '4D',
   rootlab: 'Roots',
+  tiling: 'Tilings',
   dynkin: 'Dynkin',
 };
 const SHAPE_LABELS = {
@@ -301,7 +317,7 @@ const ROOT_JUMPS = [
   { id: 'opposite', label: 'Opp', name: 'Opposite root', needsSelection: true },
   { id: 'random', label: 'Rand', name: 'Random root' },
 ];
-const SETTINGS_SECTIONS = new Set(['view', 'style', 'motion', 'quality', 'info']);
+const SETTINGS_SECTIONS = new Set(['view', 'style', 'motion', 'learn']);
 const EMPTY_SET = new Set();
 const SAVE_DEBOUNCE_MS = 140;
 const DOUBLE_TAP_MS = 320;
@@ -317,6 +333,7 @@ const MOTION_FRAME_INTERVAL_MS = 33;
 // rebuild several full-screen images, so those combinations retain the lower
 // pacing budget while clean and shader-native Ripple can run at 30 fps.
 const DENSE_E8_MOTION_FRAME_INTERVAL_MS = 50;
+const DENSE_TILING_MOTION_FRAME_INTERVAL_MS = 50;
 const AUTO_MODEL_INTERVAL_S = 3.6;
 const MOBILE_TOUR_INTERVAL_MS = 4200;
 const TAU = Math.PI * 2;
@@ -552,6 +569,14 @@ const MOBILE_TOUR_STEPS = [
     detail: 'Compare A2, B2, G2, and golden-ratio H2 without leaving the Studio.',
   },
   {
+    id: 'coxeter-tilings',
+    label: 'Tilings',
+    target: { modelMode: 'tiling', tilingSystem: 'H2' },
+    title: 'Roots become tiles',
+    body: 'Parallel line families follow rank-2 root directions; their dual crossings become rhombi.',
+    detail: 'Compare periodic A2 with fivefold H2 to see local symmetry without translational repetition.',
+  },
+  {
     id: 'dynkin-e8',
     label: 'Dynkin',
     target: { modelMode: 'dynkin', dynkinDiagram: 'E8' },
@@ -599,8 +624,8 @@ const MODEL_SHORTCUT_GROUPS = [
       { id: 'poly-tesseract', label: 'Tess', name: 'Tesseract', target: { modelMode: 'poly4d', polytope4d: 'tesseract' } },
       { id: 'poly-16cell', label: '16', name: '16-cell', target: { modelMode: 'poly4d', polytope4d: '16cell' } },
       { id: 'poly-24cell', label: '24', name: '24-cell', target: { modelMode: 'poly4d', polytope4d: '24cell' } },
-      { id: 'poly-600cell', label: '600', name: '600-cell', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
       { id: 'poly-120cell', label: '120', name: '120-cell', target: { modelMode: 'poly4d', polytope4d: '120cell' } },
+      { id: 'poly-600cell', label: '600', name: '600-cell', target: { modelMode: 'poly4d', polytope4d: '600cell' } },
     ],
   },
   {
@@ -611,6 +636,16 @@ const MODEL_SHORTCUT_GROUPS = [
       label: RANK2_ROOT_SYSTEMS[id].label,
       name: `${RANK2_ROOT_SYSTEMS[id].label} root system`,
       target: { modelMode: 'rootlab', rootSystem: id },
+    })),
+  },
+  {
+    id: 'tiling',
+    label: 'Tilings',
+    items: COXETER_TILING_ORDER.map(id => ({
+      id: `tiling-${id}`,
+      label: COXETER_TILINGS[id].label,
+      name: `${COXETER_TILINGS[id].label} ${COXETER_TILINGS[id].name}`,
+      target: { modelMode: 'tiling', tilingSystem: id },
     })),
   },
   {
@@ -637,6 +672,10 @@ let LEARN_TOPIC_CYCLE = [];
 let curriculumPaths = [];
 let curriculumLessons = [];
 let learningProgress = loadLearningProgress();
+const MOBILE_LEARN_LESSON_ORDER = [
+  'meet-e8', 'coxeter-plane', 'roots-reflections', 'rank-two-reflections', 'coxeter-multigrids', 'six-hundred-cell',
+  'why-five-solids', 'into-four-dimensions', 'reading-dynkin', 'mckay-bridge', 'designed-bloom', 'distance-fields',
+];
 const LEGACY_LEARN_TOPIC_MAP = {
   e8: 'coxeter-plane', solids: 'why-five-solids', mckay: 'mckay-bridge',
   poly4d: 'into-four-dimensions', dynkin: 'reading-dynkin',
@@ -644,12 +683,17 @@ const LEGACY_LEARN_TOPIC_MAP = {
 
 function installMobileCurriculum(curriculum) {
   curriculumPaths = Array.isArray(curriculum?.paths) ? curriculum.paths : [];
-  curriculumLessons = Array.isArray(curriculum?.lessons) ? curriculum.lessons : [];
+  curriculumLessons = Array.isArray(curriculum?.lessons) ? [...curriculum.lessons] : [];
+  curriculumLessons.sort((a, b) => {
+    const ai = MOBILE_LEARN_LESSON_ORDER.indexOf(a.id);
+    const bi = MOBILE_LEARN_LESSON_ORDER.indexOf(b.id);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+  });
   LEARN_TOPICS = [
     { id: 'auto', label: 'Auto', name: 'Scene match' },
     ...curriculumLessons.map(lesson => ({
       id: lesson.id,
-      label: lesson.title.replace(/^The /, '').split(' ').slice(0, 2).join(' '),
+      label: lesson.title,
       name: lesson.title,
       lesson,
     })),
@@ -663,6 +707,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'polytope4d',
   'dynkinDiagram',
   'rootSystem',
+  'tilingSystem',
   'selectedRoot',
   'bloomAmount',
   'bloomAuto',
@@ -678,6 +723,15 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'showRootChambers',
   'showRootSimple',
   'showRootOrbit',
+  'tilingDensity',
+  'tilingRelief',
+  'tilingShowTiles',
+  'tilingShowEdges',
+  'tilingShowGrid',
+  'tilingShowRoots',
+  'tilingShowVertices',
+  'tilingAnimate',
+  'tilingFlowSpeed',
 ];
 
 let metrics = {
@@ -1143,6 +1197,8 @@ let drag = null;
 let previousSelectedRoot = null;
 let selectedRootLabIndex = null;
 let rootLabHitTargets = [];
+let tilingGeometryCache = null;
+let tilingGeometryCacheKey = '';
 const activePointers = new Map();
 let gestureReleaseIds = new Set();
 let gesture = null;
@@ -1152,6 +1208,11 @@ let settingsDeferredRenderReason = null;
 let selectionUiDetailsDeferred = false;
 let lastSelectionDetailHtml = null;
 let paletteExpanded = false;
+let learnScreen = 'library';
+let learnLibraryScrollTop = 0;
+let learnSelectedPathId = null;
+let learnExperimentStepIndex = 0;
+let learnCoachState = null;
 let settingsCanvasResizeDeferred = false;
 let lastTap = null;
 let nativeBackHandlerInstalled = false;
@@ -1246,7 +1307,7 @@ function applyMobileExperimentStep(lessonId, stepId) {
   if (!entry?.action) return false;
   const modelByView = {
     bloom: 'bloom', platonic: 'platonic', e8coxeter: 'e8_2d', sixhundred: 'poly4d',
-    polytope: 'poly4d', raymarched: 'sdf', rootlab: 'rootlab', dynkin: 'dynkin',
+    polytope: 'poly4d', raymarched: 'sdf', rootlab: 'rootlab', tiling: 'tiling', dynkin: 'dynkin',
   };
   const source = entry.action.params || {};
   const patch = { modelMode: modelByView[entry.action.view || experiment.lesson?.view] || state.modelMode };
@@ -1255,9 +1316,15 @@ function applyMobileExperimentStep(lessonId, stepId) {
   if (SUPPORTED_POLYTOPES4D.has(source.poly4d)) patch.polytope4d = source.poly4d;
   if (SUPPORTED_DYNKIN_DIAGRAMS.has(source.dynkin)) patch.dynkinDiagram = source.dynkin;
   if (RANK2_ROOT_SYSTEMS[source.rootSystem]) patch.rootSystem = source.rootSystem;
-  for (const key of ['showRings', 'showPetrie', 'showEdges', 'autoRotate', 'bloomAmount', 'bloomAuto', 'sdfSphereR', 'sdfBlend']) {
+  if (COXETER_TILINGS[source.tilingSystem]) patch.tilingSystem = source.tilingSystem;
+  for (const key of [
+    'showRings', 'showPetrie', 'showEdges', 'autoRotate', 'bloomAmount', 'bloomAuto',
+    'sdfSphereR', 'sdfBlend', 'morph4d', 'polyRotXY', 'polyRotZW', 'polyRotXW',
+  ]) {
     if (Object.hasOwn(source, key)) patch[key] = source[key];
   }
+  if (Object.hasOwn(source, 'showWeylMirrors')) patch.showMirrors = source.showWeylMirrors;
+  if (Object.hasOwn(source, 'pickedRoot')) patch.selectedRoot = source.pickedRoot;
   const rootParamMap = {
     rootShowMirrors: 'showRootMirrors',
     rootShowChambers: 'showRootChambers',
@@ -1265,6 +1332,20 @@ function applyMobileExperimentStep(lessonId, stepId) {
     rootShowOrbit: 'showRootOrbit',
   };
   for (const [sourceKey, stateKey] of Object.entries(rootParamMap)) {
+    if (Object.hasOwn(source, sourceKey)) patch[stateKey] = source[sourceKey];
+  }
+  const tilingParamMap = {
+    tilingShowTiles: 'tilingShowTiles',
+    tilingShowEdges: 'tilingShowEdges',
+    tilingShowGrid: 'tilingShowGrid',
+    tilingShowRoots: 'tilingShowRoots',
+    tilingShowVertices: 'tilingShowVertices',
+    tilingAnimate: 'tilingAnimate',
+    tilingDensity: 'tilingDensity',
+    tilingRelief: 'tilingRelief',
+    tilingFlowSpeed: 'tilingFlowSpeed',
+  };
+  for (const [sourceKey, stateKey] of Object.entries(tilingParamMap)) {
     if (Object.hasOwn(source, sourceKey)) patch[stateKey] = source[sourceKey];
   }
   setManualModelState(patch, `learn-experiment-${lessonId}-${stepId}`);
@@ -1341,6 +1422,7 @@ function normalizeState(next) {
   if (!SUPPORTED_POLYTOPES4D.has(next.polytope4d)) next.polytope4d = DEFAULT_STATE.polytope4d;
   if (!SUPPORTED_DYNKIN_DIAGRAMS.has(next.dynkinDiagram)) next.dynkinDiagram = DEFAULT_STATE.dynkinDiagram;
   if (!RANK2_ROOT_SYSTEMS[next.rootSystem]) next.rootSystem = DEFAULT_STATE.rootSystem;
+  if (!COXETER_TILINGS[next.tilingSystem]) next.tilingSystem = DEFAULT_STATE.tilingSystem;
   if (LEARN_TOPIC_IDS.size > 1 && !LEARN_TOPIC_IDS.has(next.learnTopic)) next.learnTopic = DEFAULT_STATE.learnTopic;
   if (!SUPPORTED_SUBSETS.has(next.subset)) next.subset = DEFAULT_STATE.subset;
   next.pointScale = clamp(Number(next.pointScale) || 1, 0.7, 1.8);
@@ -1364,6 +1446,9 @@ function normalizeState(next) {
   next.sdfBlend = clamp(Number.isFinite(sdfBlend) ? sdfBlend : DEFAULT_STATE.sdfBlend, 0, 0.1);
   next.sdfBloom = clamp(Number.isFinite(sdfBloom) ? sdfBloom : DEFAULT_STATE.sdfBloom, 0, 1);
   next.sdfAniso = clamp(Number.isFinite(sdfAniso) ? sdfAniso : DEFAULT_STATE.sdfAniso, 0, 1);
+  next.tilingDensity = Math.round(clamp(Number(next.tilingDensity) || DEFAULT_STATE.tilingDensity, 2, 6));
+  next.tilingRelief = clamp(Number(next.tilingRelief) || 0, 0, 0.3);
+  next.tilingFlowSpeed = clamp(Number(next.tilingFlowSpeed) || DEFAULT_STATE.tilingFlowSpeed, 0.1, 2);
   next.panX = Number(next.panX) || 0;
   next.panY = Number(next.panY) || 0;
   next.zoom = clamp(Number(next.zoom) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(next.modelMode));
@@ -1381,6 +1466,12 @@ function normalizeState(next) {
   if (typeof next.showRootChambers !== 'boolean') next.showRootChambers = DEFAULT_STATE.showRootChambers;
   if (typeof next.showRootSimple !== 'boolean') next.showRootSimple = DEFAULT_STATE.showRootSimple;
   if (typeof next.showRootOrbit !== 'boolean') next.showRootOrbit = DEFAULT_STATE.showRootOrbit;
+  if (typeof next.tilingShowTiles !== 'boolean') next.tilingShowTiles = DEFAULT_STATE.tilingShowTiles;
+  if (typeof next.tilingShowEdges !== 'boolean') next.tilingShowEdges = DEFAULT_STATE.tilingShowEdges;
+  if (typeof next.tilingShowGrid !== 'boolean') next.tilingShowGrid = DEFAULT_STATE.tilingShowGrid;
+  if (typeof next.tilingShowRoots !== 'boolean') next.tilingShowRoots = DEFAULT_STATE.tilingShowRoots;
+  if (typeof next.tilingShowVertices !== 'boolean') next.tilingShowVertices = DEFAULT_STATE.tilingShowVertices;
+  if (typeof next.tilingAnimate !== 'boolean') next.tilingAnimate = DEFAULT_STATE.tilingAnimate;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
   if (typeof next.autoZoom !== 'boolean') next.autoZoom = false;
@@ -1392,7 +1483,7 @@ function normalizeState(next) {
   if (typeof next.autoFx !== 'boolean') next.autoFx = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
   if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
-  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d' || next.modelMode === 'rootlab') next.selectedRoot = null;
+  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d' || next.modelMode === 'rootlab' || next.modelMode === 'tiling') next.selectedRoot = null;
   return next;
 }
 
@@ -1435,6 +1526,7 @@ function cacheElements() {
   sdfCanvas = document.getElementById('mobile-sdf-canvas');
   els.settingsButton = document.getElementById('settings-button');
   els.qualityChip = document.getElementById('quality-chip');
+  els.qualityPopover = document.getElementById('quality-popover');
   els.sceneChip = document.getElementById('scene-chip');
   els.statusToast = document.getElementById('status-toast');
   els.resetView = document.querySelector('[data-action="reset-view"]');
@@ -1447,10 +1539,20 @@ function cacheElements() {
   els.infoSelection = document.getElementById('info-selection');
   els.mckayCard = document.getElementById('mckay-card');
   els.curiosityCard = document.getElementById('curiosity-card');
+  els.learnLibrary = document.getElementById('learn-library');
+  els.learnReader = document.getElementById('learn-reader');
+  els.learnReaderScroll = document.getElementById('learn-reader-scroll');
+  els.learnReaderProgress = document.getElementById('learn-reader-progress');
   els.learnPanel = document.getElementById('learn-panel');
   els.learnTopicGrid = document.getElementById('learn-topic-grid');
   els.learnTopicOutput = document.getElementById('learn-topic-output');
+  els.learnProgressOutput = document.getElementById('learn-progress-output');
+  els.learnRecommendedCard = document.getElementById('learn-recommended-card');
   els.learnTopicCard = document.getElementById('learn-topic-card');
+  els.learnCoach = document.getElementById('learn-coach');
+  els.learnCoachProgress = document.getElementById('learn-coach-progress');
+  els.learnCoachTitle = document.getElementById('learn-coach-title');
+  els.learnCoachPrompt = document.getElementById('learn-coach-prompt');
   els.mobileTourCard = document.getElementById('mobile-tour-card');
   els.mobileTourOutput = document.getElementById('mobile-tour-output');
   els.mobileTourStepOutput = document.getElementById('mobile-tour-step-output');
@@ -1494,6 +1596,25 @@ function cacheElements() {
   els.rootChambersToggle = document.getElementById('root-chambers-toggle');
   els.rootSimpleToggle = document.getElementById('root-simple-toggle');
   els.rootOrbitToggle = document.getElementById('root-orbit-toggle');
+  els.tilingField = document.getElementById('tiling-field');
+  els.tilingSystemOutput = document.getElementById('tiling-system-output');
+  els.tilingFactTiles = document.getElementById('tiling-fact-tiles');
+  els.tilingFactGrids = document.getElementById('tiling-fact-grids');
+  els.tilingFactOrder = document.getElementById('tiling-fact-order');
+  els.tilingFactPeriodic = document.getElementById('tiling-fact-periodic');
+  els.tilingAngleOutput = document.getElementById('tiling-angle-output');
+  els.tilingDensity = document.getElementById('tiling-density');
+  els.tilingDensityOutput = document.getElementById('tiling-density-output');
+  els.tilingRelief = document.getElementById('tiling-relief');
+  els.tilingReliefOutput = document.getElementById('tiling-relief-output');
+  els.tilingFlowSpeed = document.getElementById('tiling-flow-speed');
+  els.tilingFlowSpeedOutput = document.getElementById('tiling-flow-speed-output');
+  els.tilingTilesToggle = document.getElementById('tiling-tiles-toggle');
+  els.tilingEdgesToggle = document.getElementById('tiling-edges-toggle');
+  els.tilingGridToggle = document.getElementById('tiling-grid-toggle');
+  els.tilingRootsToggle = document.getElementById('tiling-roots-toggle');
+  els.tilingVerticesToggle = document.getElementById('tiling-vertices-toggle');
+  els.tilingAnimateToggle = document.getElementById('tiling-animate-toggle');
   els.sdfField = document.getElementById('sdf-field');
   els.sdfRadius = document.getElementById('sdf-radius');
   els.sdfRadiusOutput = document.getElementById('sdf-radius-output');
@@ -1557,7 +1678,7 @@ function cacheElements() {
   els.cameraExtrudeAuto = document.getElementById('camera-extrude-auto');
   els.sectionTabs = [...els.sheet.querySelectorAll('[data-section-tab]')];
   els.sectionPanels = [...els.sheet.querySelectorAll('[data-section]')];
-  els.qualityButtons = [...els.sheet.querySelectorAll('[data-quality]')];
+  els.qualityButtons = [...document.querySelectorAll('[data-quality]')];
   els.modelContextControls = [...els.sheet.querySelectorAll('[data-model-context]')];
 }
 
@@ -1595,10 +1716,27 @@ function bindEvents() {
   els.sceneChip.addEventListener('pointercancel', cancelSceneChipGesture);
   els.sceneChip.addEventListener('pointerleave', cancelSceneChipGesture);
   els.sceneChip.addEventListener('contextmenu', (event) => event.preventDefault());
-  els.qualityChip.addEventListener('click', cycleQuality);
+  els.qualityChip.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleQualityPopover();
+  });
+  els.qualityPopover?.addEventListener('click', (event) => {
+    const quality = event.target.closest('[data-quality]')?.dataset.quality;
+    if (!quality) return;
+    setSettingState({ quality }, 'quality-setting', { syncQuality: true });
+    closeQualityPopover();
+    showStatus(`Quality: ${QUALITY[state.quality].label}`);
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('#quality-popover, #quality-chip')) closeQualityPopover();
+  });
   els.close.addEventListener('click', () => closeSettings('settings-close'));
   els.doneButtons.forEach(button => {
     button.addEventListener('click', () => closeSettings('settings-done'));
+  });
+  els.learnCoach?.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-learn-coach-action]')?.dataset.learnCoachAction;
+    if (action) handleLearnCoachAction(action);
   });
   els.rootDrawer.addEventListener('click', (event) => {
     if (event.target.closest('[data-root-drawer-toggle]')) {
@@ -1632,6 +1770,11 @@ function bindEvents() {
     const rootSystem = event.target.closest('[data-root-system]')?.dataset.rootSystem;
     if (rootSystem) {
       selectRootSystem(rootSystem);
+      return;
+    }
+    const tilingSystem = event.target.closest('[data-tiling-system]')?.dataset.tilingSystem;
+    if (tilingSystem) {
+      selectTilingSystem(tilingSystem);
       return;
     }
     const bloomAction = event.target.closest('[data-bloom-action]')?.dataset.bloomAction;
@@ -1681,7 +1824,12 @@ function bindEvents() {
     }
     const learnTopic = event.target.closest('[data-learn-topic]')?.dataset.learnTopic;
     if (learnTopic) {
-      selectLearnTopic(learnTopic);
+      openLearnLesson(learnTopic);
+      return;
+    }
+    const learnPath = event.target.closest('[data-learn-path]')?.dataset.learnPath;
+    if (learnPath) {
+      toggleLearnPath(learnPath);
       return;
     }
     const infoAction = event.target.closest('[data-info-action]')?.dataset.infoAction;
@@ -1731,6 +1879,27 @@ function bindEvents() {
   els.rootChambersToggle.addEventListener('change', () => setSettingState({ showRootChambers: els.rootChambersToggle.checked }, 'root-chambers-toggle'));
   els.rootSimpleToggle.addEventListener('change', () => setSettingState({ showRootSimple: els.rootSimpleToggle.checked }, 'root-simple-toggle'));
   els.rootOrbitToggle.addEventListener('change', () => setSettingState({ showRootOrbit: els.rootOrbitToggle.checked }, 'root-orbit-toggle'));
+  els.tilingDensity.addEventListener('input', () => {
+    previewState({ tilingDensity: Number(els.tilingDensity.value) }, 'tiling-density');
+    syncTilingControls();
+  });
+  els.tilingDensity.addEventListener('change', () => commitLiveControl('tiling-density'));
+  els.tilingRelief.addEventListener('input', () => {
+    previewState({ tilingRelief: Number(els.tilingRelief.value) }, 'tiling-relief');
+    syncTilingControls();
+  });
+  els.tilingRelief.addEventListener('change', () => commitLiveControl('tiling-relief'));
+  els.tilingFlowSpeed.addEventListener('input', () => {
+    previewState({ tilingFlowSpeed: Number(els.tilingFlowSpeed.value) }, 'tiling-flow-speed');
+    syncTilingControls();
+  });
+  els.tilingFlowSpeed.addEventListener('change', () => commitLiveControl('tiling-flow-speed'));
+  els.tilingTilesToggle.addEventListener('change', () => setSettingState({ tilingShowTiles: els.tilingTilesToggle.checked }, 'tiling-tiles-toggle'));
+  els.tilingEdgesToggle.addEventListener('change', () => setSettingState({ tilingShowEdges: els.tilingEdgesToggle.checked }, 'tiling-edges-toggle'));
+  els.tilingGridToggle.addEventListener('change', () => setSettingState({ tilingShowGrid: els.tilingGridToggle.checked }, 'tiling-grid-toggle'));
+  els.tilingRootsToggle.addEventListener('change', () => setSettingState({ tilingShowRoots: els.tilingRootsToggle.checked }, 'tiling-roots-toggle'));
+  els.tilingVerticesToggle.addEventListener('change', () => setSettingState({ tilingShowVertices: els.tilingVerticesToggle.checked }, 'tiling-vertices-toggle'));
+  els.tilingAnimateToggle.addEventListener('change', () => setSettingState({ tilingAnimate: els.tilingAnimateToggle.checked }, 'tiling-animate-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
     autoModel: false,
@@ -1886,19 +2055,15 @@ function handleSubsetAction(action) {
 
 function handleInfoAction(action) {
   if (!action) return false;
+  if (action === 'open-context-lesson') return openLearnLesson(sceneLearnTopicId());
+  if (action === 'close-learn-reader') return closeLearnReader();
+  if (action === 'open-experiment-coach') return openLearnExperiment();
   if (action === 'next-curiosity') return nextCuriosity();
   if (action === 'next-learn-topic') return nextLearnTopic();
+  if (action === 'previous-learn-topic') return previousLearnTopic();
   if (action === 'toggle-lesson-complete') {
     const lessonId = activeLearnTopicId();
     return setMobileLessonComplete(lessonId, !learningProgress.lessons?.[lessonId]);
-  }
-  if (action === 'apply-experiment-step' || action === 'toggle-experiment-step') {
-    const lessonId = activeLearnTopicId();
-    const experiment = mobileExperimentState(lessonId);
-    const entry = experiment.nextStep;
-    if (!entry) return false;
-    if (action === 'apply-experiment-step') return applyMobileExperimentStep(lessonId, entry.id);
-    return setMobileExperimentStepComplete(lessonId, entry.id, !experiment.completedSteps.has(entry.id));
   }
   if (action === 'toggle-tour') return toggleMobileTour();
   if (action === 'start-tour') return startMobileTour();
@@ -1909,7 +2074,7 @@ function handleInfoAction(action) {
 }
 
 function selectedRootForModelMode(modelMode) {
-  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d' || modelMode === 'rootlab') return null;
+  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d' || modelMode === 'rootlab' || modelMode === 'tiling') return null;
   if (modelMode === 'dynkin') return simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null;
   return state.selectedRoot;
 }
@@ -2095,6 +2260,7 @@ function activeGeometryRecord() {
       polytope4d: state.polytope4d,
       dynkinDiagram: state.dynkinDiagram,
       rootSystem: state.rootSystem,
+      tilingSystem: state.tilingSystem,
       selectedRoot: state.selectedRoot,
       palette: state.palette,
       quality: state.quality,
@@ -2170,6 +2336,30 @@ function activeGeometryRecord() {
       roots: cloneJson(system.roots.map(root => root.vector)),
       cartanMatrix: cloneJson(system.cartanMatrix),
       chamberAngle: system.chamberAngle,
+    };
+  }
+
+  if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    return {
+      ...base,
+      kind: 'coxeter-multigrid-tiling',
+      name: tiling.id,
+      label: `${tiling.label} ${tiling.name}`,
+      dimension: 2,
+      familyCount: tiling.familyCount,
+      rotationalOrder: tiling.order,
+      periodic: tiling.periodic,
+      angleClasses: cloneJson(tiling.angleClasses),
+      directions: cloneJson(tiling.directions),
+      constructionLines: cloneJson(tiling.lines),
+      vertices: cloneJson(tiling.vertices.map(vertex => vertex.point)),
+      edges: cloneJson(tiling.edges.map(edge => edge.indices)),
+      tiles: cloneJson(tiling.tiles.map(tile => ({
+        vertices: tile.vertexIndices,
+        families: [tile.familyA, tile.familyB],
+        angleDegrees: tile.angleDegrees,
+      }))),
     };
   }
 
@@ -2253,6 +2443,26 @@ function activeObjRecord() {
       faces: [],
       pointsOnly: false,
       note: 'Dynkin diagram exported as nodes and edge lines.',
+    };
+    record.text = objTextFromParts(record);
+    return record;
+  }
+
+  if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    const vertices = tiling.vertices.map(vertex => [
+      vertex.point[0],
+      vertex.point[1],
+      mobileTilingRelief(vertex.point[0], vertex.point[1]),
+    ]);
+    const record = {
+      kind: 'coxeter-multigrid-tiling-obj',
+      name: tiling.id,
+      vertices,
+      lines: cloneJson(tiling.edges.map(edge => edge.indices)),
+      faces: cloneJson(tiling.tiles.map(tile => tile.vertexIndices)),
+      pointsOnly: false,
+      note: 'Rhombus tiling dual to equally spaced line families aligned with rank-2 root directions.',
     };
     record.text = objTextFromParts(record);
     return record;
@@ -2449,6 +2659,10 @@ function postcardCaption() {
   if (state.modelMode === 'rootlab') {
     const system = generateRank2RootSystem(state.rootSystem);
     return `${system.label} root system | ${system.rootCount} roots | ${system.chamberCount} reflection chambers`;
+  }
+  if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    return `${tiling.name} | ${tiling.tileCount} rhombi | ${tiling.periodic ? 'periodic' : 'quasiperiodic'}`;
   }
   return scene.topbarLabel;
 }
@@ -3061,6 +3275,9 @@ function defaultMobileState() {
 function resetMobileDefaults() {
   stopMobileTour({ interactionType: 'defaults-stop-tour', status: false });
   clearTapMemory();
+  learnScreen = 'library';
+  dismissLearnCoach();
+  closeQualityPopover();
   const previousQuality = state.quality;
   markInteraction('defaults-reset');
   previousSelectedRoot = state.selectedRoot;
@@ -3243,18 +3460,25 @@ function resetView(button = els.resetView) {
   motionPhase = 0;
   selectedRootLabIndex = null;
   rootDrawerExpanded = false;
+  learnScreen = 'library';
+  dismissLearnCoach();
+  closeQualityPopover();
   const activeSelection = {
     modelMode: state.modelMode,
     shape: state.shape,
     polytope4d: state.polytope4d,
     dynkinDiagram: state.dynkinDiagram,
     rootSystem: state.rootSystem,
+    tilingSystem: state.tilingSystem,
     learnTopic: state.learnTopic,
   };
   setState({
     ...defaultMobileState(),
     ...activeSelection,
   }, { interactionType: 'reset-view' });
+  // Reset may be a visual no-op; transient Learn disclosures still need to
+  // collapse even when the persisted scene already matches its defaults.
+  syncLearnPanel();
   showResetFeedback(button);
   showStatus(`${MODEL_LABELS[state.modelMode] || 'Model'} visuals reset`);
   return true;
@@ -3271,6 +3495,7 @@ function modelShortcutMatches(shortcut) {
   if (target.modelMode === 'poly4d') return target.polytope4d === state.polytope4d;
   if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
   if (target.modelMode === 'rootlab') return target.rootSystem === state.rootSystem;
+  if (target.modelMode === 'tiling') return target.tilingSystem === state.tilingSystem;
   return true;
 }
 
@@ -3282,6 +3507,16 @@ function selectRootSystem(id) {
     autoModel: false,
     selectedRoot: null,
   }, `root-system-${id}`);
+}
+
+function selectTilingSystem(id) {
+  if (!COXETER_TILINGS[id]) return false;
+  return setManualModelState({
+    modelMode: 'tiling',
+    tilingSystem: id,
+    autoModel: false,
+    selectedRoot: null,
+  }, `tiling-system-${id}`);
 }
 
 function activeModelShortcut() {
@@ -3973,20 +4208,20 @@ function onSceneChipPointerUp(event) {
   }
 }
 
-function cycleQuality() {
-  const order = ['smooth', 'balanced'];
-  const idx = order.indexOf(state.quality);
-  const next = idx === -1 ? 'smooth' : order[(idx + 1) % order.length];
-  setState({ quality: next }, {
-    sync: false,
-    syncSkipKind: 'quality-chip',
-    interactionType: 'quality-chip',
-    renderReason: 'quality-chip',
-  });
-  metrics.qualityChipSyncSkipCount++;
-  metrics.lastQualityChipSyncSkipMs = performance.now();
-  syncQualityControls();
-  showStatus(`Quality: ${QUALITY[state.quality].label}`);
+function closeQualityPopover() {
+  if (!els.qualityPopover || els.qualityPopover.classList.contains('hidden')) return false;
+  els.qualityPopover.classList.add('hidden');
+  els.qualityChip?.setAttribute('aria-expanded', 'false');
+  return true;
+}
+
+function toggleQualityPopover() {
+  if (!els.qualityPopover) return false;
+  const opening = els.qualityPopover.classList.contains('hidden');
+  els.qualityPopover.classList.toggle('hidden', !opening);
+  els.qualityChip?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  markInteraction(opening ? 'quality-open' : 'quality-close');
+  return opening;
 }
 
 function scenePatchForTarget(target) {
@@ -3999,6 +4234,7 @@ function scenePatchForTarget(target) {
     polytope4d: target.polytope4d || DEFAULT_STATE.polytope4d,
     dynkinDiagram: target.dynkinDiagram || DEFAULT_STATE.dynkinDiagram,
     rootSystem: target.rootSystem || DEFAULT_STATE.rootSystem,
+    tilingSystem: target.tilingSystem || DEFAULT_STATE.tilingSystem,
     showVertices: DEFAULT_STATE.showVertices,
     autoRotate: false,
     autoZoom: false,
@@ -4026,6 +4262,7 @@ function sceneTargetSnapshot(index = currentAutoModelIndex(), target = state) {
     polytope4d: target.polytope4d ?? state.polytope4d,
     dynkinDiagram: target.dynkinDiagram ?? state.dynkinDiagram,
     rootSystem: target.rootSystem ?? state.rootSystem,
+    tilingSystem: target.tilingSystem ?? state.tilingSystem,
   };
 }
 
@@ -4048,6 +4285,7 @@ function setScenePreset(targetOrIndex, options = {}) {
       if (candidate.modelMode === 'poly4d') return candidate.polytope4d === target.polytope4d;
       if (candidate.modelMode === 'dynkin') return candidate.dynkinDiagram === target.dynkinDiagram;
       if (candidate.modelMode === 'rootlab') return candidate.rootSystem === target.rootSystem;
+      if (candidate.modelMode === 'tiling') return candidate.tilingSystem === target.tilingSystem;
       return true;
     });
   }
@@ -4164,6 +4402,7 @@ function syncModelControls() {
   if (els.rootChambersToggle) els.rootChambersToggle.checked = state.showRootChambers;
   if (els.rootSimpleToggle) els.rootSimpleToggle.checked = state.showRootSimple;
   if (els.rootOrbitToggle) els.rootOrbitToggle.checked = state.showRootOrbit;
+  syncTilingControls();
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
@@ -4183,6 +4422,38 @@ function syncModelControls() {
   syncSceneAccessibility(scene);
   syncMckayCard();
   syncCuriosityCard();
+}
+
+function syncTilingControls() {
+  if (els.tilingField) els.tilingField.classList.toggle('hidden', state.modelMode !== 'tiling');
+  if (state.modelMode !== 'tiling') return null;
+  const tiling = generateCoxeterTiling(state.tilingSystem, { density: state.tilingDensity });
+  if (els.tilingSystemOutput) els.tilingSystemOutput.textContent = tiling.label;
+  if (els.tilingFactTiles) els.tilingFactTiles.textContent = String(tiling.tileCount);
+  if (els.tilingFactGrids) els.tilingFactGrids.textContent = String(tiling.familyCount);
+  if (els.tilingFactOrder) els.tilingFactOrder.textContent = String(tiling.order);
+  if (els.tilingFactPeriodic) els.tilingFactPeriodic.textContent = tiling.periodic ? 'yes' : 'no';
+  if (els.tilingAngleOutput) els.tilingAngleOutput.textContent = `Rhomb angles ${tiling.angleClasses.map(value => `${formatCompactNumber(value)}°`).join(' · ')}`;
+  if (els.tilingDensity) els.tilingDensity.value = String(state.tilingDensity);
+  if (els.tilingDensityOutput) els.tilingDensityOutput.textContent = String(state.tilingDensity);
+  if (els.tilingRelief) els.tilingRelief.value = String(state.tilingRelief);
+  if (els.tilingReliefOutput) els.tilingReliefOutput.textContent = state.tilingRelief.toFixed(2);
+  if (els.tilingFlowSpeed) els.tilingFlowSpeed.value = String(state.tilingFlowSpeed);
+  if (els.tilingFlowSpeedOutput) els.tilingFlowSpeedOutput.textContent = `${state.tilingFlowSpeed.toFixed(2)}×`;
+  if (els.tilingTilesToggle) els.tilingTilesToggle.checked = state.tilingShowTiles;
+  if (els.tilingEdgesToggle) els.tilingEdgesToggle.checked = state.tilingShowEdges;
+  if (els.tilingGridToggle) els.tilingGridToggle.checked = state.tilingShowGrid;
+  if (els.tilingRootsToggle) els.tilingRootsToggle.checked = state.tilingShowRoots;
+  if (els.tilingVerticesToggle) els.tilingVerticesToggle.checked = state.tilingShowVertices;
+  if (els.tilingAnimateToggle) els.tilingAnimateToggle.checked = state.tilingAnimate;
+  if (els.tilingField) {
+    els.tilingField.querySelectorAll('[data-tiling-system]').forEach(button => {
+      const active = button.dataset.tilingSystem === state.tilingSystem;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+  return tiling;
 }
 
 function modelContextVisible(context) {
@@ -4304,6 +4575,17 @@ function activeSceneSummary() {
       infoCopy: `${system.label} is generated live by reflecting two simple roots until the set closes. It is ${crystal}; the overlays expose its mirrors, fundamental chambers, generators, and a Coxeter orbit. Use one finger to orbit and tilt the diagram; use two fingers to pan or pinch-zoom.`,
     };
   }
+  if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    const rhythm = tiling.periodic ? 'periodic lattice' : 'quasiperiodic order';
+    return {
+      chipStrong: MODEL_LABELS.tiling,
+      chipSmall: `${tiling.label} / ${tiling.tileCount} tiles`,
+      topbarLabel: `${tiling.name}, ${tiling.tileCount} rhombi, ${tiling.order}-fold local symmetry`,
+      canvasLabel: `${tiling.name} Coxeter tiling with ${tiling.tileCount} rhombi and ${tiling.familyCount} line families`,
+      infoCopy: `${tiling.name} turns ${tiling.familyCount} root directions into parallel line families, then dualizes their crossings into rhombi. This finite window shows ${rhythm}; toggle Multigrid to expose the construction. Use one finger to orbit and tilt the surface, and two fingers to pan or pinch-zoom.`,
+    };
+  }
   if (state.modelMode === 'dynkin') {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     const label = DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram;
@@ -4411,7 +4693,7 @@ function syncMckayCard() {
 
 function activeCuriosityKey() {
   const selected = state.selectedRoot == null ? 'none' : 'root';
-  return `${state.modelMode}|${state.shape}|${state.polytope4d}|${state.rootSystem}|${state.dynkinDiagram}|${state.subset}|${selected}`;
+  return `${state.modelMode}|${state.shape}|${state.polytope4d}|${state.rootSystem}|${state.tilingSystem}|${state.dynkinDiagram}|${state.subset}|${selected}`;
 }
 
 function activeCuriosityNotes() {
@@ -4470,6 +4752,13 @@ function activeCuriosityNotes() {
       body: `${system.label} grows from two simple roots into all ${system.rootCount} roots by reflection.`,
       detail: `${system.chamberCount} chambers meet at angles of ${Math.round(180 / system.coxeterNumber)} degrees. Toggle the overlays to reconstruct the system layer by layer.`,
     });
+  } else if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    notes.push({
+      title: 'Dual multigrid',
+      body: `${tiling.familyCount} families of parallel lines generate ${tiling.tileCount} visible rhombi in this finite window.`,
+      detail: `${tiling.label} has ${tiling.order}-fold local symmetry and ${tiling.periodic ? 'repeats by translation' : 'does not repeat periodically'}. Every line crossing becomes one rhombus in the dual tiling.`,
+    });
   }
   notes.push({
     title: 'McKay lens',
@@ -4518,8 +4807,9 @@ function sceneLearnTopicId() {
   if (state.modelMode === 'platonic') return 'why-five-solids';
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
   if (state.modelMode === 'rootlab') return 'rank-two-reflections';
+  if (state.modelMode === 'tiling') return 'coxeter-multigrids';
   if (state.modelMode === 'dynkin') return 'reading-dynkin';
-  return 'coxeter-plane';
+  return 'meet-e8';
 }
 
 function activeLearnTopicId() {
@@ -4528,10 +4818,38 @@ function activeLearnTopicId() {
 
 function renderLearnTopics() {
   if (!els.learnTopicGrid) return false;
-  els.learnTopicGrid.innerHTML = LEARN_TOPICS.map(topic => (
-    `<button type="button" data-learn-topic="${escapeHtml(topic.id)}" aria-label="${escapeHtml(topic.name)} learn topic">${escapeHtml(topic.label)}</button>`
-  )).join('');
-  metrics.learnTopicButtonCount = LEARN_TOPICS.length;
+  const preferredPathOrder = ['coxeter-geometry', 'solid-foundations', 'exceptional-bridges', 'rendering-mathematics'];
+  const orderedPaths = [...curriculumPaths].sort((a, b) => {
+    const ai = preferredPathOrder.indexOf(a.id);
+    const bi = preferredPathOrder.indexOf(b.id);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+  });
+  if (learnSelectedPathId == null) {
+    learnSelectedPathId = curriculumLessons.find(lesson => lesson.id === sceneLearnTopicId())?.pathId || orderedPaths[0]?.id || null;
+  }
+  const grouped = orderedPaths.map(path => {
+    const lessons = curriculumLessons.filter(lesson => lesson.pathId === path.id);
+    if (!lessons.length) return '';
+    const expanded = learnSelectedPathId === path.id;
+    const completeCount = lessons.filter(lesson => learningProgress.lessons?.[lesson.id]).length;
+    const rows = lessons.map(lesson => {
+      const complete = !!learningProgress.lessons?.[lesson.id];
+      const recommended = lesson.id === sceneLearnTopicId();
+      return `<button class="learn-lesson-row${recommended ? ' recommended' : ''}" type="button" data-learn-topic="${escapeHtml(lesson.id)}">
+        <span><strong>${escapeHtml(lesson.title)}</strong><small>${recommended ? 'Recommended · ' : ''}${lesson.estimatedMinutes || 5} min</small></span>
+        <b aria-label="${complete ? 'Completed' : 'Open lesson'}">${complete ? '✓' : '›'}</b>
+      </button>`;
+    }).join('');
+    return `<section class="mobile-learn-path${expanded ? ' expanded' : ''}">
+      <button class="learn-path-button" type="button" data-learn-path="${escapeHtml(path.id)}" aria-expanded="${expanded}">
+        <span><strong>${escapeHtml(path.title)}</strong><small>${escapeHtml(path.description || '')}</small></span>
+        <b>${completeCount}/${lessons.length}</b>
+      </button>
+      <div class="learn-path-lessons${expanded ? '' : ' hidden'}">${rows}</div>
+    </section>`;
+  }).join('');
+  els.learnTopicGrid.innerHTML = grouped;
+  metrics.learnTopicButtonCount = curriculumLessons.length;
   return true;
 }
 
@@ -4540,133 +4858,116 @@ function learnTopicRecord(id) {
   if (topic.lesson) {
     const lesson = topic.lesson;
     const path = curriculumPaths.find(item => item.id === lesson.pathId);
-    const readingCount = lesson.readings?.length || 0;
-    const sourceCount = lesson.sources?.length || 0;
-    const sourceDetail = sourceCount
-      ? `${sourceCount} scoped source${sourceCount === 1 ? '' : 's'}: ${lesson.sources.map(source => source.author).join('; ')}.`
-      : 'Rendering or app-designed lesson; source expansion is still under review.';
-    const selectedDetail = lesson.id === 'roots-reflections' && state.selectedRoot != null
-      ? ` Selected root #${state.selectedRoot} is available in the root drawer.`
-      : '';
-    const objectiveDetail = lesson.objectives?.length
-      ? ` Goal: ${lesson.objectives.join(' ')}`
-      : '';
-    const activityDetail = lesson.activity ? ` Try it: ${lesson.activity}` : '';
-    const claimLabels = {
-      'established-mathematics': 'Established mathematics',
-      interpretation: 'Interpretation',
-      'app-designed-visualization': 'App-designed visualization',
-      'rendering-technique': 'Rendering technique',
-    };
     return {
       ...topic,
       title: lesson.title,
-      body: path?.description || 'Shared E8 Studio curriculum lesson.',
-      detail: `${claimLabels[lesson.claimType] || lesson.claimType}: ${lesson.claimNote}${objectiveDetail}${activityDetail} ${readingCount} reading${readingCount === 1 ? '' : 's'} · ${lesson.quiz?.title || 'quiz'}. ${sourceDetail}${selectedDetail}`,
+      pathTitle: path?.title || 'E8 Studio curriculum',
+      estimatedMinutes: lesson.estimatedMinutes || 5,
+      shortAnswer: lesson.shortAnswer || lesson.claimNote,
+      keyIdeas: lesson.keyIdeas || lesson.objectives || [],
+      visualEvidence: lesson.visualEvidence || null,
+      activity: lesson.activity || 'Open the visualization and compare what changes with what stays fixed.',
+      proof: lesson.proof || null,
+      claimNote: lesson.claimNote || '',
+      lesson,
     };
   }
-  const source = activeMckaySource();
-  const info = mckayInfo[source] || {};
-  const sourceLabel = SHAPE_LABELS[source] || source;
-  if (id === 'e8') {
-    const context = getSelectedContext();
-    const point = state.selectedRoot == null ? null : points[state.selectedRoot];
-    const selectedDetail = context && point
-      ? `Selected root #${state.selectedRoot}: ring ${point.ring}, ${context.neighborCount} Cartan neighbors, opposite #${context.antipode}.`
-      : 'Tap a root or use Jumps to inspect rings, Cartan neighbors, antipodes, and 8D coordinates.';
-    return {
-      ...topic,
-      title: 'E8 roots',
-      body: 'E8 has 240 roots in rank 8. The mobile renderer shows the same root data in 2D Coxeter and lightweight depth views.',
-      detail: selectedDetail,
-    };
-  }
-  if (id === 'solids') {
-    const shapeName = SUPPORTED_SHAPES.has(state.shape) ? state.shape : DEFAULT_STATE.shape;
-    const shape = platonicGeometry[shapeName] || {};
-    const label = SHAPE_LABELS[shapeName] || shapeName;
-    const bridge = mckayInfo[shapeName] || info;
-    return {
-      ...topic,
-      title: 'Platonic solids',
-      body: 'The five regular solids are the 3D symmetry doorway into the McKay story.',
-      detail: `${label}: ${shape.verts?.length || 0} vertices, ${shape.edges?.length || 0} edges. Binary ${bridge.symmetry || 'symmetry'} points toward ${bridge.roots || 'ADE roots'}.`,
-    };
-  }
-  if (id === 'mckay') {
-    const subset = data?.mckay_subsets?.[source] || [];
-    return {
-      ...topic,
-      title: 'McKay bridge',
-      body: `${sourceLabel} links binary symmetry ${info.symmetry || '?'} to ${info.roots || 'ADE roots'}.`,
-      detail: subset.length
-        ? `${subset.length} E8 roots are highlighted for this source. Switch sources in View to compare the bridge.`
-        : 'Use a Platonic source, E8 subset, or E6/E7/E8 Dynkin diagram to see the correspondence.',
-    };
-  }
-  if (id === 'poly4d') {
-    const polyName = SUPPORTED_POLYTOPES4D.has(state.polytope4d) ? state.polytope4d : DEFAULT_STATE.polytope4d;
-    const poly = polytope4DGeometry[polyName] || {};
-    const label = POLYTOPE4D_LABELS[polyName] || polyName;
-    return {
-      ...topic,
-      title: '4D polytopes',
-      body: 'Mobile V2 projects regular 4D polytopes through a depth cue, then draws them with Canvas 2D.',
-      detail: `${label}: ${poly.verts?.length || 0} vertices and ${poly.edges?.length || 0} edges. Motion rotates the projection without enabling a heavy WebGL path.`,
-    };
-  }
-  if (id === 'dynkin') {
-    const diagramName = SUPPORTED_DYNKIN_DIAGRAMS.has(state.dynkinDiagram) ? state.dynkinDiagram : DEFAULT_STATE.dynkinDiagram;
-    const diagram = dynkinGeometry[diagramName] || {};
-    const selected = selectedContext?.simpleRootLabel ? ` Current E8 node: ${selectedContext.simpleRootLabel}.` : '';
-    return {
-      ...topic,
-      title: 'Dynkin diagrams',
-      body: 'Dynkin nodes are simple roots; edges mark Cartan dot -1 relationships.',
-      detail: `${diagramName}: ${diagram.nodes?.length || 0} nodes and ${diagram.edges?.length || 0} edges.${selected}`,
-    };
-  }
-  return {
-    ...topic,
-    title: 'Mobile Learn',
-    body: 'Pick a compact topic or leave Auto on to follow the active scene.',
-    detail: 'The canvas stays clear; Learn lives only in the Info sheet.',
-  };
+  return learnTopicRecord(sceneLearnTopicId());
+}
+
+function learnEvidenceHtml(record) {
+  const evidence = record.visualEvidence;
+  if (!evidence?.rows?.length) return '';
+  const columns = (evidence.columns || []).map(column => `<span role="columnheader">${escapeHtml(column)}</span>`).join('');
+  const rows = evidence.rows.map(row => `<div role="row">${row.map(cell => `<span role="cell">${escapeHtml(cell)}</span>`).join('')}</div>`).join('');
+  const columnCount = Math.max(1, evidence.columns?.length || evidence.rows[0]?.length || 1);
+  return `<section class="mobile-learn-section"><h4>See the evidence</h4><div class="mobile-learn-evidence" role="table" style="--learn-columns:${columnCount}"><div role="row">${columns}</div>${rows}</div></section>`;
+}
+
+function learnProofHtml(record) {
+  if (!record.proof) return '';
+  return `<section class="mobile-learn-math-note" aria-labelledby="mobile-learn-proof-title"><h4 id="mobile-learn-proof-title">Compact mathematical proof</h4><div><code>${escapeHtml(record.proof.formula)}</code><p>${escapeHtml(record.proof.explanation)}</p><p>${escapeHtml(record.proof.boundary)}</p></div></section>`;
+}
+
+function syncLearnRoute() {
+  const readerOpen = learnScreen === 'lesson';
+  els.learnLibrary?.classList.toggle('hidden', readerOpen);
+  els.learnReader?.classList.toggle('hidden', !readerOpen);
+  els.sheet?.classList.toggle('learn-reader-open', readerOpen && activeSettingsSection() === 'learn');
+  return readerOpen;
 }
 
 function syncLearnPanel() {
   if (!els.learnTopicCard) return false;
+  const recommendedId = sceneLearnTopicId();
+  const recommended = learnTopicRecord(recommendedId);
+  const completedCount = curriculumLessons.filter(lesson => learningProgress.lessons?.[lesson.id]).length;
+  if (els.learnTopicOutput) els.learnTopicOutput.textContent = MODEL_LABELS[state.modelMode] || 'Current view';
+  if (els.learnProgressOutput) els.learnProgressOutput.textContent = `${completedCount} / ${curriculumLessons.length}`;
+  if (els.learnRecommendedCard) {
+    const started = !!learningProgress.lessons?.[recommendedId] || state.learnTopic === recommendedId;
+    els.learnRecommendedCard.innerHTML = `<span class="mobile-learn-kicker">${started ? 'Continue learning' : 'Start here'}</span>
+      <h3>${escapeHtml(recommended.title)}</h3>
+      <p>${escapeHtml(recommended.shortAnswer)}</p>
+      <button type="button" data-info-action="open-context-lesson">${started ? 'Continue' : 'Start lesson'} →</button>`;
+  }
+  renderLearnTopics();
+
   const activeId = activeLearnTopicId();
   const record = learnTopicRecord(activeId);
-  const configured = state.learnTopic;
-  if (els.learnTopicOutput) {
-    els.learnTopicOutput.textContent = configured === 'auto' ? `Auto: ${record.label}` : record.label;
-  }
-  if (els.learnTopicGrid) {
-    els.learnTopicGrid.querySelectorAll('[data-learn-topic]').forEach(button => {
-      const isConfigured = button.dataset.learnTopic === configured;
-      const isEffective = configured === 'auto' && button.dataset.learnTopic === activeId;
-      button.classList.toggle('active', isConfigured);
-      button.classList.toggle('effective', isEffective);
-      button.setAttribute('aria-pressed', isConfigured ? 'true' : 'false');
-    });
-  }
   const lessonComplete = !!learningProgress.lessons?.[activeId];
-  const experiment = mobileExperimentState(activeId);
-  const currentStep = experiment.nextStep;
-  const stepObserved = currentStep ? experiment.completedSteps.has(currentStep.id) : false;
-  const experimentHtml = currentStep ? `<div class="mobile-learn-experiment">
-    <div class="mobile-learn-experiment-head"><span>Guided experiment</span><strong>${experiment.completedCount}/${experiment.steps.length}</strong></div>
-    <b>${escapeHtml(currentStep.title)}</b>
-    <small>${escapeHtml(currentStep.instruction)}</small>
-    <div class="mobile-learn-question"><span>Notice</span>${escapeHtml(currentStep.question)}</div>
-    ${stepObserved ? `<div class="mobile-learn-takeaway"><span>Takeaway</span>${escapeHtml(currentStep.takeaway)}</div>` : ''}
-    <div class="mobile-learn-actions"><button type="button" data-info-action="apply-experiment-step">Try in view</button><button type="button" data-info-action="toggle-experiment-step" aria-pressed="${stepObserved}">${stepObserved ? 'Observed' : 'Mark observed'}</button></div>
-  </div>` : '';
-  els.learnTopicCard.innerHTML = `<strong>${escapeHtml(record.title)}</strong><small>${escapeHtml(record.body)}</small><small>${escapeHtml(record.detail)}</small>${experimentHtml}<div class="learn-topic-foot"><button type="button" data-info-action="toggle-lesson-complete" aria-pressed="${lessonComplete}">${lessonComplete ? 'Completed' : 'Mark complete'}</button><button id="learn-topic-next" type="button" data-info-action="next-learn-topic" aria-label="Next learn topic">Next</button></div>`;
+  const steps = record.lesson?.experiment?.steps || [];
+  const experimentProgress = mobileExperimentState(activeId);
+  const nextIncompleteStepIndex = steps.findIndex(step => !experimentProgress.completedSteps.has(step.id));
+  learnExperimentStepIndex = Math.max(0, Math.min(learnExperimentStepIndex, Math.max(0, steps.length - 1)));
+  if (nextIncompleteStepIndex >= 0 && experimentProgress.completedSteps.has(steps[learnExperimentStepIndex]?.id)) {
+    learnExperimentStepIndex = nextIncompleteStepIndex;
+  }
+  const currentStep = steps[learnExperimentStepIndex] || null;
+  const activityStepsHtml = steps.map((step, stepIndex) => {
+    const complete = experimentProgress.completedSteps.has(step.id);
+    const current = stepIndex === learnExperimentStepIndex;
+    return `<article class="mobile-learn-activity${current ? ' current' : ''}${complete ? ' complete' : ''}">
+      <header><span>Activity ${stepIndex + 1}</span><b>${complete ? '✓ Explored' : stepIndex + 1}</b></header>
+      <h5>${escapeHtml(step.title)}</h5>
+      <p>${escapeHtml(step.instruction)}</p>
+      <div class="mobile-learn-question"><span>Question</span><p>${escapeHtml(step.question)}</p></div>
+      <div class="mobile-learn-takeaway"><span>Explanation</span><p>${escapeHtml(step.takeaway)}</p></div>
+    </article>`;
+  }).join('');
+  const index = Math.max(0, curriculumLessons.findIndex(lesson => lesson.id === activeId));
+  const lessonNavigationHtml = `<nav class="mobile-learn-actions mobile-learn-lesson-nav" aria-label="Lesson navigation">
+    <button type="button" data-info-action="previous-learn-topic" ${index <= 0 ? 'disabled' : ''}>← Previous</button>
+    <button type="button" data-info-action="toggle-lesson-complete" aria-pressed="${lessonComplete}">${lessonComplete ? '✓ Complete' : 'Finish lesson'}</button>
+    <button id="learn-topic-next" type="button" data-info-action="next-learn-topic" ${index >= curriculumLessons.length - 1 ? 'disabled' : ''}>Next →</button>
+  </nav>`;
+  const experimentHtml = currentStep ? `<section class="mobile-learn-section mobile-learn-experiment">
+    <div class="mobile-learn-experiment-head"><span>Guided Studio activities</span><strong>${experimentProgress.completedCount} / ${steps.length} explored</strong></div>
+    <h4>${escapeHtml(record.lesson?.experiment?.title || 'Try it in the Studio')}</h4>
+    <p>${escapeHtml(record.lesson?.experiment?.intro || record.activity)}</p>
+    <div class="mobile-learn-activity-list">${activityStepsHtml}</div>
+    ${lessonNavigationHtml}
+  </section>` : '';
+  const ideasHtml = (record.keyIdeas || []).slice(0, 3).map((idea, index) => `<article><span>${index + 1}</span><div><h4>${index === 0 ? 'Start with the rule' : index === 1 ? 'Connect it to the picture' : 'Keep this distinction'}</h4><p>${escapeHtml(idea)}</p></div></article>`).join('');
+  if (els.learnReaderProgress) els.learnReaderProgress.textContent = `Lesson ${index + 1} of ${curriculumLessons.length}`;
+  els.learnTopicCard.innerHTML = `
+    <header class="mobile-learn-lesson-head">
+      <span class="mobile-learn-kicker">${escapeHtml(record.pathTitle)} · ${record.estimatedMinutes} min</span>
+      <h3 id="learn-reader-title" class="mobile-learn-title" tabindex="-1">${escapeHtml(record.title)}</h3>
+    </header>
+    <section class="mobile-learn-answer"><span>The direct answer</span><p>${escapeHtml(record.shortAnswer)}</p></section>
+    ${ideasHtml ? `<section class="mobile-learn-section"><h4>Build the idea</h4><div class="mobile-learn-ideas">${ideasHtml}</div></section>` : ''}
+    ${learnEvidenceHtml(record)}
+    ${learnProofHtml(record)}
+    ${experimentHtml}
+    <section class="mobile-learn-math-note" aria-labelledby="mobile-learn-source-title"><h4 id="mobile-learn-source-title">Math and source note</h4><div><p>${escapeHtml(record.claimNote || 'This lesson distinguishes mathematical structure from the choices used to display it.')}</p></div></section>
+    <footer class="learn-topic-foot learn-topic-studio">
+      <button class="mobile-learn-primary" type="button" data-info-action="open-experiment-coach">Open in Studio</button>
+    </footer>`;
+  syncLearnRoute();
   metrics.learnTopicSyncCount++;
   metrics.lastLearnTopic = activeId;
-  metrics.lastLearnTopicConfigured = configured;
+  metrics.lastLearnTopicConfigured = state.learnTopic;
   metrics.lastLearnTopicTitle = record.title;
   metrics.lastLearnTopicMs = performance.now();
   return true;
@@ -4689,12 +4990,105 @@ function selectLearnTopic(id, options = {}) {
   return getState();
 }
 
+function openLearnLesson(id = sceneLearnTopicId(), options = {}) {
+  if (id === 'auto') id = sceneLearnTopicId();
+  if (!LEARN_TOPIC_IDS.has(id) || id === 'auto') return false;
+  if (learnScreen === 'library' && els.sheetBody) learnLibraryScrollTop = els.sheetBody.scrollTop;
+  const lesson = curriculumLessons.find(entry => entry.id === id);
+  learnSelectedPathId = lesson?.pathId || learnSelectedPathId;
+  learnScreen = 'lesson';
+  if (!options.preserveExperiment) {
+    learnExperimentStepIndex = 0;
+  }
+  selectLearnTopic(id, { interactionType: `open-learn-${id}` });
+  syncLearnRoute();
+  if (els.learnReaderScroll) els.learnReaderScroll.scrollTop = 0;
+  requestAnimationFrame(() => {
+    document.getElementById('learn-reader-title')?.focus({ preventScroll: true });
+  });
+  return true;
+}
+
+function closeLearnReader() {
+  if (learnScreen !== 'lesson') return false;
+  learnScreen = 'library';
+  syncLearnPanel();
+  requestAnimationFrame(() => {
+    if (els.sheetBody) els.sheetBody.scrollTop = learnLibraryScrollTop;
+    els.learnTopicGrid?.querySelector(`[data-learn-topic="${CSS.escape(activeLearnTopicId())}"]`)?.focus({ preventScroll: true });
+  });
+  markInteraction('learn-back-to-library');
+  return true;
+}
+
+function toggleLearnPath(pathId) {
+  if (!curriculumPaths.some(path => path.id === pathId)) return false;
+  learnSelectedPathId = learnSelectedPathId === pathId ? '' : pathId;
+  renderLearnTopics();
+  markInteraction(`learn-path-${pathId}`);
+  return true;
+}
+
+function showLearnCoach(lessonId, stepIndex) {
+  const record = learnTopicRecord(lessonId);
+  const steps = record.lesson?.experiment?.steps || [];
+  const step = steps[stepIndex];
+  if (!step || !els.learnCoach) return false;
+  learnCoachState = { lessonId, stepIndex };
+  els.learnCoachProgress.textContent = `Activity ${stepIndex + 1} of ${steps.length}`;
+  els.learnCoachTitle.textContent = step.title;
+  els.learnCoachPrompt.textContent = step.question;
+  els.learnCoach.classList.remove('hidden');
+  return true;
+}
+
+function dismissLearnCoach() {
+  const visible = !!els.learnCoach && !els.learnCoach.classList.contains('hidden');
+  els.learnCoach?.classList.add('hidden');
+  learnCoachState = null;
+  return visible;
+}
+
+function openLearnExperiment() {
+  const lessonId = activeLearnTopicId();
+  const record = learnTopicRecord(lessonId);
+  const step = record.lesson?.experiment?.steps?.[learnExperimentStepIndex];
+  if (!step) return false;
+  applyMobileExperimentStep(lessonId, step.id);
+  showLearnCoach(lessonId, learnExperimentStepIndex);
+  closeSettings('learn-open-experiment');
+  return true;
+}
+
+function handleLearnCoachAction(action) {
+  if (action === 'dismiss') return dismissLearnCoach();
+  if (action !== 'return' || !learnCoachState) return false;
+  const { lessonId, stepIndex } = learnCoachState;
+  dismissLearnCoach();
+  learnExperimentStepIndex = stepIndex;
+  const step = learnTopicRecord(lessonId).lesson?.experiment?.steps?.[stepIndex];
+  if (step) setMobileExperimentStepComplete(lessonId, step.id, true);
+  openSettings('learn');
+  openLearnLesson(lessonId, { preserveExperiment: true });
+  requestAnimationFrame(() => els.learnReaderScroll?.querySelector('.mobile-learn-experiment')?.scrollIntoView({ block: 'start' }));
+  return true;
+}
+
 function nextLearnTopic() {
   const activeId = activeLearnTopicId();
   const index = LEARN_TOPIC_CYCLE.findIndex(topic => topic.id === activeId);
-  const next = LEARN_TOPIC_CYCLE[(index + 1 + LEARN_TOPIC_CYCLE.length) % LEARN_TOPIC_CYCLE.length] || LEARN_TOPIC_CYCLE[0];
+  const next = LEARN_TOPIC_CYCLE[index + 1];
+  if (!next) return false;
   metrics.learnTopicNextCount++;
-  return selectLearnTopic(next.id, { interactionType: 'next-learn-topic' });
+  return openLearnLesson(next.id);
+}
+
+function previousLearnTopic() {
+  const activeId = activeLearnTopicId();
+  const index = LEARN_TOPIC_CYCLE.findIndex(topic => topic.id === activeId);
+  const previous = LEARN_TOPIC_CYCLE[index - 1];
+  if (!previous) return false;
+  return openLearnLesson(previous.id);
 }
 
 function mobileTourStepAt(index = mobileTourIndex) {
@@ -4711,6 +5105,8 @@ function mobileTourTargetSnapshot(step = mobileTourStepAt()) {
     shape: target.shape || null,
     polytope4d: target.polytope4d || null,
     dynkinDiagram: target.dynkinDiagram || null,
+    rootSystem: target.rootSystem || null,
+    tilingSystem: target.tilingSystem || null,
   };
 }
 
@@ -4953,6 +5349,7 @@ function openSettings(section = null) {
     ? (activeSettingsSection() || 'view')
     : (SETTINGS_SECTIONS.has(section) ? section : 'view');
   const wasOpen = isSettingsOpen();
+  closeQualityPopover();
   cancelQueuedRenderForSettings('settings-open');
   if (wasOpen) {
     metrics.settingsTabSyncSkipCount++;
@@ -4980,6 +5377,7 @@ function applySettingsSection(target) {
   if (current === target) {
     metrics.settingsSectionSwitchSkipCount++;
     if (els.sheetBody) els.sheetBody.scrollTop = 0;
+    syncLearnRoute();
     return false;
   }
   els.sectionTabs.forEach(btn => {
@@ -4990,13 +5388,19 @@ function applySettingsSection(target) {
   });
   metrics.settingsSectionSwitchCount++;
   if (els.sheetBody) els.sheetBody.scrollTop = 0;
+  syncLearnRoute();
   return true;
 }
 
 function closeSettings(interactionType = null) {
   const wasOpen = isSettingsOpen();
+  closeQualityPopover();
   els.sheet.classList.add('hidden');
   els.settingsButton.setAttribute('aria-expanded', 'false');
+  if (interactionType !== 'learn-open-experiment') {
+    learnScreen = 'library';
+    syncLearnRoute();
+  }
   if (wasOpen && interactionType) markInteraction(interactionType);
   if (selectionUiDetailsDeferred) updateSelectionUI({ reason: 'settings-close-flush' });
   flushDeferredSettingsRender();
@@ -5007,7 +5411,10 @@ function closeSettings(interactionType = null) {
 
 function handleBackNavigation() {
   clearTapMemory();
+  if (closeQualityPopover()) return true;
+  if (!isSettingsOpen() && dismissLearnCoach()) return true;
   if (isSettingsOpen()) {
+    if (activeSettingsSection() === 'learn' && learnScreen === 'lesson') return closeLearnReader();
     const closed = closeSettings('back-close-settings');
     if (closed) showStatus('Settings closed');
     return closed;
@@ -5673,6 +6080,8 @@ function render() {
       dynkinLabel: DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram,
       rootSystem: state.rootSystem,
       rootSystemLabel: RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem,
+      tilingSystem: state.tilingSystem,
+      tilingSystemLabel: COXETER_TILINGS[state.tilingSystem]?.label || state.tilingSystem,
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
       autoFx: state.autoFx,
@@ -5735,6 +6144,12 @@ function render() {
 
     if (state.modelMode === 'rootlab') {
       const projectedAllFrame = drawRootLabModel(layout, paletteSet, drawStats, interactionLiteFrame);
+      completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
+      return;
+    }
+
+    if (state.modelMode === 'tiling') {
+      const projectedAllFrame = drawTilingModel(layout, paletteSet, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -6336,6 +6751,8 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   metrics.lastDynkinSelectedNode = drawStats.dynkinSelectedNode ?? null;
   metrics.lastRootSystem = drawStats.rootSystem || state.rootSystem;
   metrics.lastRootSystemLabel = drawStats.rootSystemLabel || RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem;
+  metrics.lastTilingSystem = drawStats.tilingSystem || state.tilingSystem;
+  metrics.lastTilingSystemLabel = drawStats.tilingSystemLabel || COXETER_TILINGS[state.tilingSystem]?.label || state.tilingSystem;
   metrics.lastRuntimePalette = drawStats.runtimePalette || state.palette;
   metrics.lastStylePhase = stylePhase;
   metrics.lastModelDrawMs = performance.now();
@@ -6352,6 +6769,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   if (state.modelMode === 'platonic') metrics.platonicDrawCount++;
   if (state.modelMode === 'poly4d') metrics.polytope4DDrawCount++;
   if (state.modelMode === 'rootlab') metrics.rootLabDrawCount = (metrics.rootLabDrawCount || 0) + 1;
+  if (state.modelMode === 'tiling') metrics.tilingDrawCount = (metrics.tilingDrawCount || 0) + 1;
   if (state.modelMode === 'dynkin') metrics.dynkinDrawCount++;
   metrics.lastRenderMs = performance.now() - t0;
   if (metrics.firstRenderMs == null) metrics.firstRenderMs = performance.now() - startedAt;
@@ -8101,6 +8519,181 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   return frame;
 }
 
+function mobileTilingGeometry() {
+  const key = `${state.tilingSystem}|${state.tilingDensity}`;
+  if (key !== tilingGeometryCacheKey || !tilingGeometryCache) {
+    tilingGeometryCacheKey = key;
+    tilingGeometryCache = generateCoxeterTiling(state.tilingSystem, { density: state.tilingDensity });
+  }
+  return tilingGeometryCache;
+}
+
+function mobileTilingRelief(x, y) {
+  const radial = Math.hypot(x, y);
+  return state.tilingRelief * (
+    Math.sin(radial * 8.5) * 0.42
+    + Math.cos(x * 6.2 - y * 4.7) * 0.22
+  );
+}
+
+function tilingPaletteBucket(tile, paletteSet, familyCount) {
+  const angle = Math.atan2(tile.center[1], tile.center[0]) / TAU;
+  const family = (tile.familyA + tile.familyB * 0.62) / Math.max(1, familyCount * 1.62);
+  const motion = state.tilingAnimate ? stylePhase * 0.11 : 0;
+  const value = ((family * 0.54 + angle * 0.31 + Math.hypot(...tile.center) * 0.18 + motion) % 1 + 1) % 1;
+  return Math.min(paletteSet.colors.length - 1, Math.floor(value * paletteSet.colors.length));
+}
+
+function drawTilingModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  const tiling = mobileTilingGeometry();
+  const modelScale = 1.04;
+  const project = point => projectPlaneScreenPoint(
+    point[0],
+    point[1],
+    mobileTilingRelief(point[0], point[1]),
+    layout,
+    modelScale,
+    true,
+  );
+  const projectedTiles = tiling.tiles.map(tile => ({
+    tile,
+    points: tile.points.map(project),
+  }));
+  const allProjected = projectedTiles.flatMap(tile => tile.points);
+
+  if (state.tilingShowTiles) {
+    const buckets = Array.from({ length: paletteSet.colors.length }, () => []);
+    for (const item of projectedTiles) buckets[tilingPaletteBucket(item.tile, paletteSet, tiling.familyCount)].push(item);
+    ctx.save();
+    ctx.globalCompositeOperation = state.fxMode === 'glow' || state.fxMode === 'ripple' ? 'lighter' : 'source-over';
+    buckets.forEach((items, index) => {
+      if (!items.length) return;
+      ctx.beginPath();
+      for (const item of items) {
+        item.points.forEach((point, pointIndex) => {
+          if (pointIndex) ctx.lineTo(point.x, point.y);
+          else ctx.moveTo(point.x, point.y);
+        });
+        ctx.closePath();
+      }
+      ctx.fillStyle = colorWithAlpha(
+        paletteSet.colors[index],
+        interactionLiteFrame ? 0.22 : state.fxMode === 'none' ? 0.38 : 0.46,
+      );
+      ctx.fill();
+      drawStats.modelFaceFills++;
+    });
+    ctx.restore();
+  }
+
+  if (state.tilingShowGrid && !interactionLiteFrame) {
+    ctx.save();
+    ctx.setLineDash([4, 7]);
+    ctx.lineWidth = 1;
+    for (let family = 0; family < tiling.familyCount; family++) {
+      ctx.beginPath();
+      for (const line of tiling.lines) {
+        if (line.family !== family) continue;
+        const a = project(line.points[0]);
+        const b = project(line.points[1]);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.strokeStyle = colorWithAlpha(paletteSet.colors[family % paletteSet.colors.length], 0.24);
+      ctx.stroke();
+      drawStats.modelEdgeStrokes++;
+    }
+    ctx.restore();
+  }
+
+  if (state.tilingShowEdges) {
+    const edgeBuckets = Array.from({ length: paletteSet.colors.length }, () => []);
+    for (const edge of tiling.edges) {
+      const midpoint = [
+        (edge.points[0][0] + edge.points[1][0]) / 2,
+        (edge.points[0][1] + edge.points[1][1]) / 2,
+      ];
+      const turn = ((Math.atan2(midpoint[1], midpoint[0]) / TAU) % 1 + 1) % 1;
+      const bucket = Math.min(edgeBuckets.length - 1, Math.floor(turn * edgeBuckets.length));
+      edgeBuckets[bucket].push(edge);
+    }
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    edgeBuckets.forEach((edges, index) => {
+      if (!edges.length) return;
+      ctx.beginPath();
+      for (const edge of edges) {
+        const a = project(edge.points[0]);
+        const b = project(edge.points[1]);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.lineWidth = interactionLiteFrame ? 0.7 : 1.05;
+      ctx.strokeStyle = colorWithAlpha(paletteSet.colors[index], interactionLiteFrame ? 0.38 : 0.72);
+      if (!interactionLiteFrame && state.fxMode !== 'none') {
+        ctx.shadowColor = paletteSet.colors[index];
+        ctx.shadowBlur = 2 + state.fxStrength * 2.5;
+      }
+      ctx.stroke();
+      drawStats.modelEdgeStrokes++;
+    });
+    ctx.restore();
+  }
+
+  if (state.tilingShowRoots) {
+    const center = project([0, 0]);
+    ctx.save();
+    ctx.lineWidth = interactionLiteFrame ? 1.4 : 2.2;
+    ctx.lineCap = 'round';
+    tiling.directions.forEach((direction, index) => {
+      const end = project([direction[0] * 0.46, direction[1] * 0.46]);
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.strokeStyle = paletteSet.colors[index % paletteSet.colors.length];
+      if (!interactionLiteFrame) {
+        ctx.shadowColor = paletteSet.colors[index % paletteSet.colors.length];
+        ctx.shadowBlur = 7;
+      }
+      ctx.stroke();
+      drawStats.modelEdgeStrokes++;
+    });
+    ctx.restore();
+  }
+
+  if (state.tilingShowVertices && !interactionLiteFrame) {
+    ctx.save();
+    const vertexBuckets = Array.from({ length: paletteSet.colors.length }, () => []);
+    tiling.vertices.forEach((vertex, index) => vertexBuckets[index % vertexBuckets.length].push(project(vertex.point)));
+    vertexBuckets.forEach((vertices, index) => {
+      ctx.beginPath();
+      for (const point of vertices) {
+        const size = 1.7 * state.pointScale;
+        ctx.rect(point.x - size, point.y - size, size * 2, size * 2);
+      }
+      ctx.fillStyle = colorWithAlpha(paletteSet.colors[index], 0.88);
+      ctx.fill();
+      drawStats.modelVertexFills++;
+    });
+    ctx.restore();
+  }
+
+  drawStats.points = state.tilingShowVertices ? tiling.vertexCount : 0;
+  drawStats.modelVertices = tiling.vertexCount;
+  drawStats.modelProjectedVertices = tiling.vertexCount;
+  drawStats.modelEdges = tiling.edgeCount;
+  drawStats.modelFaces = tiling.tileCount;
+  drawStats.tilingSystem = tiling.id;
+  drawStats.tilingTiles = tiling.tileCount;
+  drawStats.tilingFamilies = tiling.familyCount;
+  drawStats.tilingOrder = tiling.order;
+  drawStats.tilingPeriodic = tiling.periodic;
+  drawStats.tilingAngleClasses = tiling.angleClasses;
+  drawStats.tilingPlanePitch = planeCameraPitch();
+  return projectedModelFrameMetrics(allProjected);
+}
+
 function drawRootLabModel(layout, paletteSet, drawStats, interactionLiteFrame) {
   const system = generateRank2RootSystem(state.rootSystem);
   const maxLength = Math.max(...system.roots.map(root => root.length), 1);
@@ -9099,8 +9692,8 @@ function currentAutoModelIndex() {
     if (target.modelMode === 'dynkin') return target.dynkinDiagram === state.dynkinDiagram;
     return true;
   });
-  // Manual-only models such as Dynkin start the showcase at its canonical E8
-  // scene on the next advance rather than entering midway through the cycle.
+  // Manual-only models such as Root Lab, Tiling Lab, and Dynkin start the
+  // showcase at its canonical E8 scene on the next advance.
   return index >= 0 ? index : AUTO_MODEL_SEQUENCE.length - 1;
 }
 
@@ -9135,7 +9728,10 @@ function mobileMotionFrameIntervalMs() {
   const denseCanvasFx = state.modelMode === 'e8_2d' && state.showEdges && (
     !e8ChordGl || (state.fxMode !== 'none' && state.fxMode !== 'ripple')
   );
-  return denseCanvasFx ? DENSE_E8_MOTION_FRAME_INTERVAL_MS : MOTION_FRAME_INTERVAL_MS;
+  const denseTiling = state.modelMode === 'tiling' && state.tilingAnimate && state.tilingDensity >= 5;
+  if (denseCanvasFx) return DENSE_E8_MOTION_FRAME_INTERVAL_MS;
+  if (denseTiling) return DENSE_TILING_MOTION_FRAME_INTERVAL_MS;
+  return MOTION_FRAME_INTERVAL_MS;
 }
 
 function syncAutoMotionPhase(kind) {
@@ -9157,7 +9753,7 @@ function autoMotionValue(min, max, phaseOffset) {
 
 function hasRuntimeAnimation() {
   const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto));
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto) || (state.modelMode === 'tiling' && state.tilingAnimate));
 }
 
 function startMotion() {
@@ -9220,8 +9816,14 @@ function startMotion() {
       }
     }
     const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-    if (state.autoColor || state.autoFx || state.softFx || nativeFxAnimation) {
-      const styleRate = state.autoColor || state.autoFx ? state.colorSpeed : state.softFx ? 0.42 * state.fxStrength : 0.26 * state.fxStrength;
+    if (state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'tiling' && state.tilingAnimate)) {
+      const styleRate = state.autoColor || state.autoFx
+        ? state.colorSpeed
+        : state.softFx
+          ? 0.42 * state.fxStrength
+          : nativeFxAnimation
+            ? 0.26 * state.fxStrength
+            : 0.18 * state.tilingFlowSpeed;
       stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
       if (state.softFx) metrics.softFxFrameCount++;
@@ -10195,6 +10797,11 @@ function modelInfoHtml() {
     const system = generateRank2RootSystem(state.rootSystem);
     return `<strong>${system.label} root system</strong><small>${system.rootCount} roots | ${system.chamberCount} chambers | Coxeter number ${system.coxeterNumber}</small><small>Built live from two simple roots by repeated reflections. One finger orbits and tilts; two fingers pan or zoom.</small>`;
   }
+  if (state.modelMode === 'tiling') {
+    const tiling = mobileTilingGeometry();
+    const repetition = tiling.periodic ? 'periodic' : 'quasiperiodic';
+    return `<strong>${escapeHtml(tiling.name)}</strong><small>${escapeHtml(tiling.label)} | ${tiling.tileCount} rhombi | ${tiling.familyCount} grids | ${tiling.order}-fold order</small><small>${escapeHtml(repetition)} dual multigrid. Turn on Multigrid to see the line families that generate the tiles.</small>`;
+  }
   if (state.modelMode === 'dynkin') {
     const diagram = dynkinGeometry[state.dynkinDiagram];
     return `<strong>${DYNKIN_LABELS[state.dynkinDiagram] || state.dynkinDiagram} Dynkin diagram</strong><small>${diagram?.nodes?.length || 0} simple roots | ${diagram?.edges?.length || 0} Cartan edges</small><small>Tap an E8 node to select its simple root context.</small>`;
@@ -10519,6 +11126,7 @@ async function init() {
     nextMobileTourStep,
     previousMobileTourStep,
     mobileSurprise,
+    resetView,
     resetMobileDefaults,
     shareSnapshot,
     sharePostcard,

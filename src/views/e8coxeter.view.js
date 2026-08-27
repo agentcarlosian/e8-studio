@@ -1237,12 +1237,14 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
         params._weylSteps = 0;
       }
 
-      // Auto-rotation (z-axis spin on the rendered group). When recording
-      // video, slow the spin so thin chord lines move fewer pixels per frame
-      // and stay sharp under video compression (no smearing).
+      // Auto-rotation (z-axis spin on the rendered group). rotationSpeed was
+      // originally tuned as a small per-frame value; scale it into a useful
+      // per-second rate so the slider ranges from a calm drift to a decisive
+      // circular spin. When recording, slow the result to keep thin chords
+      // sharp under video compression.
       if (params.autoRotate) {
         const recScale = params._recording ? (params._recordingMotionScale ?? 0.4) : 1;
-        group.rotation.z += dt * params.rotationSpeed * recScale;
+        group.rotation.z += dt * params.rotationSpeed * 50 * recScale;
       }
 
       // Animated 3D exploration: when in custom 3D mode, ALWAYS animate

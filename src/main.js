@@ -43,7 +43,6 @@ import { ExportRecordingService, isCapacitorNative } from './services/export-rec
 import { createResourceScope } from './platform/resource-scope.js';
 import { FrameHealthController } from './platform/frame-health.js';
 import { EssayPanel } from './ui/essays.js';
-import { startTour, stopTour, isTourActive, isTourPaused, pauseTour, resumeTour } from './ui/tour.js';
 import { ESSAYS, CODE_ART_SHADERS } from './content/essays.js';
 import { CURIOUS_CARDS, DAILY_FACTS, REWARD_BACKGROUNDS, BIOGRAPHIES, TIMELINE, dailyFactForDate } from './content/learning.js';
 import { LEARNING_PATHS, LEARNING_LESSONS, learningLessonById, adjacentLearningLesson } from './content/curriculum.js';
@@ -61,7 +60,9 @@ import { createSixHundredView } from './views/sixhundred.view.js';
 import { createBloomView } from './views/bloom.view.js';
 import { createRaymarchedView } from './views/raymarched-e8.view.js';
 import { createRootLabView } from './views/rootlab.view.js';
+import { createTilingView } from './views/tiling.view.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEMS } from './math/rank2-roots.js';
+import { COXETER_TILINGS, generateCoxeterTiling } from './math/coxeter-tilings.js';
 
 // Raycaster for hover tooltips
 const raycaster = new THREE.Raycaster();
@@ -147,6 +148,7 @@ const VIEWS = [
   // Secondary view: visible in the More menu and View workspace without
   // displacing the six visual-first primary tabs.
   { id: 'rootlab',     label: 'Root Lab',    factory: createRootLabView,   primary: false },
+  { id: 'tiling',      label: 'Tiling Lab',  factory: createTilingView,    primary: false },
   { id: 'dynkin',      label: 'Dynkin',      factory: createDynkinView,    primary: false },
 ];
 
@@ -1136,7 +1138,7 @@ function updateOverlays(viewId) {
   } else if (viewId === 'dynkin') {
     const d = DATA.dynkin[params.dynkin];
     tl.innerHTML = `<b>${d.name} Dynkin</b><br>${d.nodes.length} nodes · ${d.edges.length} edges`;
-    tr.innerHTML = `From: <b>${params.shape}</b>`;
+    tr.innerHTML = `Cartan data<br><b>simple-root graph</b>`;
     bl.innerHTML = `Node size = degree`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>root system: <b>${params.dynkin}</b>`;
   } else if (viewId === 'rootlab') {
@@ -1149,6 +1151,13 @@ function updateOverlays(viewId) {
     tr.innerHTML = `Coxeter h = <b>${rootSystem.coxeterNumber}</b> · chamber ${formatOverlayNumber(rootSystem.chamberAngleDegrees)}°<br>${rootSystem.crystallographic ? 'Cartan' : 'reflection'} ${matrix}`;
     bl.innerHTML = `simple-root angle ${formatOverlayNumber(rootSystem.simpleAngleDegrees)}°<br>${lengths} roots<br>${rootSystem.name}`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>family: <b>${rootSystem.family}</b>`;
+  } else if (viewId === 'tiling') {
+    const tiling = generateCoxeterTiling(params.tilingSystem, { density: params.tilingDensity });
+    const angleSummary = tiling.angleClasses.map(formatOverlayNumber).map(value => `${value}°`).join(' · ');
+    tl.innerHTML = `<b>${tiling.label} TILING LAB</b><br>${tiling.tileCount} rhombi · ${tiling.familyCount} grids`;
+    tr.innerHTML = `${tiling.order}-fold local order<br>${tiling.periodic ? '<b>periodic lattice</b>' : '<b>quasiperiodic field</b>'}`;
+    bl.innerHTML = `tile angles ${angleSummary}<br>${tiling.name}`;
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>dual multigrid: <b>${tiling.label}</b>`;
   } else if (viewId === 'polytope') {
     const p = DATA.polytopes4d[params.poly4d];
     tl.innerHTML = `<b>${params.poly4d.toUpperCase()}</b><br>${p.verts.length} verts · ${p.edges.length} edges`;
@@ -1264,6 +1273,16 @@ function defaultParams() {
     poly4d: '24cell',
     dynkin: 'E8',
     rootSystem: 'A2',
+    tilingSystem: 'H2',
+    tilingDensity: 5,
+    tilingRelief: 0.1,
+    tilingShowTiles: true,
+    tilingShowEdges: true,
+    tilingShowGrid: false,
+    tilingShowRoots: false,
+    tilingShowVertices: false,
+    tilingAnimate: true,
+    tilingFlowSpeed: 0.55,
     palette: 'gold',
     opacity: 0.9,
     rotationSpeed: 0.003,
@@ -1435,6 +1454,7 @@ function paramEnums() {
     quality: new Set(['auto', 'low', 'medium', 'high']),
     dynkin: new Set(['E6', 'E7', 'E8']),
     rootSystem: new Set(Object.keys(RANK2_ROOT_SYSTEMS)),
+    tilingSystem: new Set(Object.keys(COXETER_TILINGS)),
     rootSubset: new Set(['icosahedron', 'dodecahedron', 'simple_roots']),
   };
   return _paramEnums;
@@ -1470,6 +1490,7 @@ function normalizeParams(target) {
   if (!E.quality.has(target.mobileQuality)) target.mobileQuality = 'high';
   if (!E.dynkin.has(target.dynkin)) target.dynkin = 'E8';
   if (!E.rootSystem.has(target.rootSystem)) target.rootSystem = 'A2';
+  if (!E.tilingSystem.has(target.tilingSystem)) target.tilingSystem = 'H2';
   if (!E.rootSubset.has(target.rootSubset)) target.rootSubset = 'icosahedron';
   if (typeof target.reducedMode !== 'boolean') target.reducedMode = false;
   // Migrate the original combined Create workspace to the focused View tab.
@@ -1497,6 +1518,12 @@ function normalizeParams(target) {
   if (typeof target.showVertices !== 'boolean') target.showVertices = false;
   for (const key of ['rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit']) {
     if (typeof target[key] !== 'boolean') target[key] = true;
+  }
+  for (const key of ['tilingShowTiles', 'tilingShowEdges', 'tilingAnimate']) {
+    if (typeof target[key] !== 'boolean') target[key] = true;
+  }
+  for (const key of ['tilingShowGrid', 'tilingShowRoots', 'tilingShowVertices']) {
+    if (typeof target[key] !== 'boolean') target[key] = false;
   }
   if (!['instant', 'standard'].includes(target.firstVisualMode)) target.firstVisualMode = 'standard';
   if (typeof target.activeUnlock !== 'string') target.activeUnlock = '';
@@ -1526,6 +1553,9 @@ function normalizeParams(target) {
   target.rootHaloDepth = Math.round(clampNumber(target.rootHaloDepth, 1, 5, 3));
   target.rootDiffusionSpeed = clampNumber(target.rootDiffusionSpeed, 0.2, 4, 1.25);
   target.rootOrbitSpeed = clampNumber(target.rootOrbitSpeed, 0.1, 2, 0.7);
+  target.tilingDensity = Math.round(clampNumber(target.tilingDensity, 2, 8, 5));
+  target.tilingRelief = clampNumber(target.tilingRelief, 0, 0.45, 0.1);
+  target.tilingFlowSpeed = clampNumber(target.tilingFlowSpeed, 0.1, 2, 0.55);
   target.cameraSpeed = clampNumber(target.cameraSpeed, 0.1, 5, 1.0);
   target.cameraDistance = clampNumber(target.cameraDistance, 0.45, 12, CAMERA_DEFAULT_DISTANCE);
   target.cameraRotation = clampNumber(target.cameraRotation, -Math.PI, Math.PI, Math.PI / 6);
@@ -1938,6 +1968,29 @@ function geometryForView() {
       cartanMatrix: rootSystem.cartanMatrix,
     };
   }
+  if (v === 'tiling') {
+    const tiling = generateCoxeterTiling(params.tilingSystem, { density: params.tilingDensity });
+    return {
+      ...meta,
+      kind: 'coxeter-multigrid-tiling',
+      name: tiling.id,
+      label: tiling.label,
+      density: tiling.density,
+      periodic: tiling.periodic,
+      localSymmetryOrder: tiling.order,
+      familyCount: tiling.familyCount,
+      directions: tiling.directions,
+      offsets: tiling.offsets,
+      tiles: tiling.tiles.map(tile => ({
+        familyA: tile.familyA,
+        familyB: tile.familyB,
+        gridIndices: [tile.indexA, tile.indexB],
+        angleDegrees: tile.angleDegrees,
+        points: tile.points,
+      })),
+      edges: tiling.edges.map(edge => edge.points),
+    };
+  }
   if (v === 'e8coxeter' || v === 'raymarched' || v === 'bloom') {
     const e8 = DATA.e8;
     return e8 && { ...meta, kind: 'e8-root-system', dimension: 8, count: 240,
@@ -2255,7 +2308,17 @@ function showLearningModal(html) {
 }
 
 function closeExperimentCoach() {
-  document.getElementById('learning-experiment-coach')?.remove();
+  const coach = document.getElementById('learning-experiment-coach');
+  if (!coach) return false;
+  coach.remove();
+  return true;
+}
+
+function dismissLearningSurfaces() {
+  const modalClosed = closeLearningModal();
+  const coachClosed = closeExperimentCoach();
+  const essayClosed = window.essayPanel?.close?.() || false;
+  return modalClosed || coachClosed || essayClosed;
 }
 
 function showExperimentCoach(lessonId, stepId) {
@@ -2335,6 +2398,22 @@ function openLearningCenter(lessonId = null) {
   const lessonComplete = learningProgress.lessonComplete(lesson.id);
   const experimentState = learningProgress.experimentState(lesson.id);
   const completedLessonIds = new Set(Object.keys(learningProgress.progress.lessons || {}));
+  const learningSummary = learningProgress.summary();
+  const overallProgress = learningSummary.lessonsTotal
+    ? Math.round((learningSummary.lessonsComplete / learningSummary.lessonsTotal) * 100)
+    : 0;
+  const pathLessonIndex = Math.max(0, path?.lessons.findIndex(entry => entry.id === lesson.id) ?? 0);
+  const lessonViewLabel = ({
+    bloom: 'Bloom',
+    platonic: 'Platonic solids',
+    e8coxeter: 'E₈ Coxeter',
+    sixhundred: '600-cell',
+    polytope: '4D polytopes',
+    raymarched: 'E₈ SDF',
+    rootlab: 'Root Lab',
+    tiling: 'Tiling Lab',
+    dynkin: 'Dynkin diagrams',
+  })[lesson.view] || lesson.view;
   const claimLabels = {
     'established-mathematics': 'Established mathematics',
     interpretation: 'Interpretation',
@@ -2346,10 +2425,10 @@ function openLearningCenter(lessonId = null) {
     return `
     <section class="learning-path ${item.id === lesson.pathId ? 'active' : ''}">
       <div class="learning-path-title"><span>${svgEsc(item.title)}</span><small>${pathComplete}/${item.lessons.length}</small></div>
-      ${item.lessons.map(entry => `
+      ${item.lessons.map((entry, entryIndex) => `
         <button class="learning-lesson-link ${entry.id === lesson.id ? 'active' : ''}"
           data-learning-lesson="${svgEsc(entry.id)}" aria-current="${entry.id === lesson.id ? 'step' : 'false'}">
-          <span>${svgEsc(entry.title)}</span>
+          <span class="learning-lesson-copy"><span class="learning-lesson-index">${String(entryIndex + 1).padStart(2, '0')}</span><span>${svgEsc(entry.title)}</span></span>
           <small>${learningProgress.lessonComplete(entry.id) ? 'complete' : entry.prerequisites.every(id => completedLessonIds.has(id)) ? 'ready' : 'suggested order'}</small>
         </button>
       `).join('')}
@@ -2384,7 +2463,7 @@ function openLearningCenter(lessonId = null) {
       <div class="learning-experiment-step-head"><span>${index + 1}</span><strong>${svgEsc(entry.title)}</strong><small>${observed ? 'observed' : 'ready'}</small></div>
       <p>${svgEsc(entry.instruction)}</p>
       <div class="learning-experiment-question"><span>Notice</span>${svgEsc(entry.question)}</div>
-      ${observed ? `<div class="learning-experiment-takeaway"><span>Takeaway</span>${svgEsc(entry.takeaway)}</div>` : ''}
+      <div class="learning-experiment-takeaway"><span>Explanation</span>${svgEsc(entry.takeaway)}</div>
       <div class="learning-experiment-step-actions">
         <button data-learning-run-step="${svgEsc(entry.id)}">Run in Studio</button>
         <button data-learning-observe-step="${svgEsc(entry.id)}" aria-pressed="${observed}">${observed ? '✓ Observed' : 'Mark observed'}</button>
@@ -2395,64 +2474,104 @@ function openLearningCenter(lessonId = null) {
     const target = learningLessonById(connection.lessonId);
     return `<button class="learning-connection-card" data-learning-lesson="${svgEsc(connection.lessonId)}"><span>${svgEsc(connection.label)}</span><small>${svgEsc(target?.title || connection.lessonId)} →</small></button>`;
   }).join('');
+  const proofHtml = lesson.proof ? `
+    <section class="learning-proof" aria-labelledby="learning-proof-title">
+      <header class="learning-proof-header"><span id="learning-proof-title">Why this works</span><code>${svgEsc(lesson.proof.formula)}</code></header>
+      <p>${svgEsc(lesson.proof.explanation)}</p>
+      <div class="learning-proof-table" role="table" aria-label="Valid regular solid cases">
+        <div role="row" class="learning-proof-row learning-proof-head"><span role="columnheader">Face</span><span role="columnheader">At each vertex</span><span role="columnheader">Solid</span></div>
+        ${(lesson.proof.cases || []).map(([face, count, solid]) => `<div role="row" class="learning-proof-row"><span role="cell">${svgEsc(face)}</span><span role="cell">${svgEsc(count)}</span><span role="cell">${svgEsc(solid)}</span></div>`).join('')}
+      </div>
+      <p class="learning-proof-boundary">${svgEsc(lesson.proof.boundary)}</p>
+    </section>` : '';
   const host = showLearningModal(`
-    <button class="modal-close" data-modal-close aria-label="Close">x</button>
+    <button class="modal-close" data-modal-close aria-label="Close">×</button>
     <div class="learning-center-shell">
       <aside class="learning-center-nav" aria-label="Learning paths">
-        <div class="modal-kicker">Learning Center</div>
-        <div class="learning-progress-summary">${learningProgress.summary().lessonsComplete}/${learningProgress.summary().lessonsTotal} lessons complete</div>
+        <div class="learning-nav-header">
+          <div class="modal-kicker">Learning Center</div>
+          <div class="learning-progress-summary"><strong>${learningSummary.lessonsComplete}</strong><span>of ${learningSummary.lessonsTotal} lessons</span><em>${overallProgress}%</em></div>
+          <div class="learning-overall-progress" role="progressbar" aria-label="Curriculum progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${overallProgress}"><span style="width:${overallProgress}%"></span></div>
+        </div>
         ${pathNavigation}
       </aside>
       <article class="learning-center-content">
-        <div class="modal-kicker">${svgEsc(path?.title || 'Learning path')} · Lesson ${lesson.lessonIndex + 1}</div>
-        <h2>${svgEsc(lesson.title)}</h2>
-        <p class="modal-copy">${svgEsc(path?.description || '')}</p>
-        <div class="learning-claim-note" data-claim-type="${svgEsc(lesson.claimType)}">
-          <strong>${svgEsc(claimLabels[lesson.claimType] || lesson.claimType)}</strong>
-          <span>${svgEsc(lesson.claimNote)}</span>
-        </div>
-        <div class="learning-lesson-status">
-          <span>Visualization: ${svgEsc(lesson.view)}</span>
-          <span>About ${lesson.estimatedMinutes || 5} minutes</span>
-          <span>${quizState?.passedAt ? `Quiz complete · best ${quizState.bestScore}/${quizState.total}` : 'Quiz available'}</span>
-        </div>
-        <h3>Recommended foundation</h3>
-        <div class="learning-prerequisite-grid">${prerequisiteCards}</div>
-        <h3>What you will learn</h3>
-        <ul class="learning-objectives">${(lesson.objectives || []).map(objective => `<li>${svgEsc(objective)}</li>`).join('')}</ul>
+        <header class="learning-lesson-hero">
+          <div class="learning-lesson-eyebrow">
+            <div class="modal-kicker">${svgEsc(path?.title || 'Learning path')}</div>
+            <span>Lesson ${pathLessonIndex + 1} of ${path?.lessons.length || 1}</span>
+          </div>
+          <h2>${svgEsc(lesson.title)}</h2>
+          <div class="learning-lesson-status" aria-label="Lesson details">
+            <span>${svgEsc(lessonViewLabel)}</span>
+            <span>${lesson.estimatedMinutes || 5} min</span>
+            <span>${quizState?.passedAt ? `Quiz ${quizState.bestScore}/${quizState.total}` : 'Quiz included'}</span>
+            <span class="${lessonComplete ? 'is-complete' : ''}">${lessonComplete ? '✓ Completed' : 'Ready to begin'}</span>
+          </div>
+        </header>
+        <section class="learning-answer" aria-labelledby="learning-answer-title">
+          <span id="learning-answer-title">The short answer</span>
+          <p>${svgEsc(lesson.shortAnswer || lesson.claimNote)}</p>
+          <ul>${(lesson.keyIdeas || lesson.objectives || []).map(idea => `<li>${svgEsc(idea)}</li>`).join('')}</ul>
+        </section>
+        ${proofHtml}
         <div class="learning-activity">
-          <strong>Try it in the Studio</strong>
+          <strong>See it for yourself</strong>
           <span>${svgEsc(lesson.activity || 'Open the visualization and compare what changes with what stays mathematically fixed.')}</span>
         </div>
         <div class="modal-actions learning-primary-actions">
-          <button data-learning-open-view="${svgEsc(lesson.view)}">Open visualization</button>
-          <button data-learning-quiz="${svgEsc(lesson.quizId)}">${quizState?.passedAt ? 'Review quiz' : 'Take quiz'}</button>
-          <button data-learning-complete="${svgEsc(lesson.id)}" aria-pressed="${lessonComplete}">${lessonComplete ? 'Mark incomplete' : 'Mark lesson complete'}</button>
+          <button class="learning-action-primary" data-learning-open-view="${svgEsc(lesson.view)}">Try it in Studio →</button>
         </div>
         <section class="learning-experiment" aria-labelledby="learning-experiment-title">
-          <div class="learning-experiment-header">
+          <header class="learning-experiment-header">
             <div><span>Guided Studio experiment</span><h3 id="learning-experiment-title">${svgEsc(lesson.experiment?.title || 'Try it yourself')}</h3></div>
-            <strong>${experimentState.completedCount}/${experimentState.total}</strong>
+            <strong>${experimentState.completedCount}/${experimentState.total} <small>explored</small></strong>
+          </header>
+          <div class="learning-experiment-body">
+            <p>${svgEsc(lesson.experiment?.intro || lesson.activity)}</p>
+            <div class="learning-experiment-progress" role="progressbar" aria-label="Experiment progress" aria-valuemin="0" aria-valuemax="${experimentState.total}" aria-valuenow="${experimentState.completedCount}"><span style="width:${experimentState.total ? (experimentState.completedCount / experimentState.total) * 100 : 0}%"></span></div>
+            <div class="learning-experiment-steps">${experimentSteps}</div>
+            <div class="learning-experiment-reflection"><span>Reflect</span>${svgEsc(lesson.experiment?.reflection || '')}</div>
           </div>
-          <p>${svgEsc(lesson.experiment?.intro || lesson.activity)}</p>
-          <div class="learning-experiment-progress" role="progressbar" aria-label="Experiment progress" aria-valuemin="0" aria-valuemax="${experimentState.total}" aria-valuenow="${experimentState.completedCount}"><span style="width:${experimentState.total ? (experimentState.completedCount / experimentState.total) * 100 : 0}%"></span></div>
-          <div class="learning-experiment-steps">${experimentSteps}</div>
-          <div class="learning-experiment-reflection"><span>Reflect</span>${svgEsc(lesson.experiment?.reflection || '')}</div>
         </section>
-        <h3>Readings</h3>
-        <div class="learning-resource-grid">${essayCards}</div>
-        <h3>Sources and scope</h3>
-        <div class="learning-source-list">${sourceCards}</div>
-        <h3>Connect the ideas</h3>
-        <div class="learning-connection-grid">${connectionCards}</div>
-        <div class="learning-lesson-nav">
-          ${previous ? `<button data-learning-lesson="${svgEsc(previous.id)}">← ${svgEsc(previous.title)}</button>` : '<span>Start of curriculum</span>'}
-          ${next ? `<button data-learning-lesson="${svgEsc(next.id)}">${svgEsc(next.title)} →</button>` : '<span>Curriculum complete</span>'}
-        </div>
+        <section class="learning-check">
+          <div><span>Check your understanding</span><strong>Ready when you are</strong></div>
+          <div class="modal-actions learning-check-actions">
+            <button data-learning-quiz="${svgEsc(lesson.quizId)}">${quizState?.passedAt ? 'Review quiz' : 'Take quiz'}</button>
+          </div>
+        </section>
+        <nav class="learning-lesson-nav" aria-label="Lesson navigation">
+          <button type="button" class="learning-lesson-nav-button" ${previous ? `data-learning-lesson="${svgEsc(previous.id)}"` : 'disabled'} aria-label="${previous ? `Previous lesson: ${svgEsc(previous.title)}` : 'Start of curriculum'}">← Previous</button>
+          <button type="button" class="learning-lesson-nav-button learning-lesson-nav-finish ${lessonComplete ? 'is-complete' : ''}" data-learning-complete="${svgEsc(lesson.id)}" aria-pressed="${lessonComplete}">${lessonComplete ? '✓ Complete' : 'Finish lesson'}</button>
+          <button type="button" class="learning-lesson-nav-button learning-lesson-nav-next" ${next ? `data-learning-lesson="${svgEsc(next.id)}"` : 'disabled'} aria-label="${next ? `Next lesson: ${svgEsc(next.title)}` : 'Curriculum complete'}">Next →</button>
+        </nav>
+        <section class="learning-more" aria-labelledby="learning-more-title">
+          <header id="learning-more-title" class="learning-more-header">Sources, readings, and lesson details</header>
+          <div class="learning-more-body">
+            <p class="modal-copy">${svgEsc(path?.description || '')}</p>
+            <div class="learning-claim-note" data-claim-type="${svgEsc(lesson.claimType)}">
+              <strong>${svgEsc(claimLabels[lesson.claimType] || lesson.claimType)}</strong>
+              <span>${svgEsc(lesson.claimNote)}</span>
+            </div>
+            <h3>Recommended foundation</h3>
+            <div class="learning-prerequisite-grid">${prerequisiteCards}</div>
+            <h3>Lesson objectives</h3>
+            <ul class="learning-objectives">${(lesson.objectives || []).map(objective => `<li>${svgEsc(objective)}</li>`).join('')}</ul>
+            <h3>Readings</h3>
+            <div class="learning-resource-grid">${essayCards}</div>
+            <h3>Sources and scope</h3>
+            <div class="learning-source-list">${sourceCards}</div>
+            <h3>Connect the ideas</h3>
+            <div class="learning-connection-grid">${connectionCards}</div>
+          </div>
+        </section>
       </article>
     </div>
   `);
   host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog');
+  requestAnimationFrame(() => {
+    host.querySelector('.learning-lesson-link[aria-current="step"]')?.scrollIntoView({ block: 'nearest' });
+  });
   host.querySelectorAll('[data-learning-lesson]').forEach(button => {
     button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
   });
@@ -2460,10 +2579,12 @@ function openLearningCenter(lessonId = null) {
     closeLearningModal();
     switchView(event.currentTarget.dataset.learningOpenView);
   });
-  host.querySelector('[data-learning-complete]')?.addEventListener('click', event => {
-    learningProgress.setLessonComplete(event.currentTarget.dataset.learningComplete, !lessonComplete);
-    openLearningCenter(lesson.id);
-    refreshPanel();
+  host.querySelectorAll('[data-learning-complete]').forEach(button => {
+    button.addEventListener('click', event => {
+      learningProgress.setLessonComplete(event.currentTarget.dataset.learningComplete, !lessonComplete);
+      openLearningCenter(lesson.id);
+      refreshPanel();
+    });
   });
   host.querySelectorAll('[data-learning-run-step]').forEach(button => {
     button.addEventListener('click', () => applyLearningExperimentStep(lesson.id, button.dataset.learningRunStep));
@@ -2685,11 +2806,10 @@ function openBiographiesModal(focusId = null) {
 // SHORTCUTS array mirrors the keydown handler. Plain modal, no search.
 const SHORTCUTS = [
   { group: 'Views',   items: [
-    { k: '1–8', d: 'Switch view' },
+    { k: '1–9', d: 'Switch view' },
   ]},
   { group: 'Explore', items: [
-    { k: 'T',   d: 'Start / stop guided tour' },
-    { k: 'Space', d: 'Pause animation — or the tour, if running' },
+    { k: 'Space', d: 'Pause animation' },
     { k: 'I',   d: 'Toggle essay panel' },
     { k: '←/→', d: 'Previous / next essay' },
     { k: 'G',   d: 'Open glossary' },
@@ -2709,7 +2829,7 @@ const SHORTCUTS = [
   ]},
   { group: 'Other',   items: [
     { k: '?',   d: 'This cheatsheet' },
-    { k: 'Esc', d: 'Close top layer / exit tour or zen' },
+    { k: 'Esc', d: 'Close top layer / exit zen' },
   ]},
 ];
 
@@ -2934,7 +3054,7 @@ function openVideoExportModal() {
     <button class="modal-close" data-modal-close aria-label="Close">x</button>
     <div class="modal-kicker">Export</div>
     <h2>Record video</h2>
-    <p class="modal-copy">Records the live animation at a fixed resolution (independent of the on-screen pixel ratio, so it stays sharp). The render keeps running while you record — orbit, pause the tour, change presets.</p>
+    <p class="modal-copy">Records the live animation at a fixed resolution (independent of the on-screen pixel ratio, so it stays sharp). The render keeps running while you record, so you can orbit, pause, or change presets.</p>
 
     <div class="proof-card">
       <div class="proof-count-row">
@@ -3255,10 +3375,6 @@ window.__app = {
   },
   getLearningState() { return learningState(); },
   openLearningCenter(lessonId = null) { openLearningCenter(lessonId); },
-  openE8Explorer() {
-    if (params.view !== 'e8coxeter') switchView('e8coxeter');
-    updateParam('panelMode', 'scene', { save: false });
-  },
   getCuriosityCard(view) { return CURIOUS_CARDS[view || params.view] || CURIOUS_CARDS.e8coxeter; },
   startQuiz(moduleId) { startQuizModule(moduleId); },
   completeQuiz(moduleId, score, total) {
@@ -3439,6 +3555,20 @@ window.__app = {
     refreshPanel();
     updateOverlays(params.view);
   },
+  setTilingSystem(systemId) {
+    params.autoModel = false;
+    updateParam('tilingSystem', systemId, { refresh: false });
+    const canvas = document.getElementById('canvas');
+    if (canvas) canvas.setAttribute('aria-label', modelCanvasLabel(params.view, params));
+    refreshPanel();
+    updateOverlays(params.view);
+  },
+  toggleTilingTiles() { updateParam('tilingShowTiles', !params.tilingShowTiles); },
+  toggleTilingEdges() { updateParam('tilingShowEdges', !params.tilingShowEdges); },
+  toggleTilingGrid() { updateParam('tilingShowGrid', !params.tilingShowGrid); },
+  toggleTilingRoots() { updateParam('tilingShowRoots', !params.tilingShowRoots); },
+  toggleTilingVertices() { updateParam('tilingShowVertices', !params.tilingShowVertices); },
+  toggleTilingAnimate() { updateParam('tilingAnimate', !params.tilingAnimate); },
   toggleRootMirrors() { updateParam('rootShowMirrors', !params.rootShowMirrors); },
   toggleRootChambers() { updateParam('rootShowChambers', !params.rootShowChambers); },
   toggleRootSimple() { updateParam('rootShowSimple', !params.rootShowSimple); },
@@ -3455,14 +3585,8 @@ window.__app = {
   },
   toggleAutoRotate() {
     updateParam('autoRotate', !params.autoRotate, { refresh: false });
-    // The compact panel control means a predictable manual orbit; named
-    // cinematic paths remain available through the command palette.
-    if (params.autoRotate) {
-      params.cameraMode = 'orbit';
-      params.cameraOrbit = false;
-      params.cameraPath = 'manual';
-    }
     refreshPanel();
+    showSavedToast(params.autoRotate ? 'Circular spin on' : 'Circular spin off');
   },
   toggleBloomAuto() { updateParam('bloomAuto', !params.bloomAuto); },
   toggleRings() { updateParam('showRings', !params.showRings); },
@@ -3700,8 +3824,7 @@ window.__app = {
   },
   setCameraMode(mode) {
     updateParam('cameraMode', mode, { refresh: false });
-    updateParam('autoRotate', false, { refresh: false });
-    // A camera mode only drives the camera while auto-rotation is on and no
+    // A camera mode only drives the camera while cameraOrbit is on and no
     // cinematic camera *path* is overriding it. Enable both so picking a mode is
     // immediately visible (otherwise the button looks like it does nothing).
     updateParam('cameraOrbit', true, { refresh: false });
@@ -3710,14 +3833,12 @@ window.__app = {
   },
   setCameraPath(path) {
     cameraController.pathStartedAt = performance.now();
-    if (path !== 'manual') params.autoRotate = false;
     params.cameraOrbit = false;
     updateParam('cameraPath', path);
     showSavedToast(path === 'manual' ? 'Camera path off' : 'Camera path: ' + path);
   },
   setCameraPreset(preset) {
     params.autoZoom = false;
-    params.autoRotate = false;
     if (preset === 'dive') {
       params.cameraOrbit = false;
       params.cameraPath = 'ringDive';
@@ -3725,7 +3846,10 @@ window.__app = {
       params.cameraOrbit = false;
       params.cameraPath = 'petrieSpiral';
     } else {
-      params.cameraOrbit = true;
+      const orbitWasActive = params.cameraPath === 'manual'
+        && params.cameraMode === 'orbit'
+        && params.cameraOrbit;
+      params.cameraOrbit = !orbitWasActive;
       params.cameraMode = 'orbit';
       params.cameraPath = 'manual';
       cameraController.distance = params.cameraDistance;
@@ -4002,9 +4126,9 @@ window.__app = {
         && (!item.shape || item.shape === params.shape)
         && (!item.poly4d || item.poly4d === params.poly4d)
         && (!item.dynkin || item.dynkin === params.dynkin));
-      // Dynkin remains fully available for intentional exploration, but is
-      // not part of the visual showcase. Starting Auto Model from Dynkin wraps
-      // cleanly into E8 instead of skipping ahead to the second scene.
+      // Root Lab, Tiling Lab, and Dynkin remain available for intentional
+      // exploration, but are not part of the visual showcase. Starting Auto
+      // Model from one of them wraps cleanly into E8.
       autoModelIndex = match >= 0 ? match : AUTO_MODEL_SEQUENCE.length - 1;
       lastModelShiftAt = performance.now() / 1000;
       params.intro = false;
@@ -4053,6 +4177,7 @@ window.__app = {
   // the camera. Less destructive than resetConfig, more thorough than the
   // individual angle resets.
   resetView() {
+    dismissLearningSurfaces();
     const v = params.view;
     if (v === 'bloom') window.__app.resetBloom();
     else if (v === 'e8coxeter') window.__app.resetE8Angles();
@@ -4071,25 +4196,7 @@ window.__app = {
   },
   refreshPanel: buildPanel,
   toggleEssay() { if (window.essayPanel) window.essayPanel.toggle(); },
-  toggleTour() { isTourActive() ? stopTour() : startTour(window.__app); },
-  // `tourStart`/`tourStop` are kept distinct from the tour module exports so the
-  // dist build's regex (which rewrites imported local names to window.__modules[X]
-  // lookups) doesn't mangle method-shorthand syntax. The regex fires anywhere
-  // the imported name appears — including inside object-literal method-shorthand
-  // — which turns `startTour() { ... }` into `window.__modules['startTour']() { ... }`
-  // (invalid JS). The export uses `startTour`/`stopTour`/`isTourActive` from
-  // tour.js, but the app actions use these distinct names.
-  tourStart() { startTour(window.__app); },
-  tourStop()  { stopTour(); },
-  // Distinct names (same reason as tourStart/tourStop above) to avoid the dist
-  // build's regex rewriter mangling pauseTour/resumeTour method shorthand.
-  tourPause()  { pauseTour(); },
-  tourResume() { resumeTour(); },
-  tourPaused() { return isTourPaused(); },
-  // Called by tour.js only on natural completion (not manual stop).
-  _onTourComplete() {
-    awardExplorationBadge('explore:tour-complete', 'Guided');
-  },
+  closeEssay() { return window.essayPanel?.close?.() || false; },
   copyCodeArt(idx) {
     const s = CODE_ART_SHADERS[idx];
     if (!s) return;
@@ -4142,6 +4249,7 @@ window.__app = {
     return exportRecording.exportHighResPNG({ renderer, camera, scene, scale: 1 });
   },
   resetConfig() {
+    dismissLearningSurfaces();
     // Reset the active model to its canonical visual state while preserving
     // the user's current model/view selection. This is immediate and visible;
     // it no longer reloads into E8 and makes the button feel unresponsive.
@@ -4732,21 +4840,14 @@ function installDelegatedHandlers() {
 
 function closeTopAppLayer() {
   if (closeLearningModal()) return true;
+  if (closeExperimentCoach()) return true;
   const fallback = document.getElementById('render-fallback');
   if (fallback && !fallback.classList.contains('hidden')) {
     fallback.classList.add('hidden');
     return true;
   }
   if (closeCommandPalette()) return true;
-  if (isTourActive()) {
-    stopTour();
-    return true;
-  }
-  if (window.essayPanel?.open) {
-    window.essayPanel.open = false;
-    window.essayPanel.render();
-    return true;
-  }
+  if (window.essayPanel?.close?.()) return true;
   if (params && (params.layout === 'presentation' || params.presentationMode)) {
     window.__app.setLayout('wide-canvas');
     setStatus('exited full screen');
@@ -4886,23 +4987,14 @@ async function main() {
     if (params.intro) params.intro = false;  // any keypress dismisses intro
     if (e.key === ' ') {
       e.preventDefault();
-      // When the tour is running, Space pauses/resumes the TOUR (not the
-      // animation) — so you can linger on a stop. Otherwise it toggles the
-      // render-animation pause as usual.
-      if (isTourActive()) {
-        isTourPaused() ? resumeTour() : pauseTour();
-        setStatus(isTourPaused() ? 'tour paused' : 'tour resumed');
-      } else {
-        params.paused = !params.paused;
-        setStatus(params.paused ? 'paused' : 'running');
-      }
+      params.paused = !params.paused;
+      setStatus(params.paused ? 'paused' : 'running');
     }
     if (e.key === 's' || e.key === 'S') { window.__app.exportHighResPNG(1); setStatus('saved PNG'); }
     if (e.key === 'r' || e.key === 'R') { params.seed = Math.floor(Math.random()*99999); setStatus('seed ' + params.seed); }
     if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); }
     // Essay panel shortcuts
     if (e.key === 'i' || e.key === 'I') { window.__app.toggleEssay(); }
-    if (e.key === 't' || e.key === 'T') { window.__app.toggleTour(); }
     if (e.key === 'ArrowLeft') { window.__app.essayPrev(); }
     if (e.key === 'ArrowRight') { window.__app.essayNext(); }
     // Quick-access section shortcuts. Each opens the matching learning tool or

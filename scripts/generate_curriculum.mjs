@@ -20,6 +20,10 @@ const lessons = LEARNING_LESSONS.map(lesson => ({
   lessonIndex: lesson.lessonIndex,
   estimatedMinutes: lesson.estimatedMinutes,
   prerequisites: lesson.prerequisites,
+  shortAnswer: lesson.shortAnswer,
+  keyIdeas: lesson.keyIdeas,
+  visualEvidence: lesson.visualEvidence || null,
+  proof: lesson.proof || null,
   objectives: lesson.objectives,
   activity: lesson.activity,
   claimType: lesson.claimType,
@@ -30,7 +34,7 @@ const lessons = LEARNING_LESSONS.map(lesson => ({
   quiz: { id: lesson.quizId, title: quizById.get(lesson.quizId)?.title || lesson.quizId },
   sources: lesson.sourceIds.map(id => ({ id, ...FACT_SOURCES[id] })),
 }));
-const payload = { schemaVersion: 3, paths, lessons };
+const payload = { schemaVersion: 5, paths, lessons };
 const destination = fileURLToPath(new URL('../data/curriculum.json', import.meta.url));
 await writeFile(destination, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 console.log(`Curriculum artifact written: data/curriculum.json (${lessons.length} lessons)`);

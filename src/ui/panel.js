@@ -9,17 +9,18 @@
 // Each view shows ONLY its relevant controls. No E8 controls on Platonic.
 // No lighting sliders that only affect mesh views when you're on Bloom.
 
-import { PALETTE_PRESETS, SHIFT_PRESETS, COLORINGS, palettePreviewCSS } from './palettes.js';
+import { PALETTE_PRESETS, SHIFT_PRESETS, COLORINGS, colorAt, palettePreviewCSS } from './palettes.js';
 import { BACKGROUND_PRESETS, backgroundModesForQuality } from './backgrounds.js';
 import { renderCartanMatrix } from '../math/cartan.js';
 import { renderBrackets } from '../math/brackets.js';
 import { THEMES, THEME_LABELS } from './theme.js';
-import { CODE_ART_SHADERS, TOUR_STOPS } from '../content/essays.js';
+import { CODE_ART_SHADERS } from '../content/essays.js';
 import { BADGE_INFO } from '../content/learning.js';
 import { activeViewModifiers } from '../state/selection-policy.js';
 import { exportFormatsForView, viewCapabilities } from '../state/model-registry.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEM_ORDER } from '../math/rank2-roots.js';
+import { COXETER_TILING_ORDER, generateCoxeterTiling } from '../math/coxeter-tilings.js';
 import {
   CURATED_LOOKS,
   FX_BY_ID,
@@ -54,7 +55,7 @@ function shapeShort(name) {
 
 function renderCameraControls(params, caps) {
   let html = '<div class="ps-subtitle">Camera</div>';
-  html += slider('Rotation', 'cameraRotation', params.cameraRotation ?? Math.PI / 6,
+  html += slider('Orbit angle', 'cameraRotation', params.cameraRotation ?? Math.PI / 6,
     -Math.PI, Math.PI, 0.01, v => `${Math.round(v * 180 / Math.PI)}°`);
   // Camera distance runs opposite to a user's mental model of zoom. Render it
   // inverted so moving right always zooms in (smaller physical distance).
@@ -66,17 +67,19 @@ function renderCameraControls(params, caps) {
     html += slider('Extrude', 'e8MorphT', params.e8MorphT || 0, 0, 1, 0.01, v => v.toFixed(2));
   }
   html += '<div class="seg seg-wrap">';
-  html += `<button class="${params.cameraPath === 'manual' && params.cameraOrbit ? 'on' : ''}" ${pressed(params.cameraPath === 'manual' && params.cameraOrbit)} data-act="setCameraPreset" data-arg="orbit" title="Continuous camera orbit">Orbit</button>`;
+  html += `<button class="${params.cameraPath === 'manual' && params.cameraOrbit ? 'on' : ''}" ${pressed(params.cameraPath === 'manual' && params.cameraOrbit)} data-act="setCameraPreset" data-arg="orbit" title="Move the camera around the model from side to side">Orbit</button>`;
   html += `<button class="${params.cameraPath === 'ringDive' ? 'on' : ''}" ${pressed(params.cameraPath === 'ringDive')} data-act="setCameraPreset" data-arg="dive" title="Dive toward the center and back">Dive</button>`;
   html += `<button class="${params.cameraPath === 'petrieSpiral' ? 'on' : ''}" ${pressed(params.cameraPath === 'petrieSpiral')} data-act="setCameraPreset" data-arg="spiral" title="Spiral around the structure">Spiral</button>`;
   html += '<button data-act="resetCamera" title="Reset camera position">Reset</button>';
   html += '</div>';
   html += '<div class="ps-subtitle">Motion</div>';
   html += '<div class="seg seg-wrap">';
+  html += `<button class="${params.autoRotate ? 'on' : ''}" ${pressed(params.autoRotate)} data-act="toggleAutoRotate" title="Rotate the model itself in a continuous circular spin">Spin</button>`;
   html += `<button class="${params.autoZoom ? 'on' : ''}" ${pressed(params.autoZoom)} data-act="toggleAutoZoom" title="Travel through the full useful zoom range">Auto zoom</button>`;
   html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio's visual showcase">Auto model</button>`;
   html += '</div>';
-  html += slider('Motion speed', 'cameraSpeed', params.cameraSpeed ?? 1, 0.2, 2, 0.05, v => `${v.toFixed(2)}×`);
+  html += slider('Spin speed', 'rotationSpeed', params.rotationSpeed ?? 0.003, 0.0005, 0.02, 0.0005, v => `${(v / 0.003).toFixed(1)}×`);
+  html += slider('Camera speed', 'cameraSpeed', params.cameraSpeed ?? 1, 0.2, 2, 0.05, v => `${v.toFixed(2)}×`);
   return html;
 }
 
@@ -120,8 +123,8 @@ function renderViewSection(params, data, uiState = {}) {
 
   // View switcher (always visible)
   html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'dynkin' ? 'Dynkin' : v;
+  for (const v of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
+    const label = v === 'e8coxeter' ? 'E₈' : v === 'sixhundred' ? '600' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'tiling' ? 'Tilings' : v === 'dynkin' ? 'Dynkin' : v;
     html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
   }
   html += '</div>';
@@ -156,6 +159,35 @@ function renderViewSection(params, data, uiState = {}) {
     </div>
     <div class="root-lab-equation"><span>${rootSystem.crystallographic ? 'Cartan' : 'Reflection'}</span><code>${matrix}</code></div>
     <div class="ps-help root-lab-lengths">${lengthSummary} roots · generated live from two reflections</div>`;
+  }
+
+  if (params.view === 'tiling') {
+    const tiling = generateCoxeterTiling(params.tilingSystem, { density: params.tilingDensity });
+    const angles = tiling.angleClasses.map(formatAngle).join(' · ');
+    html += '<div class="ps-subtitle">Root directions</div><div class="seg seg-wrap">';
+    for (const id of COXETER_TILING_ORDER) {
+      html += `<button class="${params.tilingSystem === id ? 'on' : ''}" ${pressed(params.tilingSystem === id)} data-act="setTilingSystem" data-arg="${id}" title="Build the ${id} Coxeter multigrid">${id.replace('2', '₂')}</button>`;
+    }
+    html += '</div>';
+    html += '<div class="ps-subtitle">Layers</div><div class="seg seg-wrap tiling-layer-toggles">';
+    html += `<button class="${params.tilingShowTiles ? 'on' : ''}" ${pressed(params.tilingShowTiles)} data-act="toggleTilingTiles" title="Filled rhombi dual to grid crossings">Tiles</button>`;
+    html += `<button class="${params.tilingShowEdges ? 'on' : ''}" ${pressed(params.tilingShowEdges)} data-act="toggleTilingEdges" title="Shared tile boundaries">Edges</button>`;
+    html += `<button class="${params.tilingShowGrid ? 'on' : ''}" ${pressed(params.tilingShowGrid)} data-act="toggleTilingGrid" title="Parallel mirror families used by the construction">Multigrid</button>`;
+    html += `<button class="${params.tilingShowRoots ? 'on' : ''}" ${pressed(params.tilingShowRoots)} data-act="toggleTilingRoots" title="Root directions that become tile edges">Root star</button>`;
+    html += `<button class="${params.tilingShowVertices ? 'on' : ''}" ${pressed(params.tilingShowVertices)} data-act="toggleTilingVertices" title="Unique vertices of the dual tiling">Vertices</button>`;
+    html += `<button class="${params.tilingAnimate ? 'on' : ''}" ${pressed(params.tilingAnimate)} data-act="toggleTilingAnimate" title="Gently animate the construction">Flow</button>`;
+    html += '</div>';
+    html += slider('Density', 'tilingDensity', params.tilingDensity ?? 5, 2, 8, 1, value => `${Math.round(value)}`);
+    html += slider('Relief', 'tilingRelief', params.tilingRelief ?? 0.1, 0, 0.45, 0.01, value => value.toFixed(2));
+    if (params.tilingAnimate) html += slider('Flow speed', 'tilingFlowSpeed', params.tilingFlowSpeed ?? 0.55, 0.1, 2, 0.05, value => `${value.toFixed(2)}×`);
+    html += `<div class="root-lab-readout tiling-readout" aria-label="${tiling.label} tiling facts">
+      <div><strong>${tiling.tileCount}</strong><span>tiles</span></div>
+      <div><strong>${tiling.familyCount}</strong><span>grids</span></div>
+      <div><strong>${tiling.order}</strong><span>local order</span></div>
+      <div><strong>${tiling.periodic ? 'yes' : 'no'}</strong><span>periodic</span></div>
+    </div>
+    <div class="root-lab-equation"><span>Rhomb angles</span><code>${angles}</code></div>
+    <div class="ps-help root-lab-lengths">${tiling.name} · ${tiling.description}</div>`;
   }
 
   // Shape selector — only if this view uses shapes
@@ -584,6 +616,7 @@ function renderMathSection(params, data) {
     : caps.math === '600' ? 'the 600-cell'
     : caps.math === 'dynkin' ? 'the selected Dynkin diagram'
     : caps.math === 'rootlab' ? 'the selected rank-2 root system'
+    : caps.math === 'tiling' ? 'the selected Coxeter multigrid'
     : 'the selected solid';
   let html = `<div class="ps-section" data-section="math"><div class="ps-title">Math lab</div>
     <div class="ps-help learn-math-intro">Interactive details for ${subject}. Change the active View to open a different lab.</div>`;
@@ -719,6 +752,26 @@ function renderMathSection(params, data) {
       <div class="cartan-scroll"><table class="dynkin-cartan" aria-label="${system.id} reflection matrix"><tbody>${matrixRows}</tbody></table></div>
       ${system.goldenRatio ? `<div class="ps-help">The off-diagonal value is −φ, where φ = ${(system.goldenRatio).toFixed(6)}. This is why H₂ connects naturally to pentagonal and Penrose geometry.</div>` : ''}
     </div>`;
+  } else if (caps.math === 'tiling') {
+    const tiling = generateCoxeterTiling(params.tilingSystem, { density: params.tilingDensity });
+    const typeRows = Object.entries(tiling.tileTypeCounts)
+      .map(([angle, count]) => `<div class="class-row"><span class="class-dot" style="background:${colorAt(params.palette, Number.parseFloat(angle) / 90)}"></span><span class="class-label"><b>${angle}</b> rhombi</span><span class="class-size">${count}</span></div>`)
+      .join('');
+    html += `<div class="info-box root-lab-info">
+      <span class="info-title">${tiling.label} · ${tiling.name}</span>
+      ${tiling.familyCount} line families · ${tiling.order}-fold local order · ${tiling.tileCount} rhombi<br>
+      <b>${tiling.periodic ? 'Periodic' : 'Quasiperiodic'}</b> at equal grid spacing
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">From roots to tiles</span>
+      <div class="ps-help">The unoriented roots become normals for parallel line families. Every crossing of two families is dualized into one rhombus whose edges follow those two root directions.</div>
+      ${typeRows}
+    </div>`;
+    html += `<div class="info-box" style="margin-top:8px">
+      <span class="info-title">Why symmetry does not force repetition</span>
+      Local rotational order describes the patches around points; periodicity asks whether one translation repeats the entire plane. ${tiling.periodic ? 'The three-family A₂ construction has both.' : `The ${tiling.familyCount}-family ${tiling.label} field keeps its local order without a global repeating translation.`}
+      ${tiling.goldenRatio ? `<div class="ps-help">H₂ produces 36° and 72° rhombi. Their diagonal relationships contain φ ≈ ${tiling.goldenRatio.toFixed(6)}, connecting the pentagrid to Penrose geometry.</div>` : ''}
+    </div>`;
   } else if (caps.math === 'dynkin') {
     const diagram = data.dynkin?.[params.dynkin];
     const rank = diagram?.nodes?.length || 0;
@@ -837,9 +890,6 @@ function toggle(label, value, act) {
 }
 
 function renderLearnSection(params) {
-  const totalSeconds = TOUR_STOPS.reduce((sum, s) => sum + s.seconds, 0);
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
   const learning = (typeof window !== 'undefined' && window.__app?.getLearningState?.()) || null;
   const rootSystem = params.view === 'rootlab' ? generateRank2RootSystem(params.rootSystem) : null;
   const curiosity = rootSystem ? {
@@ -865,7 +915,6 @@ function renderLearnSection(params) {
         </div>
         <p>A <b>root system</b> is a set of vectors closed under reflection in the mirrors perpendicular to those vectors. In rank 2, the whole construction fits on one plane.</p>
         <p>${escapeHtml(rootSystem.description)} The moving marker follows one orbit of the Coxeter element—the product of the two simple reflections.</p>
-        <div class="learn-orientation-actions"><button data-act="openE8Explorer">Compare with E₈</button></div>
       </div>` : `
       <div class="info-box learn-orientation" data-learn-orientation>
         <span class="info-title">E₈ at a glance</span>
@@ -876,30 +925,28 @@ function renderLearnSection(params) {
         </div>
         <p>The exceptional Lie algebra E<sub>8</sub> is shown through its 240 <b>root vectors</b>, projected from eight dimensions onto the <b>Coxeter plane</b>.</p>
         <p>Those roots land on <b>eight concentric rings</b>. The Petrie path traces a 30-step orbit; bright roots are an illustrative McKay-source highlight.</p>
-        <div class="learn-orientation-actions"><button data-act="openE8Explorer">Explore E₈</button></div>
       </div>`;
   return `
     <div class="ps-section" data-section="learn">
       <div class="ps-title">Learn</div>
+
+      <button class="learning-center-launch" data-act="openLearningCenter" aria-label="Open Learning Center">
+        <span>Open Learning Center</span>
+        <small>${summary.lessonsComplete || 0}/${summary.lessonsTotal || 0} lessons complete${recommendedLesson ? ` · Continue with ${escapeHtml(recommendedLesson.title)}` : ''}</small>
+      </button>
+
       ${curiosity ? `
         <div class="ps-subtitle">In this view</div>
         <div class="info-box curiosity-card">
           <span class="info-title">${escapeHtml(curiosity.title)}</span>
           <div>${escapeHtml(curiosity.body)}</div>
-          ${recommendedLesson && !rootSystem ? `<div class="seg"><button data-act="openLearningCenter">Open ${escapeHtml(recommendedLesson.title)}</button></div>` : ''}
         </div>
       ` : ''}
 
       ${orientation}
 
-      <div class="ps-subtitle">Start exploring</div>
+      <div class="ps-subtitle">More learning</div>
       <div class="learn-path-grid" data-learn-paths>
-        <button class="learn-path-card primary" data-act="openLearningCenter">
-          <span>${recommendedLesson ? `Continue: ${escapeHtml(recommendedLesson.title)}` : 'Curriculum'}</span><small>${summary.lessonsComplete || 0}/${summary.lessonsTotal || 0} lessons · ${summary.experimentsComplete || 0}/${summary.experimentsTotal || 0} experiments</small>
-        </button>
-        <button class="learn-path-card" data-act="toggleTour">
-          <span>Guided tour</span><small>${TOUR_STOPS.length} scenes · ${mins}m ${secs}s</small>
-        </button>
         <button class="learn-path-card" data-act="openProofs">
           <span>Interactive proofs</span><small>Build the ideas step by step</small>
         </button>
@@ -1117,13 +1164,19 @@ export class ControlPanel {
     const p = this.params;
     const viewLabel = ({ e8coxeter: 'E₈', sixhundred: '600-cell', polytope: '4D', raymarched: 'SDF' })[p.view]
       || p.view;
-    const shapeLabel = String(p.shape || '').replaceAll('_', ' ');
+    const selection = p.view === 'polytope' ? p.poly4d
+      : p.view === 'dynkin' ? p.dynkin
+      : p.view === 'rootlab' ? p.rootSystem
+      : p.view === 'tiling' ? p.tilingSystem
+      : p.view === 'raymarched' ? '240 roots'
+      : p.shape;
+    const selectionLabel = String(selection || '').replaceAll('_', ' ');
     const paletteLabel = String(p.palette || '').replaceAll('_', ' ');
     el.innerHTML = `
       <div class="ps-status-row">
         <span class="ps-status-key">${viewLabel}</span>
         <span class="ps-status-sep">·</span>
-        <span class="ps-status-key">${shapeLabel}</span>
+        <span class="ps-status-key">${selectionLabel}</span>
         <span class="ps-status-sep">·</span>
         <span class="ps-status-key">${paletteLabel}</span>
         <span class="ps-status-sep">·</span>
@@ -1150,6 +1203,7 @@ const MOTION_STATES = {
   model:    { label: '✦ models',   cls: 'is-active' },
   zoom:     { label: '↕ zoom',     cls: 'is-active' },
   fx:       { label: '✧ FX',       cls: 'is-active' },
+  spinOrbit:{ label: '↻ spin + orbit', cls: 'is-active' },
   orbit:    { label: '↻ orbit',   cls: 'is-active' },
   flux:     { label: '↕ flux',    cls: 'is-active' },
   rotate:   { label: '↻ rotate',  cls: 'is-active' },
@@ -1166,6 +1220,7 @@ export function updateMotionStatus(params) {
   else if (params.cameraPath && params.cameraPath !== 'manual') key = 'cam';
   else if (params.autoZoom) key = 'zoom';
   else if (params.autoFx) key = 'fx';
+  else if (params.cameraOrbit && (params.autoRotate || params.e8AutoRotate || params.polyAutoRotate)) key = 'spinOrbit';
   else if (params.cameraOrbit) key = 'orbit';
   else if ((params.autoSliders || []).includes('e8MorphT')) key = 'flux';
   else if (params.autoRotate || params.e8AutoRotate || params.polyAutoRotate) key = 'rotate';
