@@ -5,7 +5,7 @@
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
-  "description": "Interactive WebGL studio for E8, root systems, Dynkin diagrams, Platonic solids, the 600-cell, and regular 4D polytopes.",
+  "description": "Interactive WebGL studio for E8, root systems, Coxeter tilings, Dynkin diagrams, Platonic solids, the 600-cell, and regular 4D polytopes.",
   "license": "MIT",
   "author": {
     "name": "Carlosian",
@@ -40,6 +40,7 @@
     "test:visual-system": "node scripts/test_visual_system.mjs",
     "test:model-contracts": "node scripts/test_model_contracts.mjs",
     "test:rank2-roots": "node scripts/test_rank2_roots.mjs",
+    "test:coxeter-tilings": "node scripts/test_coxeter_tilings.mjs",
     "test:curriculum": "node scripts/test_curriculum.mjs",
     "test:progress": "node scripts/test_progress.mjs",
     "test:content": "node scripts/test_content_integrity.mjs",

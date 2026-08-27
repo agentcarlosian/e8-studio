@@ -23,6 +23,8 @@ export const GALLERY_PRESETS = [
   { id: 'electric-tesseract', name: 'Electric Tesseract', description: 'A cube-within-cube projection drawn in electric blue.', settings: { view: 'polytope', poly4d: 'tesseract', morph4d: 0.72, palette: 'electric', bgMode: 'grid', bgIntensity: 0.72, polyAutoRotate: true, polyRotationSpeed: 0.14, fxMode: 'wireframe', fxIntensity: 0.38, cameraOrbit: true } },
   { id: 'rose-crystal', name: 'Rose Crystal', description: 'A slow crystalline bloom with warm metallic highlights.', settings: { view: 'platonic', shape: 'great_icosahedron', palette: 'rose_gold', bgMode: 'cosmos', bgIntensity: 0.62, autoRotate: true, rotationSpeed: 0.0025, fxMode: 'crystal', fxIntensity: 0.46 } },
   { id: 'midnight-600', name: 'Midnight 600', description: 'The 600-cell drifting through a blue-violet night field.', settings: { view: 'sixhundred', shape: 'icosahedron', palette: 'midnight', bgMode: 'cosmos', bgIntensity: 0.9, showEdges: true, autoRotate: true, rotationSpeed: 0.003, fxMode: 'nebula', fxIntensity: 0.3 } },
+  { id: 'penrose-aurora', name: 'Penrose Aurora', description: 'Five root directions unfold into a flowing field of golden-ratio rhombi.', featured: true, settings: { view: 'tiling', tilingSystem: 'H2', tilingDensity: 5, tilingRelief: 0.12, tilingShowTiles: true, tilingShowEdges: true, tilingShowGrid: false, tilingShowRoots: false, tilingShowVertices: false, tilingAnimate: true, tilingFlowSpeed: 0.65, palette: 'aurora', bgMode: 'aurora', bgIntensity: 0.62, fxMode: 'iridescent', fxIntensity: 0.34, cameraOrbit: false } },
+  { id: 'multigrid-blueprint', name: 'Multigrid Blueprint', description: 'The hidden parallel-line construction revealed beneath an A2 lozenge lattice.', settings: { view: 'tiling', tilingSystem: 'A2', tilingDensity: 6, tilingRelief: 0.03, tilingShowTiles: true, tilingShowEdges: true, tilingShowGrid: true, tilingShowRoots: false, tilingShowVertices: false, tilingAnimate: false, palette: 'electric', bgMode: 'grid', bgIntensity: 0.72, fxMode: 'edge-glow', fxIntensity: 0.3, cameraOrbit: false } },
 ];
 
 export function galleryPresetById(id) {
@@ -68,5 +70,9 @@ export function createGalleryBaseline() {
     bloomMandelbox: false, bloomMandelboxScale: 2.618,
     bloomMandelboxIters: 6, bloomMandelboxMix: 0.65,
     h4TwinReveal: false,
+    tilingSystem: 'H2', tilingDensity: 5, tilingRelief: 0.1,
+    tilingShowTiles: true, tilingShowEdges: true, tilingShowGrid: false,
+    tilingShowRoots: false, tilingShowVertices: false, tilingAnimate: true,
+    tilingFlowSpeed: 0.55,
   };
 }

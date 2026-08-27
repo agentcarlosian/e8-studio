@@ -197,7 +197,7 @@ export function recordPostcardCreated(progress, rewardId = 'postcard-prime') {
  * Award an exploration (activity-based) badge. Idempotent: returns the same
  * progress object if the badge is already present (and `granted` = false so the
  * caller can decide whether to toast). Used for non-quiz achievements like
- * "visited all views", "finished the tour", "opened the command palette".
+ * "visited all views", "completed a lesson", "opened the command palette".
  *
  * Unlike the quiz/daily paths this does NOT unlock a reward background — these
  * are intrinsic milestones, not cosmetic unlocks.

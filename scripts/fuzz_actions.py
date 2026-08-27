@@ -49,7 +49,7 @@ ACTIONS = [
     ('e8-mode', 'ortho3d'), ('e8-mode', 'custom'),
     ('action', 'surprise'), ('action', 'resetCamera'),
     ('action', 'resetE8Angles'), ('action', 'resetPolyAngles'),
-    ('action', 'sharePage'), ('action', 'shareSnapshot'), ('action', 'toggleTour'),
+    ('action', 'sharePage'), ('action', 'shareSnapshot'),
     ('action', 'togglePerf'), ('action', 'toggleCommandPalette'),
     ('slider', 'fxIntensity', 0.0, 1.0),
     ('slider', 'bgIntensity', 0.0, 1.5),
@@ -143,7 +143,6 @@ ACTION_METHODS = {
     'resetPolyAngles':         'resetPolyAngles',
     'sharePage':               'sharePage',
     'shareSnapshot':           'shareSnapshot',
-    'toggleTour':              'toggleTour',
     'togglePerf':              'togglePerf',
     'toggleCommandPalette':    'toggleCommandPalette',
 }

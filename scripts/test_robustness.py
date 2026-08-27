@@ -34,7 +34,7 @@ FX_MODES = ['none', 'glow', 'pulse', 'trail', 'chromatic', 'kaleidoscope', 'ripp
             'spiral', 'fog', 'heat', 'edge-glow', 'aura', 'voronoi', 'caustic',
             'iridescent', 'flowfield', 'plasma', 'kaleido6', 'dof', 'nebula',
             'wireframe', 'hologram', 'xray', 'crystal']
-VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']
+VIEWS = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']
 SDF_FX_MODES = FX_MODES
 
 results: list[tuple[str, bool, str]] = []
@@ -126,7 +126,7 @@ def main() -> int:
             # and background at the ceiling of each tier so this also verifies
             # that the global selector drives the shared capability policy.
             quality_matrix = pg.evaluate("""() => {
-              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin'];
+              const views = ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin'];
               const tiers = {
                 low: {fx: 'glow', bg: 'starfield'},
                 medium: {fx: 'trail', bg: 'aurora'},
@@ -160,7 +160,7 @@ def main() -> int:
                            or row["bg"] != {"low": "starfield", "medium": "aurora", "high": "cosmos"}[row["quality"]]
                            or row["hasView"] is not True
                            or row["objectVisible"] is not True]
-            check("all eight models render across Low, Balanced, and High quality",
+            check("all nine models render across Low, Balanced, and High quality",
                   not matrix_fail, str(matrix_fail[:3]))
 
             # Platonic faces must participate in the centralized FX pipeline,
@@ -291,6 +291,8 @@ def main() -> int:
                 hasModePresets: !!document.querySelector('[data-act="setCameraMode"]'),
                 hasBookmarks: !!document.querySelector('[data-act="saveCameraBookmark"], [data-act="loadCameraBookmark"]'),
                 presets: Array.from(document.querySelectorAll('[data-act="setCameraPreset"]')).map(el => el.textContent.trim()),
+                spinButton: document.querySelector('[data-act="toggleAutoRotate"]')?.textContent.trim(),
+                spinSpeed: !!document.querySelector('input[data-param="rotationSpeed"]'),
                 hasZoomSlider: !!document.querySelector('input[data-param="cameraDistance"]'),
                 hasCameraDisclosure: !!document.querySelector('[data-panel-disclosure="camera-motion"]'),
               };
@@ -304,8 +306,10 @@ def main() -> int:
                   and camera_ui["hasModePresets"] is False
                   and camera_ui["hasBookmarks"] is False,
                   str(camera_ui))
-            check("camera keeps three useful presets and a real zoom slider",
+            check("camera keeps three useful presets plus independent circular spin",
                   camera_ui["presets"] == ["Orbit", "Dive", "Spiral"]
+                  and camera_ui["spinButton"] == "Spin"
+                  and camera_ui["spinSpeed"] is True
                   and camera_ui["hasZoomSlider"] is True, str(camera_ui))
 
             platonic_hierarchy = pg.evaluate("""() => {
@@ -573,6 +577,35 @@ def main() -> int:
                   modal_state == {"opened": True, "closed": True, "focusAct": "openLearningCenter"},
                   str(modal_state))
 
+            learning_layout = pg.evaluate("""() => {
+              window.__app.openLearningCenter('why-five-solids');
+              const dialog = document.querySelector('.learning-center-dialog');
+              const shell = document.querySelector('.learning-center-shell');
+              const content = document.querySelector('.learning-center-content');
+              const primary = document.querySelector('.learning-action-primary');
+              const initial = content.scrollTop;
+              content.style.scrollBehavior = 'auto';
+              content.scrollTop = content.scrollHeight;
+              const result = {
+                bounded: Math.abs(dialog.clientHeight - shell.clientHeight) <= 1,
+                overflow: getComputedStyle(content).overflowY,
+                scrollable: content.scrollHeight > content.clientHeight,
+                scrolled: content.scrollTop > initial,
+                primaryHeight: primary.getBoundingClientRect().height,
+                progress: document.querySelector('.learning-overall-progress')?.getAttribute('role'),
+              };
+              document.querySelector('[data-modal-close]').click();
+              return result;
+            }""")
+            check("Learning Center is bounded, scrollable, and action-led",
+                  learning_layout["bounded"]
+                  and learning_layout["overflow"] == "auto"
+                  and learning_layout["scrollable"]
+                  and learning_layout["scrolled"]
+                  and learning_layout["primaryHeight"] >= 40
+                  and learning_layout["progress"] == "progressbar",
+                  str(learning_layout))
+
             command_focus = pg.evaluate("""() => {
               window.__app.setPanelMode('style');
               const trigger = document.getElementById('panel-tab-style');
@@ -642,13 +675,56 @@ def main() -> int:
                 },
               };
             }""")
-            check("model rotation and camera orbit have one clear owner",
+            check("model spin and camera orbit can run independently",
                   motion_ownership == {
                     "cameraOwns": {"orbit": True, "model": False},
-                    "modelOwns": {"orbit": False, "model": True, "path": "manual"},
-                    "pathOwns": {"orbit": False, "model": False, "path": "petrieSpiral"},
+                    "modelOwns": {"orbit": True, "model": True, "path": "manual"},
+                    "pathOwns": {"orbit": False, "model": True, "path": "petrieSpiral"},
                   },
                   str(motion_ownership))
+
+            motion_before = pg.evaluate("""() => {
+              window.__app.setParam('paused', false);
+              window.__app.setCameraMode('orbit');
+              const rotation = window.__app.currentView.object3d.rotation;
+              const camera = window.__app.camera.position;
+              return {
+                rotation: [rotation.x, rotation.y, rotation.z],
+                camera: [camera.x, camera.y, camera.z],
+              };
+            }""")
+            pg.wait_for_timeout(300)
+            motion_after = pg.evaluate("""() => {
+              const rotation = window.__app.currentView.object3d.rotation;
+              const camera = window.__app.camera.position;
+              return {
+                rotation: [rotation.x, rotation.y, rotation.z],
+                camera: [camera.x, camera.y, camera.z],
+              };
+            }""")
+            model_delta = sum(abs(after - before) for before, after in zip(
+                motion_before["rotation"], motion_after["rotation"]))
+            camera_delta = sum(abs(after - before) for before, after in zip(
+                motion_before["camera"], motion_after["camera"]))
+            check("Spin and Orbit visibly animate at the same time",
+                  model_delta > 0.001 and camera_delta > 0.001,
+                  str({"modelDelta": model_delta, "cameraDelta": camera_delta}))
+
+            e8_spin_before = pg.evaluate("""() => {
+              window.__app.switchView('e8coxeter');
+              window.__app.setParam('cameraOrbit', false);
+              window.__app.setParam('cameraPath', 'manual');
+              window.__app.setParam('autoRotate', true);
+              window.__app.setParam('rotationSpeed', 0.02);
+              return window.__app.currentView.object3d.rotation.z;
+            }""")
+            pg.wait_for_timeout(300)
+            e8_spin_after = pg.evaluate(
+                "() => window.__app.currentView.object3d.rotation.z")
+            e8_spin_delta = abs(e8_spin_after - e8_spin_before)
+            check("E8 Spin reaches a clearly fast top speed",
+                  e8_spin_delta > 0.18,
+                  str({"rotationDelta": e8_spin_delta}))
 
             zoom_slider = pg.evaluate("""() => {
               window.__app.setPanelMode('scene');
@@ -1003,15 +1079,18 @@ def main() -> int:
                 if (object.isLine || object.isLineSegments || object.isLineLoop) lineDprs.push(dpr);
               });
               const buttons = Array.from(document.querySelectorAll('.ps-view-switch button'));
-              const rootLab = buttons[buttons.length - 2];
-              const dynkin = buttons[buttons.length - 1];
+              const rootLab = buttons.find(button => button.dataset.arg === 'rootlab');
+              const tiling = buttons.find(button => button.dataset.arg === 'tiling');
+              const dynkin = buttons.find(button => button.dataset.arg === 'dynkin');
+              const box = button => button ? button.getBoundingClientRect().toJSON() : null;
               return {
                 native: window.devicePixelRatio,
                 renderer: window.__app.renderer.getPixelRatio(),
                 pointDprs,
                 lineDprs,
-                rootLabColumn: rootLab ? getComputedStyle(rootLab).gridColumnStart : null,
-                dynkinColumn: dynkin ? getComputedStyle(dynkin).gridColumnStart : null,
+                rootLabBox: box(rootLab),
+                tilingBox: box(tiling),
+                dynkinBox: box(dynkin),
               };
             }""")
             check("desktop high quality uses native 2x DPR",
@@ -1023,9 +1102,13 @@ def main() -> int:
                   and all(abs(value - hidpi_metrics["renderer"]) < 1e-6
                           for value in hidpi_metrics["pointDprs"] + hidpi_metrics["lineDprs"]),
                   str(hidpi_metrics))
-            check("Root Lab and Dynkin share a centered final model row",
-                  hidpi_metrics["rootLabColumn"] == "2"
-                  and hidpi_metrics["dynkinColumn"] == "4", str(hidpi_metrics))
+            final_boxes = [hidpi_metrics["rootLabBox"], hidpi_metrics["tilingBox"], hidpi_metrics["dynkinBox"]]
+            check("Root Lab, Tiling Lab, and Dynkin fill the final model row",
+                  all(final_boxes)
+                  and max(box["y"] for box in final_boxes) - min(box["y"] for box in final_boxes) < 1
+                  and final_boxes[0]["x"] < final_boxes[1]["x"] < final_boxes[2]["x"]
+                  and max(box["width"] for box in final_boxes) - min(box["width"] for box in final_boxes) < 1,
+                  str(hidpi_metrics))
             hidpi_context.close()
 
             touch_context = browser.new_context(

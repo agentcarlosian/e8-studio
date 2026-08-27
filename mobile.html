@@ -21,7 +21,14 @@
         <strong>E8</strong>
         <small>240 / 8 rings</small>
       </button>
-      <button id="quality-chip" class="quality-chip" type="button">Smooth</button>
+      <button id="quality-chip" class="quality-chip" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="quality-popover">Smooth</button>
+    </div>
+
+    <div id="quality-popover" class="quality-popover hidden" role="group" aria-label="Render quality">
+      <span>Render quality</span>
+      <button type="button" data-quality="smooth"><strong>Smooth</strong><small>Fastest</small></button>
+      <button type="button" data-quality="balanced"><strong>Balanced</strong><small>Recommended</small></button>
+      <button type="button" data-quality="sharp"><strong>Sharp</strong><small>Most detail</small></button>
     </div>
 
     <button id="settings-button" class="settings-button" type="button" aria-label="Settings" aria-haspopup="dialog" aria-controls="settings-sheet">
@@ -36,6 +43,18 @@
 
     <aside id="root-drawer" class="root-drawer hidden" aria-live="polite"></aside>
 
+    <aside id="learn-coach" class="learn-coach hidden" aria-live="polite" aria-label="Lesson activity">
+      <div class="learn-coach-head">
+        <span id="learn-coach-progress">Lesson activity</span>
+        <button type="button" data-learn-coach-action="dismiss" aria-label="Dismiss lesson activity">Close</button>
+      </div>
+      <strong id="learn-coach-title">Look at the visualization</strong>
+      <p id="learn-coach-prompt">Return to the lesson when you are ready to explain what changed.</p>
+      <div class="learn-coach-actions">
+        <button type="button" data-learn-coach-action="return">Return to lesson</button>
+      </div>
+    </aside>
+
     <section id="settings-sheet" class="settings-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="sheet-chrome">
         <div>
@@ -49,8 +68,7 @@
         <button class="active" type="button" data-section-tab="view">View</button>
         <button type="button" data-section-tab="style">Visuals</button>
         <button type="button" data-section-tab="motion">Motion</button>
-        <button type="button" data-section-tab="quality">Quality</button>
-        <button type="button" data-section-tab="info">Info</button>
+        <button type="button" data-section-tab="learn">Learn</button>
       </nav>
 
       <div class="sheet-body">
@@ -95,6 +113,7 @@
                 <option value="platonic">Platonic solid</option>
                 <option value="poly4d">4D polytope</option>
                 <option value="rootlab">Root system lab</option>
+                <option value="tiling">Tiling lab</option>
                 <option value="dynkin">Dynkin diagram</option>
               </select>
             </label>
@@ -190,6 +209,61 @@
               <label class="toggle-row">
                 <span><strong>Coxeter orbit</strong><small>Trace one root under the paired reflections.</small></span>
                 <input id="root-orbit-toggle" type="checkbox">
+              </label>
+            </div>
+            <div id="tiling-field" class="model-control-panel hidden" aria-label="Coxeter tiling controls">
+              <div class="browse-head">
+                <strong>Tiling Lab</strong>
+                <output id="tiling-system-output">H₂</output>
+              </div>
+              <div class="browse-actions root-system-actions" aria-label="Coxeter multigrids">
+                <button type="button" data-tiling-system="A2">A₂</button>
+                <button type="button" data-tiling-system="B2">B₂</button>
+                <button type="button" data-tiling-system="G2">G₂</button>
+                <button type="button" data-tiling-system="H2">H₂</button>
+              </div>
+              <div class="root-system-facts" aria-label="Active tiling facts">
+                <div><strong id="tiling-fact-tiles">0</strong><span>tiles</span></div>
+                <div><strong id="tiling-fact-grids">5</strong><span>grids</span></div>
+                <div><strong id="tiling-fact-order">10</strong><span>local order</span></div>
+                <div><strong id="tiling-fact-periodic">no</strong><span>periodic</span></div>
+              </div>
+              <output id="tiling-angle-output" class="root-system-matrix">Rhomb angles 36° · 72°</output>
+              <label class="field">
+                <span class="field-heading">Density <output id="tiling-density-output">5</output></span>
+                <input id="tiling-density" type="range" min="2" max="6" step="1" value="5">
+              </label>
+              <label class="field">
+                <span class="field-heading">Relief <output id="tiling-relief-output">0.08</output></span>
+                <input id="tiling-relief" type="range" min="0" max="0.3" step="0.01" value="0.08">
+              </label>
+              <label class="field">
+                <span class="field-heading">Flow speed <output id="tiling-flow-speed-output">0.55×</output></span>
+                <input id="tiling-flow-speed" type="range" min="0.1" max="2" step="0.05" value="0.55">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Rhombus tiles</strong><small>Fill the dual tiles.</small></span>
+                <input id="tiling-tiles-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Tile edges</strong><small>Trace shared boundaries.</small></span>
+                <input id="tiling-edges-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Construction grid</strong><small>Reveal the parallel mirror families.</small></span>
+                <input id="tiling-grid-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Root star</strong><small>Show the directions inherited from the roots.</small></span>
+                <input id="tiling-roots-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Vertices</strong><small>Mark unique tile corners.</small></span>
+                <input id="tiling-vertices-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Flow</strong><small>Animate color through the tiling.</small></span>
+                <input id="tiling-animate-toggle" type="checkbox">
               </label>
             </div>
             <label class="toggle-row" data-model-context="e8-roots">
@@ -465,99 +539,66 @@
           </div>
         </section>
 
-        <section class="settings-section" data-section="quality">
-          <h2>Quality</h2>
-          <div class="segmented" role="group" aria-label="Render quality">
-            <button type="button" data-quality="smooth">Smooth</button>
-            <button type="button" data-quality="balanced">Balanced</button>
-            <button type="button" data-quality="sharp">Sharp</button>
-          </div>
-          <div class="sheet-action" aria-label="Restore defaults">
-            <div>
-              <strong>Defaults</strong>
-              <small>Return to the safe mobile baseline.</small>
+        <section class="settings-section learn-section" data-section="learn">
+          <div id="learn-library" class="learn-library">
+            <div class="learn-section-head">
+              <div><span class="eyebrow">Learning Center</span><h2>Learn</h2></div>
+              <button id="learn-done" class="done-button learn-done-action settings-done-action" type="button" data-settings-done>Done</button>
             </div>
-            <button id="defaults-button" type="button" data-app-action="defaults">Restore</button>
-          </div>
-        </section>
-
-        <section class="settings-section" data-section="info">
-          <h2>Info</h2>
-          <p id="info-copy" class="info-copy">The 240 E8 root vectors are projected onto the Coxeter plane, forming eight concentric rings. Tap any point to inspect its ring, McKay membership, 8D coordinates, Cartan neighbor context, opposite root, and optional Petrie or Weyl mirror context.</p>
-          <div id="info-selection" class="selection-card">No root selected.</div>
-          <div id="mckay-card" class="selection-card mckay-card" aria-label="McKay bridge">McKay bridge loading.</div>
-          <div id="curiosity-card" class="selection-card curiosity-card" aria-label="Context note">
-            <div>
-              <strong>Context</strong>
-              <small>Loading note.</small>
-            </div>
-            <button id="curiosity-next" type="button" data-info-action="next-curiosity">Next</button>
-          </div>
-          <div id="learn-panel" class="selection-card learn-panel" aria-label="Learn topics">
-            <div class="learn-head">
-              <strong>Learn</strong>
-              <output id="learn-topic-output">Auto</output>
-            </div>
-            <div id="learn-topic-grid" class="learn-topic-grid"></div>
-            <div id="learn-topic-card" class="learn-topic-copy">
-              <strong>Loading topic.</strong>
-              <small>Mobile Learn adapts to the current model.</small>
-            </div>
-          </div>
-          <div id="mobile-tour-card" class="selection-card tour-card" aria-label="Guided tour">
-            <div class="tour-head">
-              <div>
-                <strong>Tour</strong>
-                <small id="mobile-tour-output">Ready</small>
+            <p class="learn-library-intro">Understand what the pictures mean, then test each idea in the Studio.</p>
+            <div id="learn-panel" class="learn-panel" aria-label="Recommended lesson">
+              <div class="learn-recommended-label"><span>Recommended for this view</span><output id="learn-topic-output">E8 Coxeter</output></div>
+              <div id="learn-recommended-card" class="learn-recommended-card">
+                <span class="mobile-learn-kicker">Start here</span>
+                <h3>What am I looking at?</h3>
+                <p>A two-dimensional view of E8's 240 roots.</p>
+                <button type="button" data-info-action="open-context-lesson">Start lesson</button>
               </div>
-              <output id="mobile-tour-step-output">1/6</output>
             </div>
-            <div id="mobile-tour-copy" class="tour-copy">
-              <strong>Mobile tour</strong>
-              <small>Step through the core E8 Studio scenes without adding canvas controls.</small>
+            <div class="learn-library-heading">
+              <div><h3>Learning paths</h3><p>Choose any lesson. Prerequisites are suggestions, not locks.</p></div>
+              <output id="learn-progress-output">0 / 12</output>
             </div>
-            <div class="tour-actions" aria-label="Tour controls">
-              <button id="mobile-tour-toggle" type="button" data-info-action="toggle-tour">Start</button>
-              <button id="mobile-tour-prev" type="button" data-info-action="prev-tour-step">Prev</button>
-              <button id="mobile-tour-next" type="button" data-info-action="next-tour-step">Next</button>
-            </div>
+            <div id="learn-topic-grid" class="learn-topic-grid" aria-label="Learning paths"></div>
+
+            <details id="mobile-context-details" class="mobile-disclosure">
+              <summary>About this model</summary>
+              <div class="mobile-disclosure-body">
+                <p id="info-copy" class="info-copy">The 240 E8 root vectors are projected onto the Coxeter plane, forming eight concentric rings.</p>
+                <div id="info-selection" class="selection-card">No root selected.</div>
+                <div id="mckay-card" class="selection-card mckay-card" aria-label="McKay bridge">McKay bridge loading.</div>
+                <div id="curiosity-card" class="selection-card curiosity-card" aria-label="Context note">
+                  <div><strong>Context</strong><small>Loading note.</small></div>
+                  <button id="curiosity-next" type="button" data-info-action="next-curiosity">Next</button>
+                </div>
+                <div id="cartan-matrix" class="cartan-matrix" aria-label="E8 simple-root Cartan matrix"></div>
+              </div>
+            </details>
+            <details id="mobile-tools-details" class="mobile-disclosure">
+              <summary>Share and tools</summary>
+              <div class="mobile-disclosure-body">
+                <div class="info-actions" aria-label="Export"><div><strong>Snapshot</strong><small>Share the current canvas as a PNG.</small></div><button id="share-png" type="button" data-export-action="share-png">Share PNG</button></div>
+                <div class="info-actions" aria-label="Postcard"><div><strong>Postcard</strong><small>Create a 9:16 share image with the active scene caption.</small></div><button id="share-postcard" type="button" data-export-action="share-postcard">Postcard</button></div>
+                <div class="info-actions" aria-label="Geometry data"><div><strong>Data</strong><small>Copy the active model geometry as JSON.</small></div><button id="copy-data" type="button" data-export-action="copy-data">Copy JSON</button></div>
+                <div class="info-actions" aria-label="Model OBJ"><div><strong>OBJ</strong><small>Copy the active model as a Wavefront OBJ.</small></div><button id="copy-obj" type="button" data-export-action="copy-obj">Copy OBJ</button></div>
+                <div class="info-actions" aria-label="Diagnostics"><div><strong>Diagnostics</strong><small>Copy state, metrics, and device details.</small></div><button id="copy-diagnostics" type="button" data-export-action="copy-diagnostics">Copy</button></div>
+                <div class="sheet-action" aria-label="Restore defaults"><div><strong>Defaults</strong><small>Return to the safe mobile baseline.</small></div><button id="defaults-button" type="button" data-app-action="defaults">Restore</button></div>
+              </div>
+            </details>
           </div>
-          <div class="info-actions" aria-label="Export">
-            <div>
-              <strong>Snapshot</strong>
-              <small>Share the current canvas as a PNG.</small>
+
+          <article id="learn-reader" class="learn-reader hidden" aria-labelledby="learn-reader-title">
+            <header class="learn-reader-bar">
+              <button type="button" data-info-action="close-learn-reader" aria-label="Back to lessons">← Learn</button>
+              <output id="learn-reader-progress">Lesson 1 of 12</output>
+              <button id="learn-reader-done" class="done-button settings-done-action" type="button" data-settings-done>Done</button>
+            </header>
+            <div id="learn-reader-scroll" class="learn-reader-scroll" tabindex="-1">
+              <div id="learn-topic-card" class="learn-topic-copy">
+                <h3 id="learn-reader-title">Loading lesson</h3>
+              </div>
             </div>
-            <button id="share-png" type="button" data-export-action="share-png">Share PNG</button>
-          </div>
-          <div class="info-actions" aria-label="Postcard">
-            <div>
-              <strong>Postcard</strong>
-              <small>Create a 9:16 share image with the active scene caption.</small>
-            </div>
-            <button id="share-postcard" type="button" data-export-action="share-postcard">Postcard</button>
-          </div>
-          <div class="info-actions" aria-label="Geometry data">
-            <div>
-              <strong>Data</strong>
-              <small>Copy the active model geometry as JSON.</small>
-            </div>
-            <button id="copy-data" type="button" data-export-action="copy-data">Copy JSON</button>
-          </div>
-          <div class="info-actions" aria-label="Model OBJ">
-            <div>
-              <strong>OBJ</strong>
-              <small>Copy the active model as a Wavefront OBJ.</small>
-            </div>
-            <button id="copy-obj" type="button" data-export-action="copy-obj">Copy OBJ</button>
-          </div>
-          <div class="info-actions" aria-label="Diagnostics">
-            <div>
-              <strong>Diagnostics</strong>
-              <small>Copy state, metrics, and device details.</small>
-            </div>
-            <button id="copy-diagnostics" type="button" data-export-action="copy-diagnostics">Copy</button>
-          </div>
-          <div id="cartan-matrix" class="cartan-matrix" aria-label="E8 simple-root Cartan matrix"></div>
+          </article>
         </section>
       </div>
     </section>

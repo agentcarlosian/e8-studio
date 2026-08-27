@@ -105,6 +105,17 @@ const VIEW_MODIFIER_DEFAULTS = Object.freeze({
     rootShowOrbit: true,
     rootOrbitSpeed: 0.7,
   }),
+  tiling: Object.freeze({
+    tilingDensity: 5,
+    tilingRelief: 0.1,
+    tilingShowTiles: true,
+    tilingShowEdges: true,
+    tilingShowGrid: false,
+    tilingShowRoots: false,
+    tilingShowVertices: false,
+    tilingAnimate: true,
+    tilingFlowSpeed: 0.55,
+  }),
 });
 
 function freshCommonDefaults(params = {}) {
@@ -183,6 +194,15 @@ export function activeViewModifiers(params, view = params.view) {
       || Math.abs((params.sdfAniso ?? 0.6) - 0.6) > 1e-6
       || Math.abs((params.sdfEdges ?? 0.3) - 0.3) > 1e-6) labels.push('SDF tuning');
     if (params.e8MorphT) labels.push('extrude');
+  } else if (view === 'tiling') {
+    if (params.tilingShowGrid) labels.push('multigrid');
+    if (params.tilingShowVertices) labels.push('vertices');
+    if (params.tilingShowTiles === false) labels.push('tiles hidden');
+    if (params.tilingShowEdges === false) labels.push('edges hidden');
+    if (params.tilingShowRoots) labels.push('root star');
+    if (params.tilingAnimate === false) labels.push('flow paused');
+    if (Math.abs((params.tilingRelief ?? 0.1) - 0.1) > 1e-6) labels.push('relief');
+    if (Math.round(params.tilingDensity ?? 5) !== 5) labels.push('density');
   }
   return labels;
 }

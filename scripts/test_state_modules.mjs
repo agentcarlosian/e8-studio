@@ -26,18 +26,20 @@ import {
   restoreEffectForView,
 } from '../src/fx/fx-catalog.js';
 
-assert.equal(GALLERY_PRESETS.length, 22);
+assert.equal(GALLERY_PRESETS.length, 24);
 assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.id)).size, GALLERY_PRESETS.length);
 assert.equal(galleryPresetById('living-e8')?.settings.view, 'raymarched');
 assert.equal(galleryPresetById('living-e8')?.settings.palette, 'prime');
-assert.equal(adjacentGalleryPreset('coxeter-rings', -1)?.id, 'midnight-600');
-assert.equal(adjacentGalleryPreset('midnight-600', 1)?.id, 'coxeter-rings');
+assert.equal(adjacentGalleryPreset('coxeter-rings', -1)?.id, 'multigrid-blueprint');
+assert.equal(adjacentGalleryPreset('midnight-600', 1)?.id, 'penrose-aurora');
 
 const baselineA = createGalleryBaseline();
 const baselineB = createGalleryBaseline();
 assert.notEqual(baselineA.autoSliders, baselineB.autoSliders);
 assert.equal(baselineA.bgMode, 'void');
 assert.equal(baselineA.poly4d, '24cell');
+assert.equal(baselineA.tilingShowRoots, false);
+assert.equal(galleryPresetById('penrose-aurora')?.settings.tilingShowRoots, false);
 
 const source = {
   cameraOrbit: true,
@@ -97,7 +99,7 @@ assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
 
-for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'rootlab', 'dynkin']) {
+for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'rootlab', 'tiling', 'dynkin']) {
   const { near, far } = autoZoomBounds(view);
   const speed = 2;
   const halfSweep = Math.PI / (0.22 * speed);
@@ -115,7 +117,7 @@ const learning = new LearningProgressService({
   postcardsCreated: 0,
   explorationBadges: [],
 });
-assert.equal(learning.summary().quizTotal, 10);
+assert.equal(learning.summary().quizTotal, 11);
 assert.equal(learning.quizById('e8-roots')?.id, 'e8-roots');
 learning.recordPostcard('postcard-prime');
 assert.equal(learning.progress.postcardsCreated, 1);
@@ -163,6 +165,7 @@ assert.deepEqual(
 );
 assert.equal(effectsForView('e8coxeter', 'high').length, 24);
 assert.equal(effectsForView('dynkin', 'high').length, 24);
+assert.equal(effectsForView('tiling', 'high').length, 24);
 assert.equal(effectAvailableForView('raymarched', 'trail', 'high'), true);
 assert.equal(effectAvailableForView('e8coxeter', 'voronoi', 'low'), false);
 assert.equal(coerceEffectMode('raymarched', 'plasma', 'high'), 'plasma');

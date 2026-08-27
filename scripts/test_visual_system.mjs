@@ -43,6 +43,8 @@ assert.ok(desktopAutoModelSequence, 'desktop auto-model sequence is discoverable
 assert.ok(mobileAutoModelSequence, 'mobile auto-model sequence is discoverable');
 assert.doesNotMatch(desktopAutoModelSequence, /view:\s*'dynkin'/, 'desktop showcase excludes manual-only Dynkin diagrams');
 assert.doesNotMatch(mobileAutoModelSequence, /modelMode:\s*'dynkin'/, 'mobile showcase excludes manual-only Dynkin diagrams');
+assert.doesNotMatch(desktopAutoModelSequence, /view:\s*'rootlab'|view:\s*'tiling'/, 'desktop showcase excludes manual-only math labs');
+assert.doesNotMatch(mobileAutoModelSequence, /modelMode:\s*'rootlab'|modelMode:\s*'tiling'/, 'mobile showcase excludes manual-only math labs');
 
 const stylesheetNames = ['style.css', 'panel-extra.css', 'panel-v2.css'];
 const selectorOwners = new Map();
@@ -138,8 +140,8 @@ const hueSpan = colors => {
 assert.ok(hueSpan(goldClasses) < 0.2, 'gold 600-cell classes stay within the selected warm palette');
 assert.ok(hueSpan(rainbowClasses) > 0.5, 'rainbow 600-cell classes retain broad palette coverage');
 
-const galleryViews = new Set(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'dynkin']);
-assert.equal(GALLERY_PRESETS.length, 22, 'gallery retains its 22 curated scenes');
+const galleryViews = new Set(['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']);
+assert.equal(GALLERY_PRESETS.length, 24, 'gallery includes two curated Tiling Lab scenes');
 assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.id)).size, GALLERY_PRESETS.length, 'gallery IDs are unique');
 assert.equal(new Set(GALLERY_PRESETS.map(preset => preset.name)).size, GALLERY_PRESETS.length, 'gallery names are unique');
 for (const preset of GALLERY_PRESETS) {

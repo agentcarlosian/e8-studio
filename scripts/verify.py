@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SUMMARY_DIR = ROOT / "dist" / "verify"
 WEB_DIST = ROOT / "dist" / "web"
-VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "rootlab", "dynkin"]
+VIEWS = ["bloom", "platonic", "e8coxeter", "sixhundred", "polytope", "raymarched", "rootlab", "tiling", "dynkin"]
 FX_MODES = ["none", "glow", "pulse", "trail", "chromatic", "kaleidoscope", "ripple",
             "spiral", "fog", "heat", "edge-glow", "aura", "voronoi", "caustic",
             "iridescent", "flowfield", "plasma", "kaleido6", "dof", "nebula",
@@ -103,6 +103,7 @@ def check_js_syntax() -> None:
 def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_state_modules.mjs"])
     run(["node", "scripts/test_rank2_roots.mjs"])
+    run(["node", "scripts/test_coxeter_tilings.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
     run(["node", "scripts/test_recording_recovery.mjs"])
@@ -687,6 +688,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         orientationText: document.querySelector('[data-learn-orientation]')?.textContent || '',
         factCount: document.querySelectorAll('.learn-fact-strip > div').length,
         pathCount: document.querySelectorAll('[data-learn-paths] .learn-path-card').length,
+        learningCenterLaunches: document.querySelectorAll('.learning-center-launch[data-act="openLearningCenter"]').length,
+        learningCenterLabel: document.querySelector('.learning-center-launch span')?.textContent,
         referenceCount: document.querySelectorAll('.learn-reference-grid button').length,
         disclosureCount: document.querySelectorAll('[data-learn-disclosure]').length,
       };
@@ -806,7 +809,9 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or learn_workspace["firstSection"] != "learn"
             or learn_workspace["orientationCards"] != 1
             or learn_workspace["factCount"] != 3
-            or learn_workspace["pathCount"] != 3
+            or learn_workspace["pathCount"] != 1
+            or learn_workspace["learningCenterLaunches"] != 1
+            or learn_workspace["learningCenterLabel"] != "Open Learning Center"
             or learn_workspace["referenceCount"] != 3
             or learn_workspace["disclosureCount"] != 2
             or "240 root vectors" not in learn_workspace["orientationText"]
@@ -902,7 +907,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             fail(f"SDF effect {mode} did not visibly change pixels: {sdf_effect_contract}")
     export_contract = page.evaluate("""() => {
       const formats = {};
-      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'dynkin']) {
+      for (const view of ['bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
         formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
@@ -930,6 +935,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         "polytope": ["PNG", "Data"],
         "raymarched": ["PNG", "Data"],
         "rootlab": ["PNG", "Data"],
+        "tiling": ["PNG", "Data"],
         "dynkin": ["PNG", "SVG", "OBJ", "Data"],
     }
     if export_contract["formats"] != expected_export_formats:
@@ -1011,7 +1017,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       scene.matrixCells = document.querySelectorAll('[aria-label="G2 reflection matrix"] td').length;
       scene.summary = document.querySelector('.root-lab-info')?.textContent;
       scene.learnTitle = document.querySelector('[data-section="learn"] .curiosity-card .info-title')?.textContent;
-      scene.lessonCard = document.querySelector('[data-learn-paths] .learn-path-card.primary span')?.textContent;
+      scene.learningCenter = document.querySelector('.learning-center-launch')?.textContent;
       return scene;
     }""")
     if (root_lab["activeSystem"] != "G2" or root_lab["selectedButtons"] != 1
@@ -1029,7 +1035,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or "G2 Root System" not in (root_lab["canvasLabel"] or "")
             or root_lab["geometry"] != {"kind": "rank-2-root-system", "rootCount": 12, "h": 6}
             or root_lab["learnTitle"] != "From two reflections to a root system"
-            or "Root systems from reflections" not in (root_lab["lessonCard"] or "")):
+            or "Open Learning Center" not in (root_lab["learningCenter"] or "")
+            or "Root systems from reflections" not in (root_lab["learningCenter"] or "")):
         fail(f"Root Lab desktop contract failed: {root_lab}")
 
     root_hover_target = page.evaluate("""() => {
@@ -1058,28 +1065,145 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or "simple root α1" not in root_hover_tooltip["text"]):
         fail(f"Root Lab hover tooltip failed: {root_hover_tooltip}")
 
+    tiling_lab = page.evaluate("""async () => {
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+      window.__app.switchView('tiling');
+      window.__app.setTilingSystem('H2');
+      window.__app.setParam('tilingDensity', 5);
+      window.__app.setParam('tilingRelief', 0.1);
+      window.__app.setParam('tilingShowTiles', true);
+      window.__app.setParam('tilingShowEdges', true);
+      window.__app.setParam('tilingShowGrid', true);
+      window.__app.setParam('tilingShowRoots', true);
+      window.__app.setParam('tilingShowVertices', false);
+      window.__app.setParam('tilingAnimate', true);
+      window.__app.setPanelMode('scene');
+      await frame(); await frame();
+      const rootGuide = window.__app.currentView.object3d.getObjectByName('TilingRoots');
+      const rootRotationBefore = rootGuide?.rotation.z;
+      await new Promise(resolve => setTimeout(resolve, 180));
+      await frame();
+      const rootRotationAfter = rootGuide?.rotation.z;
+      const geometry = window.__app.getGeometryJSON();
+      const scene = {
+        activeSystem: window.__app.params.tilingSystem,
+        selectedButtons: document.querySelectorAll('[data-act="setTilingSystem"][aria-pressed="true"]').length,
+        toggleButtons: document.querySelectorAll('.tiling-layer-toggles button').length,
+        factCells: document.querySelectorAll('.tiling-readout > div').length,
+        statusKeys: [...document.querySelectorAll('#ps-status .ps-status-key')].map(element => element.textContent.trim()),
+        canvasLabel: document.getElementById('canvas')?.getAttribute('aria-label'),
+        tilesVisible: window.__app.currentView.object3d.getObjectByName('TilingTiles')?.visible,
+        edgesVisible: window.__app.currentView.object3d.getObjectByName('TilingEdges')?.visible,
+        gridVisible: window.__app.currentView.object3d.getObjectByName('TilingGrid')?.visible,
+        rootsVisible: window.__app.currentView.object3d.getObjectByName('TilingRoots')?.visible,
+        verticesVisible: window.__app.currentView.object3d.getObjectByName('TilingVertices')?.visible,
+        rootGuideStationary: rootRotationBefore === 0 && rootRotationAfter === 0,
+        tooltipCount: window.__app.currentView.object3d.getObjectByName('TilingTooltipTargets')?.userData?.tooltipData?.length || 0,
+        tooltipFirst: window.__app.currentView.object3d.getObjectByName('TilingTooltipTargets')?.userData?.tooltipData?.[0]?.html || '',
+        geometry: {
+          kind: geometry?.kind,
+          tiles: geometry?.tiles?.length,
+          edges: geometry?.edges?.length,
+          families: geometry?.familyCount,
+          order: geometry?.localSymmetryOrder,
+          periodic: geometry?.periodic,
+        },
+      };
+      window.__app.setFX('plasma');
+      await frame(); await frame();
+      const fxModes = [];
+      window.__app.currentView.object3d.traverse(object => {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (material?.uniforms?.uFXMode) fxModes.push(material.uniforms.uFXMode.value);
+        }
+      });
+      scene.fxMaterialCount = fxModes.length;
+      scene.allPlasma = fxModes.length > 0 && fxModes.every(mode => mode === 16);
+      window.__app.setFX('none');
+      window.__app.setPanelMode('learn');
+      scene.learnTitle = document.querySelector('[data-section="learn"] .curiosity-card .info-title')?.textContent;
+      scene.learningCenter = document.querySelector('.learning-center-launch')?.textContent;
+      return scene;
+    }""")
+    if (tiling_lab["activeSystem"] != "H2" or tiling_lab["selectedButtons"] != 1
+            or tiling_lab["toggleButtons"] != 6 or tiling_lab["factCells"] != 4
+            or tiling_lab["statusKeys"][:2] != ["tiling", "H2"]
+            or len(tiling_lab["statusKeys"]) != 3
+            or not tiling_lab["tilesVisible"] or not tiling_lab["edgesVisible"]
+            or not tiling_lab["gridVisible"] or not tiling_lab["rootsVisible"]
+            or tiling_lab["verticesVisible"]
+            or not tiling_lab["rootGuideStationary"]
+            or tiling_lab["tooltipCount"] != 702
+            or "H₂ tile #0" not in tiling_lab["tooltipFirst"]
+            or "One multigrid crossing becomes one tile" not in tiling_lab["tooltipFirst"]
+            or tiling_lab["geometry"] != {
+                "kind": "coxeter-multigrid-tiling", "tiles": 702, "edges": 1459,
+                "families": 5, "order": 10, "periodic": False,
+            }
+            or tiling_lab["fxMaterialCount"] < 4 or not tiling_lab["allPlasma"]
+            or "Penrose pentagrid" not in (tiling_lab["canvasLabel"] or "")
+            or tiling_lab["learnTitle"] != "Curiosity: crossings become tiles"
+            or "Open Learning Center" not in (tiling_lab["learningCenter"] or "")
+            or "From roots to quasicrystals" not in (tiling_lab["learningCenter"] or "")):
+        fail(f"Tiling Lab desktop contract failed: {tiling_lab}")
+
+    tiling_hover_target = page.evaluate("""() => {
+      window.__app.setPanelMode('scene');
+      window.__app.params.autoRotate = false;
+      const points = window.__app.currentView.object3d.getObjectByName('TilingTooltipTargets');
+      const position = points.geometry.attributes.position;
+      const world = points.position.clone().set(position.getX(0), position.getY(0), position.getZ(0));
+      points.updateWorldMatrix(true, false);
+      points.localToWorld(world);
+      window.__app.camera.updateMatrixWorld();
+      world.project(window.__app.camera);
+      const rect = document.getElementById('canvas').getBoundingClientRect();
+      return {
+        x: rect.left + (world.x + 1) * rect.width / 2,
+        y: rect.top + (1 - world.y) * rect.height / 2,
+      };
+    }""")
+    page.mouse.move(tiling_hover_target["x"], tiling_hover_target["y"])
+    page.wait_for_timeout(120)
+    tiling_hover_tooltip = page.locator("#tooltip").evaluate("""element => ({
+      visible: element.classList.contains('visible'),
+      text: element.textContent,
+    })""")
+    if (not tiling_hover_tooltip["visible"] or "H₂ tile #0" not in tiling_hover_tooltip["text"]
+            or "One multigrid crossing becomes one tile" not in tiling_hover_tooltip["text"]):
+        fail(f"Tiling Lab hover tooltip failed: {tiling_hover_tooltip}")
+
     dynkin_learn = page.evaluate("""() => {
       window.__app.switchView('dynkin');
       window.__app.setDynkin('E8');
       window.__app.setPanelMode('learn');
       const contextual = document.querySelector('[data-section="learn"] .curiosity-card');
       const generic = document.querySelector('[data-learn-orientation]');
+      const learningCenter = document.querySelector('.learning-center-launch');
       return {
         contextualTitle: contextual?.querySelector('.info-title')?.textContent,
         contextualFirst: !!contextual && !!generic
           && contextual.getBoundingClientRect().top < generic.getBoundingClientRect().top,
-        recommended: contextual?.querySelector('[data-act="openLearningCenter"]')?.textContent,
+        learningCenter: learningCenter?.querySelector('span')?.textContent,
+        learningCenterFirst: !!learningCenter && !!contextual
+          && learningCenter.getBoundingClientRect().top < contextual.getBoundingClientRect().top,
+        guidedTourActions: document.querySelectorAll('[data-act="toggleTour"]').length,
+        exploreE8Actions: document.querySelectorAll('[data-act="openE8Explorer"]').length,
         cartanCells: document.querySelectorAll('.dynkin-cartan td').length,
         canvasLabel: document.getElementById('canvas')?.getAttribute('aria-label'),
       };
     }""")
     if (dynkin_learn["contextualTitle"] != "Curiosity: a diagram is compressed geometry"
             or not dynkin_learn["contextualFirst"]
-            or "Reading Dynkin diagrams" not in (dynkin_learn["recommended"] or "")
+            or dynkin_learn["learningCenter"] != "Open Learning Center"
+            or not dynkin_learn["learningCenterFirst"]
+            or dynkin_learn["guidedTourActions"] != 0
+            or dynkin_learn["exploreE8Actions"] != 0
             or dynkin_learn["cartanCells"] != 64
             or "E8 Dynkin Diagram" not in (dynkin_learn["canvasLabel"] or "")):
         fail(f"Contextual Dynkin Learn contract failed: {dynkin_learn}")
-    page.evaluate("window.__app.openLearningCenter()")
+    page.locator('.learning-center-launch').click()
     page.wait_for_selector(".learning-center-dialog", timeout=5000)
     if page.locator(".learning-center-content h2").text_content() != "Reading Dynkin diagrams":
         fail("Dynkin did not open its mapped curriculum lesson")
@@ -1121,12 +1245,35 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
           paths: document.querySelectorAll('.learning-path').length,
           lessons: document.querySelectorAll('[data-learning-lesson]').length,
           title: document.querySelector('.learning-center-content h2')?.textContent,
+          answer: document.querySelector('.learning-answer p')?.textContent,
           sources: document.querySelectorAll('.learning-source-card').length,
           claim: document.querySelector('.learning-claim-note strong')?.textContent,
         })"""
     )
-    if learning_center["paths"] != 4 or learning_center["lessons"] < 9 or learning_center["title"] != "The Coxeter plane" or learning_center["sources"] < 1 or learning_center["claim"] != "Established mathematics":
+    if learning_center["paths"] != 4 or learning_center["lessons"] < 10 or learning_center["title"] != "What am I looking at?" or "two-dimensional shadow" not in learning_center["answer"] or learning_center["sources"] < 1 or learning_center["claim"] != "Established mathematics":
         fail(f"Learning Center initial curriculum failed: {learning_center}")
+    page.evaluate("window.__app.openLearningCenter('why-five-solids')")
+    why_five = page.evaluate("""() => ({
+      title: document.querySelector('.learning-center-content h2')?.textContent,
+      answer: document.querySelector('.learning-answer p')?.textContent,
+      formula: document.querySelector('.learning-proof code')?.textContent,
+      cases: document.querySelectorAll('.learning-proof-row:not(.learning-proof-head)').length,
+      boundary: document.querySelector('.learning-proof-boundary')?.textContent,
+      lessonDetails: document.querySelectorAll('.learning-center-content details').length,
+      experimentExplanations: document.querySelectorAll('.learning-experiment-takeaway').length,
+      experimentSteps: document.querySelectorAll('.learning-experiment-step').length,
+      sourcesVisible: document.querySelector('.learning-more-body')?.getBoundingClientRect().height > 0,
+      navigationLabels: [...document.querySelectorAll('.learning-lesson-nav button')].map(button => button.textContent.trim()),
+      navigationMinHeight: Math.min(...[...document.querySelectorAll('.learning-lesson-nav button')].map(button => button.getBoundingClientRect().height)),
+      navigationBeforeSources: !!(document.querySelector('.learning-lesson-nav')?.compareDocumentPosition(document.querySelector('.learning-more')) & Node.DOCUMENT_POSITION_FOLLOWING),
+    })""")
+    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] != 0 or why_five["experimentExplanations"] != why_five["experimentSteps"] or not why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
+        fail(f"Why-only-five answer and proof failed: {why_five}")
+    page.evaluate("window.__app.resetView()")
+    if page.locator("#learning-modal:not(.hidden)").count() or page.locator("#learning-experiment-coach").count():
+        fail("Desktop Reset did not dismiss transient learning surfaces")
+    page.evaluate("window.__app.openLearningCenter('mckay-bridge')")
+    page.wait_for_selector(".learning-center-dialog", timeout=5000)
     lesson_navigation_ms = page.evaluate("""() => {
       const started = performance.now();
       document.querySelector('[data-learning-lesson="mckay-bridge"]')?.click();
@@ -1143,7 +1290,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
           claim: document.querySelector('.learning-claim-note strong')?.textContent,
         })"""
     )
-    if mckay_lesson != {"title": "McKay correspondence", "sources": 2, "readings": 2, "current": "mckay-bridge", "claim": "Interpretation"}:
+    if mckay_lesson != {"title": "McKay correspondence", "sources": 2, "readings": 3, "current": "mckay-bridge", "claim": "Interpretation"}:
         fail(f"Learning Center lesson navigation failed: {mckay_lesson}")
     page.click('[data-learning-complete="mckay-bridge"]')
     completed_lesson = page.evaluate(
@@ -1164,6 +1311,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     })""")
     if essay_provenance["label"] != "Interpretation" or essay_provenance["sources"] != 2 or "not its construction" not in essay_provenance["body"]:
         fail(f"Essay claim provenance failed: {essay_provenance}")
+    if page.locator('.essay-close').text_content().strip() != "Close reading" or page.locator('.essay-close').bounding_box()["height"] < 40:
+        fail("Essay reader lacks an explicit close action")
+    page.click('.essay-close')
+    if page.locator('.essay-panel').count():
+        fail("Explicit Close reading action did not dismiss the essay")
     page.evaluate("window.__app.openLearningCenter('mckay-bridge')")
     page.wait_for_selector('.learning-center-dialog', timeout=5000)
     page.click('[data-learning-open-view="e8coxeter"]')

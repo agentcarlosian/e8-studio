@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added a ninth interactive view, the Coxeter Tiling Lab, which dualizes A₂, B₂, G₂, and H₂ root directions into periodic and quasiperiodic rhombus fields.
+- Added multigrid, root-star, edge, tile, vertex, relief, density, and animated-flow controls across desktop and mobile, with full palette and effect support.
+- Added portable JSON and OBJ tiling exports, a sourced lesson, two readings, a guided three-stage comparison, a quiz, contextual explanations, and deterministic geometry tests.
+- Completed the model selector as a balanced 3×3 grid while keeping Root Lab, Tiling Lab, and Dynkin outside the automatic visual showcase.
+- Restored circular model Spin as a control independent from camera Orbit, with separate speed controls and support for combining both motions.
+- Reworked the desktop Learning Center with reliable two-pane scrolling, clearer curriculum progress, stronger lesson hierarchy, polished actions, and responsive small-screen behavior.
+- Replaced the timed tooltip tour and redundant E8 navigation action with one clearly labeled, self-paced Learning Center, preserving the former tour readings inside relevant lessons.
+
 ## 0.2.0 — Studio overhaul
 
 E8 Studio has grown from a focused E8 visualization into a cross-platform mathematical visualization studio while keeping the E8 root system at its center.

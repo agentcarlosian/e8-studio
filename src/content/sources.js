@@ -1,7 +1,7 @@
 // sources.js — factual provenance for educational content.
 //
-// Essays reference these records through `sourceIds`.  Prefer primary papers,
-// university mathematics pages, and established reference works.  `scope`
+// Essays reference these records through `sourceIds`.  Prefer freely readable
+// primary papers, university mathematics pages, and established reference works.  `scope`
 // records exactly what the source is being used to support; a source URL is not
 // a blanket endorsement of every sentence in an essay.
 
@@ -41,6 +41,13 @@ export const FACT_SOURCES = {
     scope: 'finite rank-2 I2(m) root systems, crystallographic cases, Cartan data, and reflection-group construction',
     tier: 'university',
   },
+  'debruijn-pentagrids': {
+    title: "Algebraic theory of Penrose's non-periodic tilings of the plane. I",
+    author: 'N. G. de Bruijn',
+    url: 'https://new.math.uiuc.edu/oldnew/quasicrystals/papers/debruijnPenrose.pdf',
+    scope: 'pentagrids as five rotated line families and their dual construction of non-periodic rhombus tilings',
+    tier: 'primary-paper',
+  },
   'mckay-michigan-notes': {
     title: 'McKay correspondence lecture notes',
     author: 'University of Michigan',
@@ -65,7 +72,7 @@ export const FACT_SOURCES = {
   'hart-sphere-tracing': {
     title: 'Sphere tracing: A geometric method for the antialiased ray tracing of implicit surfaces',
     author: 'John C. Hart',
-    url: 'https://doi.org/10.1007/s003710050084',
+    url: 'https://graphics.stanford.edu/courses/cs348b-20-spring-content/uploads/hart.pdf',
     scope: 'sphere tracing, signed distance bounds, implicit-surface rendering, and distance operations',
     tier: 'primary-paper',
   },
@@ -79,7 +86,7 @@ export const FACT_SOURCES = {
   'gross-heterotic-string': {
     title: 'Heterotic String',
     author: 'David Gross, Jeffrey Harvey, Emil Martinec, and Ryan Rohm',
-    url: 'https://doi.org/10.1103/PhysRevLett.54.502',
+    url: 'https://harvest.aps.org/v2/journals/articles/10.1103/PhysRevLett.54.502/fulltext',
     scope: 'construction of the heterotic string and the Spin(32)/Z2 and E8 x E8 gauge-group consistency result',
     tier: 'primary-paper',
   },

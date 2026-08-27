@@ -43,9 +43,11 @@ def main() -> int:
                 {"view": "sixhundred", "label": "600"},
                 {"view": "polytope", "label": "4D"},
                 {"view": "raymarched", "label": "SDF"},
+                {"view": "rootlab", "label": "Roots"},
+                {"view": "tiling", "label": "Tilings"},
                 {"view": "dynkin", "label": "Dynkin"},
             ], view_switch
-            print("ok View selector exposes six core views plus Dynkin")
+            print("ok View selector exposes all nine views")
 
             zoom = page.evaluate("""() => {
               window.__app.switchView('platonic');
@@ -184,7 +186,7 @@ def main() -> int:
             })""")
             assert baseline == {
                 "preset": "coxeter-rings", "bg": "void",
-                "poly4d": "24cell", "morph4d": 0, "cameraDistance": 6,
+                "poly4d": "24cell", "morph4d": 0, "cameraDistance": 5.6,
             }, baseline
 
             previous = page.locator('[data-act="stepGalleryPreset"][data-arg="-1"]')
@@ -192,7 +194,7 @@ def main() -> int:
             assert previous.count() == 1 and following.count() == 1
             previous.click()
             prev_state = page.evaluate("() => window.__app.params.galleryPreset")
-            assert prev_state == "midnight-600", prev_state
+            assert prev_state == "multigrid-blueprint", prev_state
             following = page.locator('[data-act="stepGalleryPreset"][data-arg="1"]')
             assert following.count() == 1
             following.click()
@@ -202,7 +204,7 @@ def main() -> int:
               count: document.querySelector('.gallery-nav-current small')?.textContent,
             })""")
             assert next_state == {
-                "preset": "coxeter-rings", "label": "Coxeter Rings", "count": "1 / 22",
+                "preset": "coxeter-rings", "label": "Coxeter Rings", "count": "1 / 24",
             }, next_state
             print("ok Gallery arrows wrap, apply presets, and refresh their label")
 
@@ -313,7 +315,7 @@ def main() -> int:
                 canCancel: typeof window.__app.cancelExportClip === 'function',
               };
             }""")
-            assert services["quizTotal"] == 8 and services["hasDailyFact"], services
+            assert services["quizTotal"] == 11 and services["hasDailyFact"], services
             assert services["progressIsPublic"], services
             assert services["postcard"] == {"width": 1080, "height": 1920}, services
             assert services["canRecord"] and services["canCancel"], services

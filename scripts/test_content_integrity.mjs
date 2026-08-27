@@ -4,6 +4,7 @@ import { ESSAYS, ESSAY_PROVENANCE } from '../src/content/essays.js';
 import { BIOGRAPHIES, TIMELINE, DAILY_FACTS, QUIZ_MODULES, CURIOUS_CARDS, LEARNING_CONTENT_PROVENANCE } from '../src/content/learning.js';
 import { GLOSSARY } from '../src/content/glossary.js';
 import { FACT_SOURCES } from '../src/content/sources.js';
+import { LEARNING_LESSONS } from '../src/content/curriculum.js';
 
 const claimTypes = new Set(['established-mathematics', 'historical-context', 'interpretation', 'app-designed-visualization', 'rendering-technique']);
 const collections = [
@@ -33,7 +34,10 @@ assert.deepEqual(Object.keys(LEARNING_CONTENT_PROVENANCE.quizzes).sort(), QUIZ_M
 for (const [sourceId, source] of Object.entries(FACT_SOURCES)) {
   assert.ok(source.title && source.author && source.scope && source.tier, `source ${sourceId} metadata`);
   assert.match(source.url, /^https:\/\//, `source ${sourceId} HTTPS URL`);
+  assert.doesNotMatch(source.url, /^https:\/\/doi\.org\//, `source ${sourceId} links directly to freely readable material`);
 }
+assert.equal(FACT_SOURCES['hart-sphere-tracing'].url, 'https://graphics.stanford.edu/courses/cs348b-20-spring-content/uploads/hart.pdf', 'Hart source uses the open Stanford-hosted paper');
+assert.equal(FACT_SOURCES['gross-heterotic-string'].url, 'https://harvest.aps.org/v2/journals/articles/10.1103/PhysRevLett.54.502/fulltext', 'heterotic-string source uses APS open full text');
 
 const shippedCopy = JSON.stringify({ ESSAYS, BIOGRAPHIES, TIMELINE, DAILY_FACTS, QUIZ_MODULES, GLOSSARY });
 for (const stale of [
@@ -49,20 +53,34 @@ for (const stale of [
 ]) assert.ok(!shippedCopy.includes(stale), `removed disputed claim: ${stale}`);
 
 assert.ok(CURIOUS_CARDS.dynkin, 'Dynkin has contextual curiosity content');
+assert.ok(CURIOUS_CARDS.tiling, 'Tiling Lab has contextual curiosity content');
 assert.ok(QUIZ_MODULES.some(quiz => quiz.id === 'dynkin-diagrams'), 'Dynkin has a dedicated quiz');
+assert.ok(QUIZ_MODULES.some(quiz => quiz.id === 'coxeter-multigrids'), 'Tiling Lab has a dedicated quiz');
+
+const lessonReadings = new Set(LEARNING_LESSONS.flatMap(lesson => lesson.essayIds || []));
+for (const essayId of ['platonic_phi', 'kepler_poinsot', 'sixhundred_conjugacy', 'octonions', 'why_248', 'moonshine', 'bourbaki_e8', 'e8_string_theory']) {
+  assert.ok(lessonReadings.has(essayId), `former tour reading ${essayId} is preserved in the self-paced curriculum`);
+}
 
 const readProjectFile = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const readme = readProjectFile('README.md');
 const indexHtml = readProjectFile('index.html');
 const mainJs = readProjectFile('src/main.js');
+const panelJs = readProjectFile('src/ui/panel.js');
+const mobileHtml = readProjectFile('mobile.html');
 const changelog = readProjectFile('CHANGELOG.md');
 
-assert.match(readme, /### Eight interactive views/, 'README view count');
+assert.match(readme, /### Nine interactive views/, 'README view count');
 assert.match(readme, /\| \*\*Root Lab\*\* \|/, 'README Root Lab coverage');
+assert.match(readme, /\| \*\*Tiling Lab\*\* \|/, 'README Tiling Lab coverage');
 assert.match(readme, /\| \*\*Dynkin\*\* \|/, 'README Dynkin view coverage');
-assert.match(readme, /use `1–8` for views/, 'README view shortcut range');
-assert.match(indexHtml, /eight interactive views/, 'social metadata view count');
-assert.match(mainJs, /\{ k: '1–8', d: 'Switch view' \}/, 'in-app view shortcut range');
+assert.match(readme, /use `1–9` for views/, 'README view shortcut range');
+assert.match(indexHtml, /nine interactive views/, 'social metadata view count');
+assert.match(mainJs, /\{ k: '1–9', d: 'Switch view' \}/, 'in-app view shortcut range');
+assert.doesNotMatch(mainJs, /toggleTour|openE8Explorer/, 'timed tour and redundant E8 action are removed');
+assert.match(panelJs, /Open Learning Center/, 'Learn panel names the Learning Center explicitly');
+assert.doesNotMatch(panelJs, /Guided tour|openE8Explorer/, 'Learn panel has one educational path');
+assert.doesNotMatch(mobileHtml, /mobile-tour-details|Guided tour/, 'mobile Learn has one self-paced educational path');
 assert.match(changelog, /## 0\.2\.0 — Studio overhaul/, 'current release notes');
 
 console.log(`Content integrity passed: ${collections.reduce((sum, [, records]) => sum + records.length, 0)} records, ${Object.keys(FACT_SOURCES).length} sources.`);

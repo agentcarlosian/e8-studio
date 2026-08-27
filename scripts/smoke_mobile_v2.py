@@ -142,16 +142,23 @@ def main() -> int:
             check("same state patch skips save sync and render", state_noop_after["stateNoopSkipCount"] > state_noop_before["stateNoopSkipCount"] and state_noop_after["lastStateNoopSkip"] == "set-state" and state_noop_after["saveCount"] == state_noop_before["saveCount"] and state_noop_after["controlSyncCount"] == state_noop_before["controlSyncCount"] and state_noop_after["renderCount"] == state_noop_before["renderCount"] and not state_noop_after["renderQueued"], str(state_noop_after))
             quality_chip_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator("#quality-chip").click()
+            quality_menu = page.evaluate("""() => ({
+                open: !document.getElementById('quality-popover').classList.contains('hidden'),
+                expanded: document.getElementById('quality-chip').getAttribute('aria-expanded'),
+                buttons: [...document.querySelectorAll('#quality-popover [data-quality]')].map(button => ({ id: button.dataset.quality, box: button.getBoundingClientRect() }))
+            })""")
+            check("quality chip opens a compact three-tier chooser", quality_menu["open"] and quality_menu["expanded"] == "true" and [item["id"] for item in quality_menu["buttons"]] == ["smooth", "balanced", "sharp"] and all(item["box"]["height"] >= 44 for item in quality_menu["buttons"]), str(quality_menu))
+            page.locator('#quality-popover [data-quality="balanced"]').click()
             quality_feedback = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("quality chip toggles Smooth to Balanced", quality_feedback["state"]["quality"] == "balanced", str(quality_feedback))
-            check("quality chip resizes canvas immediately", abs(quality_feedback["metrics"]["renderScale"] - 1.0) < 0.01 and not quality_feedback["metrics"]["settingsCanvasResizeDeferred"], str(quality_feedback["metrics"]))
-            check("quality chip skips full control sync", quality_feedback["metrics"]["qualityChipSyncSkipCount"] > quality_chip_before["qualityChipSyncSkipCount"] and quality_feedback["metrics"]["controlSyncCount"] == quality_chip_before["controlSyncCount"] and quality_feedback["metrics"]["liveControlSyncSkipCount"] == quality_chip_before["liveControlSyncSkipCount"], str(quality_feedback["metrics"]))
-            check("quality chip shows action status", quality_feedback["metrics"]["statusVisible"] and quality_feedback["metrics"]["statusText"] == "Quality: Balanced", str(quality_feedback["metrics"]))
+            check("quality chooser selects Balanced", quality_feedback["state"]["quality"] == "balanced", str(quality_feedback))
+            check("quality chooser resizes canvas immediately", abs(quality_feedback["metrics"]["renderScale"] - 1.0) < 0.01 and not quality_feedback["metrics"]["settingsCanvasResizeDeferred"], str(quality_feedback["metrics"]))
+            check("quality chooser uses focused control sync", quality_feedback["metrics"]["settingsControlSyncSkipCount"] > quality_chip_before["settingsControlSyncSkipCount"] and quality_feedback["metrics"]["controlSyncCount"] == quality_chip_before["controlSyncCount"], str(quality_feedback["metrics"]))
+            check("quality chooser closes with action status", quality_feedback["metrics"]["statusVisible"] and quality_feedback["metrics"]["statusText"] == "Quality: Balanced" and page.locator('#quality-popover.hidden').count() == 1, str(quality_feedback["metrics"]))
             page.locator("#quality-chip").click()
+            page.locator('#quality-popover [data-quality="smooth"]').click()
             safe_quality_feedback = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("quality chip avoids Sharp quick cycle", safe_quality_feedback["state"]["quality"] == "smooth", str(safe_quality_feedback))
-            check("quality chip toggles Balanced to Smooth", abs(safe_quality_feedback["metrics"]["renderScale"] - 0.75) < 0.01 and safe_quality_feedback["metrics"]["statusText"] == "Quality: Smooth", str(safe_quality_feedback["metrics"]))
-            check("quality chip stays on lightweight sync path", safe_quality_feedback["metrics"]["qualityChipSyncSkipCount"] > quality_feedback["metrics"]["qualityChipSyncSkipCount"] and safe_quality_feedback["metrics"]["controlSyncCount"] == quality_feedback["metrics"]["controlSyncCount"] and safe_quality_feedback["metrics"]["liveControlSyncSkipCount"] == quality_feedback["metrics"]["liveControlSyncSkipCount"], str(safe_quality_feedback["metrics"]))
+            check("quality chooser returns to Smooth", safe_quality_feedback["state"]["quality"] == "smooth" and abs(safe_quality_feedback["metrics"]["renderScale"] - 0.75) < 0.01 and safe_quality_feedback["metrics"]["statusText"] == "Quality: Smooth", str(safe_quality_feedback))
+            check("quality chooser stays on focused sync path", safe_quality_feedback["metrics"]["controlSyncCount"] == quality_feedback["metrics"]["controlSyncCount"], str(safe_quality_feedback["metrics"]))
             page.evaluate("() => window.__mobileApp.hideStatus()")
 
             scene_step_before = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -241,9 +248,9 @@ def main() -> int:
             })""")
             model_shortcut_ids = [button["id"] for group in model_shortcuts["groups"] for button in group["buttons"]]
             model_shortcut_group_counts = {group["id"]: len(group["buttons"]) for group in model_shortcuts["groups"]}
-            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 25 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 25 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "rootlab": 4, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "root-G2" in model_shortcut_ids and "root-H2" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 29 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 29 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "rootlab": 4, "tiling": 4, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "root-G2" in model_shortcut_ids and "root-H2" in model_shortcut_ids and "tiling-A2" in model_shortcut_ids and "tiling-H2" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
             model_options = page.locator("#model-select option").evaluate_all("options => options.map(option => option.value)")
-            check("model selector replaces legacy E8 3D and includes Root Lab", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "rootlab", "dynkin"], str(model_options))
+            check("model selector includes Root Lab and Tiling Lab", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "rootlab", "tiling", "dynkin"], str(model_options))
             fallback_selectors_hidden = page.evaluate("""() => [
                 document.getElementById('model-select').closest('label'),
                 document.getElementById('shape-field'),
@@ -310,6 +317,23 @@ def main() -> int:
                 }
             })""")
             check("model shortcut selects generated G2 Root Lab", model_shortcut_rootlab["state"]["modelMode"] == "rootlab" and model_shortcut_rootlab["state"]["rootSystem"] == "G2" and model_shortcut_rootlab["controls"]["modelMode"] == "rootlab" and model_shortcut_rootlab["controls"]["rootVisible"] and model_shortcut_rootlab["controls"]["rootOutput"] == "G₂" and model_shortcut_rootlab["controls"]["activeRoot"] == "G2" and model_shortcut_rootlab["controls"]["activeShortcut"] == "root-G2" and model_shortcut_rootlab["controls"]["output"] == "G₂ root system" and all(model_shortcut_rootlab["controls"]["overlays"]) and model_shortcut_rootlab["controls"]["facts"] == ["12", "6", "30°", "150°"] and model_shortcut_rootlab["controls"]["matrix"] == "Cartan [2, -3] [-1, 2]", str(model_shortcut_rootlab))
+            page.locator('#model-shortcut-groups [data-model-shortcut="tiling-H2"]').click()
+            model_shortcut_tiling = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                controls: {
+                    modelMode: document.getElementById('model-select').value,
+                    visible: !document.getElementById('tiling-field').classList.contains('hidden'),
+                    activeSystem: document.querySelector('#tiling-field [data-tiling-system].active')?.dataset.tilingSystem,
+                    activeShortcut: document.querySelector('#model-shortcut-groups button.active')?.dataset.modelShortcut,
+                    output: document.getElementById('model-shortcut-output').textContent.trim(),
+                    facts: [
+                        document.getElementById('tiling-fact-grids').textContent.trim(),
+                        document.getElementById('tiling-fact-order').textContent.trim(),
+                        document.getElementById('tiling-fact-periodic').textContent.trim(),
+                    ],
+                }
+            })""")
+            check("model shortcut selects H2 Tiling Lab", model_shortcut_tiling["state"]["modelMode"] == "tiling" and model_shortcut_tiling["state"]["tilingSystem"] == "H2" and model_shortcut_tiling["controls"]["modelMode"] == "tiling" and model_shortcut_tiling["controls"]["visible"] and model_shortcut_tiling["controls"]["activeSystem"] == "H2" and model_shortcut_tiling["controls"]["activeShortcut"] == "tiling-H2" and model_shortcut_tiling["controls"]["output"] == "H₂ Penrose pentagrid" and model_shortcut_tiling["controls"]["facts"] == ["5", "10", "no"], str(model_shortcut_tiling))
             page.locator('#model-shortcut-groups [data-model-shortcut="dynkin-E6"]').click()
             model_shortcut_dynkin = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -488,7 +512,7 @@ def main() -> int:
             page.get_by_role("button", name="Settings").click()
             check("settings button opens sheet", page.locator("#settings-sheet:not(.hidden)").count() == 1)
             section_nav_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            for name in ["View", "Visuals", "Motion", "Quality", "Info"]:
+            for name in ["View", "Visuals", "Motion", "Learn"]:
                 page.get_by_role("button", name=name, exact=True).click()
                 active = page.evaluate(
                     """sectionName => {
@@ -499,27 +523,28 @@ def main() -> int:
                 )
                 check(f"{name} section reachable", bool(active))
             section_nav_after = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("settings tab switches skip full control sync", section_nav_after["settingsTabSyncSkipCount"] >= section_nav_before["settingsTabSyncSkipCount"] + 5 and section_nav_after["controlSyncCount"] == section_nav_before["controlSyncCount"], str(section_nav_after))
-            check("settings section switches use cached controls", section_nav_after["settingsSectionSwitchCount"] >= section_nav_before["settingsSectionSwitchCount"] + 5 and section_nav_after["lastSettingsSectionSwitch"] == "info", str(section_nav_after))
-            page.get_by_role("button", name="Info", exact=True).click()
+            check("settings tab switches skip full control sync", section_nav_after["settingsTabSyncSkipCount"] >= section_nav_before["settingsTabSyncSkipCount"] + 4 and section_nav_after["controlSyncCount"] == section_nav_before["controlSyncCount"], str(section_nav_after))
+            check("settings section switches use cached controls", section_nav_after["settingsSectionSwitchCount"] >= section_nav_before["settingsSectionSwitchCount"] + 4 and section_nav_after["lastSettingsSectionSwitch"] == "learn", str(section_nav_after))
+            page.get_by_role("button", name="Learn", exact=True).click()
             same_section = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("same settings section skips DOM toggles", same_section["settingsSectionSwitchSkipCount"] > section_nav_after["settingsSectionSwitchSkipCount"] and same_section["settingsSectionSwitchCount"] == section_nav_after["settingsSectionSwitchCount"] and same_section["controlSyncCount"] == section_nav_after["controlSyncCount"], str(same_section))
+            page.evaluate("() => { document.getElementById('mobile-context-details').open = true; }")
             cartan_info = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
                 text: document.getElementById('cartan-matrix').innerText
             })""")
-            check("Info section shows compact Cartan matrix", cartan_info["metrics"]["cartanMatrixSize"] == 8 and cartan_info["metrics"]["cartanMatrixNonzeroCount"] == 22 and "Cartan matrix" in cartan_info["text"] and "a1" in cartan_info["text"], str(cartan_info))
+            check("Learn model context shows compact Cartan matrix", cartan_info["metrics"]["cartanMatrixSize"] == 8 and cartan_info["metrics"]["cartanMatrixNonzeroCount"] == 22 and "Cartan matrix" in cartan_info["text"] and "a1" in cartan_info["text"], str(cartan_info))
             mckay_info = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
                 text: document.getElementById('mckay-card').innerText
             })""")
-            check("Info section shows McKay bridge card", mckay_info["metrics"]["lastMckaySource"] == "icosahedron" and mckay_info["metrics"]["lastMckayRoots"] == "E8" and mckay_info["metrics"]["lastMckaySymmetry"] == "I" and "McKay bridge" in mckay_info["text"] and "Icosahedron" in mckay_info["text"] and "12 illustrative E8 highlights" in mckay_info["text"], str(mckay_info))
+            check("Learn model context shows McKay bridge card", mckay_info["metrics"]["lastMckaySource"] == "icosahedron" and mckay_info["metrics"]["lastMckayRoots"] == "E8" and mckay_info["metrics"]["lastMckaySymmetry"] == "I" and "McKay bridge" in mckay_info["text"] and "Icosahedron" in mckay_info["text"] and "12 illustrative E8 highlights" in mckay_info["text"], str(mckay_info))
             curiosity_info = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
                 text: document.getElementById('curiosity-card').innerText,
                 button: document.getElementById('curiosity-next').getBoundingClientRect()
             })""")
-            check("Info section shows compact context note", curiosity_info["metrics"]["lastCuriosityTitle"] == "Coxeter plane" and "Coxeter plane" in curiosity_info["text"] and "eight rings of 30" in curiosity_info["text"] and curiosity_info["button"]["height"] >= 40, str(curiosity_info))
+            check("Learn model context shows compact context note", curiosity_info["metrics"]["lastCuriosityTitle"] == "Coxeter plane" and "Coxeter plane" in curiosity_info["text"] and "eight rings of 30" in curiosity_info["text"] and curiosity_info["button"]["height"] >= 40, str(curiosity_info))
             curiosity_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator("#curiosity-next").click()
             curiosity_next = page.evaluate("""() => ({
@@ -527,292 +552,104 @@ def main() -> int:
                 text: document.getElementById('curiosity-card').innerText
             })""")
             check("Context note cycles without canvas work", curiosity_next["metrics"]["curiosityNextCount"] > curiosity_before["curiosityNextCount"] and curiosity_next["metrics"]["lastCuriosityTitle"] == "McKay lens" and curiosity_next["metrics"]["lastInteractionType"] == "next-curiosity" and curiosity_next["metrics"]["renderCount"] == curiosity_before["renderCount"] and "McKay lens" in curiosity_next["text"], str(curiosity_next))
-            learn_panel = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                buttons: [...document.querySelectorAll('#learn-topic-grid [data-learn-topic]')].map(button => ({
-                    id: button.dataset.learnTopic,
-                    text: button.textContent.trim(),
-                    active: button.classList.contains('active'),
-                    effective: button.classList.contains('effective'),
-                    pressed: button.getAttribute('aria-pressed'),
-                    box: button.getBoundingClientRect()
-                })),
-                output: document.getElementById('learn-topic-output').textContent.trim(),
-                card: document.getElementById('learn-topic-card').innerText,
-                nextButton: document.getElementById('learn-topic-next').getBoundingClientRect()
+            learn_library = page.evaluate("""() => ({
+                libraryVisible: !document.getElementById('learn-library').classList.contains('hidden'),
+                readerHidden: document.getElementById('learn-reader').classList.contains('hidden'),
+                recommended: document.getElementById('learn-recommended-card').innerText,
+                progress: document.getElementById('learn-progress-output').textContent.trim(),
+                paths: [...document.querySelectorAll('[data-learn-path]')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
+                done: document.querySelector('.learn-done-action').getBoundingClientRect()
             })""")
-            learn_ids = [button["id"] for button in learn_panel["buttons"]]
-            expected_lesson_ids = ["auto", "why-five-solids", "into-four-dimensions", "six-hundred-cell", "rank-two-reflections", "coxeter-plane", "roots-reflections", "reading-dynkin", "mckay-bridge", "designed-bloom", "distance-fields"]
-            check("Info section exposes shared curriculum lessons", learn_panel["state"]["learnTopic"] == "auto" and learn_ids == expected_lesson_ids and learn_panel["metrics"]["learnTopicButtonCount"] == len(expected_lesson_ids) and all(button["box"]["height"] >= 40 for button in learn_panel["buttons"]), str(learn_panel))
-            check("Learn Auto follows current curriculum scene", learn_panel["output"] == "Auto: Coxeter plane" and any(button["id"] == "auto" and button["active"] and button["pressed"] == "true" for button in learn_panel["buttons"]) and any(button["id"] == "coxeter-plane" and button["effective"] for button in learn_panel["buttons"]) and "Move from the 600-cell" in learn_panel["card"] and "2 scoped sources" in learn_panel["card"] and learn_panel["nextButton"]["height"] >= 40, str(learn_panel))
+            check("Learn opens as a navigable library", learn_library["libraryVisible"] and learn_library["readerHidden"] and "What am I looking at?" in learn_library["recommended"] and learn_library["progress"].endswith("/ 12") and len(learn_library["paths"]) == 4, str(learn_library))
+            check("Learn library uses readable touch targets", learn_library["done"]["height"] >= 44 and all(path["box"]["height"] >= 64 for path in learn_library["paths"]), str(learn_library))
+            page.locator('[data-learn-path="solid-foundations"]').click()
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             mobile_lesson_select_ms = page.evaluate("""() => {
                 const started = performance.now();
-                document.querySelector('#learn-topic-grid [data-learn-topic="mckay-bridge"]')?.click();
+                document.querySelector('[data-learn-topic="why-five-solids"]')?.click();
                 return performance.now() - started;
             }""")
             check("Mobile lesson selection meets interaction budget", mobile_lesson_select_ms <= 150, f"{mobile_lesson_select_ms:.1f}ms > 150ms")
-            learn_mckay = page.evaluate("""() => ({
+            why_five = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
-                output: document.getElementById('learn-topic-output').textContent.trim(),
-                card: document.getElementById('learn-topic-card').innerText,
-                active: document.querySelector('#learn-topic-grid button.active')?.dataset.learnTopic
+                sheetReader: document.getElementById('settings-sheet').classList.contains('learn-reader-open'),
+                libraryHidden: document.getElementById('learn-library').classList.contains('hidden'),
+                readerVisible: !document.getElementById('learn-reader').classList.contains('hidden'),
+                text: document.getElementById('learn-topic-card').innerText,
+                bodySize: parseFloat(getComputedStyle(document.querySelector('.mobile-learn-answer p')).fontSize),
+                bodyLineHeight: parseFloat(getComputedStyle(document.querySelector('.mobile-learn-answer p')).lineHeight),
+                nav: [...document.querySelectorAll('.learn-reader-bar button')].map(button => button.getBoundingClientRect()),
+                lessonNav: [...document.querySelectorAll('.mobile-learn-lesson-nav button')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
+                activityCount: document.querySelectorAll('.mobile-learn-activity').length,
+                explanationCount: document.querySelectorAll('.mobile-learn-activity .mobile-learn-takeaway').length,
+                hiddenLessonDetails: document.querySelectorAll('#learn-topic-card details').length,
+                sourceNoteVisible: document.querySelector('#mobile-learn-source-title')?.getBoundingClientRect().height > 0,
+                hiddenExplanationControls: document.querySelectorAll('[data-info-action="reveal-experiment-answer"], [data-info-action="next-experiment-step"]').length,
+                studioButton: (() => {
+                    const button = document.querySelector('.learn-topic-studio [data-info-action="open-experiment-coach"]');
+                    return { text: button?.innerText, box: button?.getBoundingClientRect(), parent: button?.parentElement?.className };
+                })(),
+                sheetOverflow: getComputedStyle(document.querySelector('.sheet-body')).overflowY,
+                readerOverflow: getComputedStyle(document.getElementById('learn-reader-scroll')).overflowY
             })""")
-            check("Learn lesson chip pins McKay bridge", learn_mckay["state"]["learnTopic"] == "mckay-bridge" and learn_mckay["active"] == "mckay-bridge" and learn_mckay["output"] == "McKay correspondence" and "qualified relationships" in learn_mckay["card"] and "2 scoped sources" in learn_mckay["card"], str(learn_mckay))
-            check("Learn lesson switch avoids hidden canvas render", learn_mckay["metrics"]["learnTopicSelectCount"] > learn_before["learnTopicSelectCount"] and learn_mckay["metrics"]["lastLearnTopic"] == "mckay-bridge" and learn_mckay["metrics"]["lastLearnTopicConfigured"] == "mckay-bridge" and learn_mckay["metrics"]["lastInteractionType"] == "learn-topic-mckay-bridge" and learn_mckay["metrics"]["renderCount"] == learn_before["renderCount"], str(learn_mckay["metrics"]))
+            check("Why-five opens in a dedicated reader", why_five["state"]["learnTopic"] == "why-five-solids" and why_five["sheetReader"] and why_five["libraryHidden"] and why_five["readerVisible"], str(why_five))
+            check("Why-five directly teaches the five cases", "less than 360°" in why_five["text"] and "3 triangles" in why_five["text"] and "Dodecahedron" in why_five["text"] and "3 hexagons" in why_five["text"] and "Flat tiling" in why_five["text"], why_five["text"])
+            check("Lesson reader is readable and has persistent navigation", why_five["bodySize"] >= 16 and why_five["bodyLineHeight"] >= 24 and all(box["height"] >= 48 for box in why_five["nav"]), str(why_five))
+            check("Lesson activities expose every explanation without toggles", why_five["activityCount"] == 3 and why_five["explanationCount"] == 3 and why_five["hiddenLessonDetails"] == 0 and why_five["sourceNoteVisible"] and why_five["hiddenExplanationControls"] == 0 and "60° angular deficit" in why_five["text"] and "36° of angular deficit" in why_five["text"] and "exactly 360°" in why_five["text"], str(why_five))
+            check("Primary lesson navigation replaces the old experiment controls", [item["text"] for item in why_five["lessonNav"]] == ["← Previous", "Finish lesson", "Next →"] and all(item["box"]["height"] >= 54 for item in why_five["lessonNav"]), str(why_five["lessonNav"]))
+            check("Open in Studio is the large final lesson action", why_five["studioButton"]["text"] == "Open in Studio" and why_five["studioButton"]["box"]["height"] >= 54 and "learn-topic-studio" in why_five["studioButton"]["parent"], str(why_five["studioButton"]))
+            check("Lesson reader owns the only nested scroll", why_five["sheetOverflow"] == "hidden" and why_five["readerOverflow"] in ["auto", "scroll"], str(why_five))
+            page.locator('[data-info-action="open-experiment-coach"]').click()
+            coach = page.evaluate("""() => ({
+                settingsHidden: document.getElementById('settings-sheet').classList.contains('hidden'),
+                visible: !document.getElementById('learn-coach').classList.contains('hidden'),
+                text: document.getElementById('learn-coach').innerText,
+                state: window.__mobileApp.getState(),
+                box: document.getElementById('learn-coach').getBoundingClientRect()
+            })""")
+            check("Lesson experiment keeps a compact coach on the canvas", coach["settingsHidden"] and coach["visible"] and "ACTIVITY 1 OF 3" in coach["text"] and "Why can five triangles" in coach["text"] and coach["state"]["modelMode"] == "platonic" and coach["box"]["height"] < 260, str(coach))
+            page.locator('[data-learn-coach-action="return"]').click()
+            returned = page.evaluate("""() => ({
+                settingsVisible: !document.getElementById('settings-sheet').classList.contains('hidden'),
+                readerVisible: !document.getElementById('learn-reader').classList.contains('hidden'),
+                coachHidden: document.getElementById('learn-coach').classList.contains('hidden'),
+                text: document.getElementById('learn-topic-card').innerText,
+                progress: window.__mobileApp.getLearningProgress()
+            })""")
+            check("Experiment returns to the same lesson with an explanation", returned["settingsVisible"] and returned["readerVisible"] and returned["coachHidden"] and "60° angular deficit" in returned["text"] and "triangles" in returned["progress"]["experiments"]["why-five-solids"]["completedSteps"], str(returned))
             page.locator('[data-info-action="toggle-lesson-complete"]').click()
-            learn_complete = page.evaluate("""() => ({
-                progress: window.__mobileApp.getLearningProgress(),
-                stored: JSON.parse(localStorage.getItem('e8_progress_v1') || '{}'),
-                pressed: document.querySelector('[data-info-action="toggle-lesson-complete"]')?.getAttribute('aria-pressed'),
-                label: document.querySelector('[data-info-action="toggle-lesson-complete"]')?.textContent.trim()
+            page.locator('[data-info-action="close-learn-reader"]').click()
+            back_to_library = page.evaluate("""() => ({
+                libraryVisible: !document.getElementById('learn-library').classList.contains('hidden'),
+                readerHidden: document.getElementById('learn-reader').classList.contains('hidden'),
+                progress: window.__mobileApp.getLearningProgress()
             })""")
-            check("Mobile lesson completion uses shared progress ledger", bool(learn_complete["progress"]["lessons"].get("mckay-bridge")) and bool(learn_complete["stored"]["lessons"].get("mckay-bridge")) and learn_complete["pressed"] == "true" and learn_complete["label"] == "Completed", str(learn_complete))
+            check("Reader Back returns to the library and preserves progress", back_to_library["libraryVisible"] and back_to_library["readerHidden"] and bool(back_to_library["progress"]["lessons"].get("why-five-solids")), str(back_to_library))
+            page.locator('[data-learn-path="exceptional-bridges"]').click()
+            page.locator('[data-learn-topic="mckay-bridge"]').click()
+            learn_mckay = page.evaluate("""() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics(), card: document.getElementById('learn-topic-card').innerText })""")
+            check("Learn reader presents the McKay distinction", learn_mckay["state"]["learnTopic"] == "mckay-bridge" and "finite subgroups of SU(2)" in learn_mckay["card"] and "not the same claim" in learn_mckay["card"], str(learn_mckay))
             page.locator('#learn-topic-next').click()
-            learn_next = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                output: document.getElementById('learn-topic-output').textContent.trim(),
-                card: document.getElementById('learn-topic-card').innerText
+            learn_next = page.evaluate("""() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics(), card: document.getElementById('learn-topic-card').innerText, scroll: document.getElementById('learn-reader-scroll').scrollTop })""")
+            check("Learn Next follows mobile curriculum order and resets scroll", learn_next["state"]["learnTopic"] == "designed-bloom" and "authored visualization" in learn_next["card"] and learn_next["metrics"]["learnTopicNextCount"] > learn_mckay["metrics"]["learnTopicNextCount"] and learn_next["scroll"] == 0, str(learn_next))
+            page.evaluate("() => window.__mobileApp.resetView()")
+            learn_reset = page.evaluate("""() => ({
+                progress: window.__mobileApp.getLearningProgress(),
+                libraryVisible: !document.getElementById('learn-library').classList.contains('hidden'),
+                readerHidden: document.getElementById('learn-reader').classList.contains('hidden'),
+                coachHidden: document.getElementById('learn-coach').classList.contains('hidden')
             })""")
-            check("Learn Next follows curriculum order", learn_next["state"]["learnTopic"] == "designed-bloom" and learn_next["output"] == "designed Bloom" and "qualified relationships" in learn_next["card"] and learn_next["metrics"]["learnTopicNextCount"] > learn_mckay["metrics"]["learnTopicNextCount"] and learn_next["metrics"]["lastInteractionType"] == "next-learn-topic", str(learn_next))
-            check("Learn Next stays render-free", learn_next["metrics"]["renderCount"] == learn_mckay["metrics"]["renderCount"], str(learn_next["metrics"]))
-            page.locator('#learn-topic-grid [data-learn-topic="auto"]').click()
-            learn_auto = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                output: document.getElementById('learn-topic-output').textContent.trim(),
-                card: document.getElementById('learn-topic-card').innerText
+            check("Reset dismisses transient Learn UI without erasing progress", learn_reset["libraryVisible"] and learn_reset["readerHidden"] and learn_reset["coachHidden"] and bool(learn_reset["progress"]["lessons"].get("why-five-solids")), str(learn_reset))
+            page.evaluate("() => { window.__mobileApp.setState({ modelMode: 'e8_2d', shape: 'icosahedron', selectedRoot: null }); window.__mobileApp.flushSave(); }")
+            tour_removed = page.evaluate("""() => ({
+                details: !!document.getElementById('mobile-tour-details'),
+                actions: document.querySelectorAll('[data-info-action*="tour"]').length,
+                lessonCount: document.querySelectorAll('#learn-topic-grid button[data-learn-topic]').length,
+                heading: document.querySelector('#learn-library .learn-library-heading h3')?.textContent?.trim() || ''
             })""")
-            check("Learn Auto can be restored", learn_auto["state"]["learnTopic"] == "auto" and learn_auto["output"] == "Auto: Coxeter plane" and "Move from the 600-cell" in learn_auto["card"], str(learn_auto))
-            page.evaluate("() => window.__mobileApp.flushSave()")
-            tour_card = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                tour: window.__mobileApp.getMobileTourState(),
-                metrics: window.__mobileApp.getMetrics(),
-                output: document.getElementById('mobile-tour-output').textContent.trim(),
-                step: document.getElementById('mobile-tour-step-output').textContent.trim(),
-                copy: document.getElementById('mobile-tour-copy').innerText,
-                buttons: [...document.querySelectorAll('#mobile-tour-card button')].map(button => ({
-                    id: button.id,
-                    text: button.textContent.trim(),
-                    pressed: button.getAttribute('aria-pressed'),
-                    disabled: button.disabled,
-                    ariaDisabled: button.getAttribute('aria-disabled'),
-                    box: button.getBoundingClientRect()
-                }))
-            })""")
-            check("Info section exposes compact guided tour", tour_card["tour"]["count"] == 7 and tour_card["tour"]["index"] == 0 and tour_card["output"] == "Ready" and tour_card["step"] == "1/7" and "E8 Coxeter plane" in tour_card["copy"] and tour_card["metrics"]["mobileTourButtonCount"] == 3 and all(button["box"]["height"] >= 40 for button in tour_card["buttons"]), str(tour_card))
-            check("Tour card keeps start action explicit", any(button["id"] == "mobile-tour-toggle" and button["text"] == "Start" and button["pressed"] == "false" for button in tour_card["buttons"]), str(tour_card["buttons"]))
-            check("Tour step buttons are disabled until started", all(button["disabled"] and button["ariaDisabled"] == "true" for button in tour_card["buttons"] if button["id"] in ["mobile-tour-prev", "mobile-tour-next"]), str(tour_card["buttons"]))
-            tour_start_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator("#mobile-tour-toggle").click()
-            page.wait_for_function("() => window.__mobileApp.getMetrics().mobileTourActive === true")
-            tour_start = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                tour: window.__mobileApp.getMobileTourState(),
-                metrics: window.__mobileApp.getMetrics(),
-                stored: window.__mobileApp.getStoredState()
-            })""")
-            check("Tour starts from Info and clears the sheet", tour_start["tour"]["active"] and tour_start["tour"]["timerActive"] and not tour_start["metrics"]["settingsOpen"] and tour_start["tour"]["step"]["id"] == "e8-coxeter" and tour_start["state"]["modelMode"] == "e8_2d", str(tour_start))
-            check("Tour start keeps static conservative renderer", not tour_start["state"]["autoRotate"] and not tour_start["state"]["autoModel"] and not tour_start["state"]["autoColor"] and not tour_start["state"]["softFx"] and not tour_start["metrics"]["runtimeAnimationActive"] and not tour_start["metrics"]["motionActive"], str(tour_start))
-            check("Tour start records runtime metrics", tour_start["metrics"]["mobileTourStartCount"] > tour_start_before["mobileTourStartCount"] and tour_start["metrics"]["mobileTourStepCount"] > tour_start_before["mobileTourStepCount"] and tour_start["metrics"]["lastMobileTourAction"] == "mobile-tour-start" and tour_start["metrics"]["lastInteractionType"] == "mobile-tour-start" and tour_start["metrics"]["statusText"] == "Tour: E8 roots", str(tour_start["metrics"]))
-            tour_next_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            tour_next = page.evaluate("""() => {
-                const result = window.__mobileApp.nextMobileTourStep({ schedule: false });
-                return {
-                    result,
-                    state: window.__mobileApp.getState(),
-                    tour: window.__mobileApp.getMobileTourState(),
-                    metrics: window.__mobileApp.getMetrics(),
-                    stored: window.__mobileApp.getStoredState()
-                };
-            }""")
-            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'bloom'")
-            tour_next = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                tour: window.__mobileApp.getMobileTourState(),
-                metrics: window.__mobileApp.getMetrics(),
-                stored: window.__mobileApp.getStoredState()
-            })""")
-            check("Tour Next steps to Bloom without extra chrome", tour_next["tour"]["active"] and not tour_next["tour"]["timerActive"] and tour_next["tour"]["index"] == 1 and tour_next["tour"]["step"]["id"] == "designed-bloom" and tour_next["state"]["modelMode"] == "bloom", str(tour_next))
-            check("Tour Next remains static and render-on-demand", not tour_next["state"]["autoRotate"] and not tour_next["state"]["autoModel"] and not tour_next["state"]["autoColor"] and not tour_next["state"]["softFx"] and not tour_next["metrics"]["runtimeAnimationActive"] and not tour_next["metrics"]["motionActive"], str(tour_next))
-            check("Tour step records scene and no saved config change", tour_next["metrics"]["mobileTourNextCount"] > tour_next_before["mobileTourNextCount"] and tour_next["metrics"]["lastMobileTourAction"] == "mobile-tour-next" and tour_next["metrics"]["lastInteractionType"] == "mobile-tour-next" and tour_next["stored"]["modelMode"] == "e8_2d", str(tour_next))
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
-            tour_open = page.evaluate("""() => ({
-                metrics: window.__mobileApp.getMetrics(),
-                output: document.getElementById('mobile-tour-output').textContent.trim(),
-                step: document.getElementById('mobile-tour-step-output').textContent.trim(),
-                toggle: document.getElementById('mobile-tour-toggle').textContent.trim(),
-                copy: document.getElementById('mobile-tour-copy').innerText
-            })""")
-            check("Tour card reflects paused active step when reopened", tour_open["metrics"]["settingsOpen"] and tour_open["output"] == "Paused" and tour_open["step"] == "2/7" and tour_open["toggle"] == "Stop" and "Designed Bloom" in tour_open["copy"], str(tour_open))
-            check("Tour timer pauses while Info sheet is open", tour_open["metrics"]["mobileTourPausedForSettings"] and not tour_open["metrics"]["mobileTourTimerActive"] and tour_open["metrics"]["mobileTourPauseCount"] >= 1, str(tour_open["metrics"]))
-            tour_stop_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("debug back closes settings before stopping tour", page.evaluate("() => window.__mobileApp.handleBackNavigation()"))
-            page.evaluate("() => window.__mobileApp.handleBackNavigation()")
-            tour_stop = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                tour: window.__mobileApp.getMobileTourState(),
-                metrics: window.__mobileApp.getMetrics()
-            })""")
-            check("Back stops active tour after sheet is closed", not tour_stop["tour"]["active"] and not tour_stop["tour"]["timerActive"] and tour_stop["metrics"]["mobileTourStopCount"] > tour_stop_before["mobileTourStopCount"] and tour_stop["metrics"]["lastMobileTourAction"] == "back-stop-tour" and tour_stop["metrics"]["lastInteractionType"] == "back-stop-tour", str(tour_stop))
-            tour_storage_guard = page.evaluate("""() => {
-                const app = window.__mobileApp;
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    palette: 'gold',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null
-                });
-                app.flushSave();
-                app.startMobileTour({ schedule: false, status: false, closeSettings: false });
-                app.nextMobileTourStep({ schedule: false, status: false });
-                const beforePending = app.getMetrics();
-                app.setState({ palette: 'cyan' });
-                const pending = app.getMetrics();
-                app.stopMobileTour({ status: false });
-                const afterStop = app.getMetrics();
-                const stored = app.getStoredState();
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    palette: 'gold',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null
-                });
-                app.flushSave();
-                return { beforePending, pending, afterStop, stored, state: app.getState() };
-            }""")
-            check("Tour storage guard saves user setting without tour scene", tour_storage_guard["pending"]["savePending"] and not tour_storage_guard["afterStop"]["savePending"] and tour_storage_guard["afterStop"]["mobileTourStorageGuardFlushCount"] > tour_storage_guard["beforePending"]["mobileTourStorageGuardFlushCount"] and tour_storage_guard["stored"]["palette"] == "cyan" and tour_storage_guard["stored"]["modelMode"] == "e8_2d" and tour_storage_guard["stored"]["autoRotate"] is False and tour_storage_guard["stored"]["autoModel"] is False and tour_storage_guard["stored"]["selectedRoot"] is None, str(tour_storage_guard))
-            page.evaluate("""() => {
-                const app = window.__mobileApp;
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    palette: 'gold',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null
-                });
-                app.flushSave();
-                app.startMobileTour({ schedule: false, status: false, closeSettings: false });
-                app.openSettings('view');
-            }""")
-            manual_model_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator("#model-select").evaluate("el => { el.value = 'platonic'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
-            manual_model_stop = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                controls: {
-                    modelMode: document.getElementById('model-select').value,
-                    shapeHidden: document.getElementById('shape-field').classList.contains('hidden')
-                }
-            })""")
-            check("Manual model select stops active tour", not manual_model_stop["metrics"]["mobileTourActive"] and not manual_model_stop["metrics"]["mobileTourTimerActive"] and manual_model_stop["metrics"]["mobileTourStopCount"] > manual_model_before["mobileTourStopCount"] and manual_model_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-model-stop" and manual_model_stop["metrics"]["lastInteractionType"] == "model-select", str(manual_model_stop))
-            check("Manual model select wins over paused tour scene", manual_model_stop["state"]["modelMode"] == "platonic" and manual_model_stop["controls"]["modelMode"] == "platonic" and not manual_model_stop["controls"]["shapeHidden"], str(manual_model_stop))
-            page.evaluate("""() => {
-                const app = window.__mobileApp;
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null
-                });
-                app.flushSave();
-                app.startMobileTour({ schedule: false, status: false, closeSettings: false });
-                app.openSettings('style');
-            }""")
-            manual_runtime_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('#fx-preset-grid [data-fx-preset="live"]').click()
-            manual_runtime_stop = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                controls: {
-                    autoColor: document.getElementById('auto-color-toggle').checked,
-                    softFx: document.getElementById('soft-fx-toggle').checked,
-                    activeFx: document.querySelector('#fx-preset-grid button.active')?.dataset.fxPreset
-                }
-            })""")
-            check("Manual FX preset stops active tour", not manual_runtime_stop["metrics"]["mobileTourActive"] and not manual_runtime_stop["metrics"]["mobileTourTimerActive"] and manual_runtime_stop["metrics"]["mobileTourStopCount"] > manual_runtime_before["mobileTourStopCount"] and manual_runtime_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-runtime-stop" and manual_runtime_stop["metrics"]["lastInteractionType"] == "fx-preset-live", str(manual_runtime_stop))
-            check("Manual FX preset wins over tour static mode", manual_runtime_stop["state"]["autoColor"] and manual_runtime_stop["state"]["softFx"] and manual_runtime_stop["controls"]["autoColor"] and manual_runtime_stop["controls"]["softFx"] and manual_runtime_stop["controls"]["activeFx"] == "live", str(manual_runtime_stop))
-            page.evaluate("""() => {
-                const app = window.__mobileApp;
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null
-                });
-                app.flushSave();
-                app.startMobileTour({ schedule: false, status: false, closeSettings: false });
-                app.openSettings('info');
-            }""")
-            manual_explore_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('#cartan-matrix [data-cartan-root="3"]').first.click()
-            manual_explore_stop = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics(),
-                info: document.getElementById('info-selection').innerText
-            })""")
-            check("Manual root exploration stops active tour", not manual_explore_stop["metrics"]["mobileTourActive"] and not manual_explore_stop["metrics"]["mobileTourTimerActive"] and manual_explore_stop["metrics"]["mobileTourStopCount"] > manual_explore_before["mobileTourStopCount"] and manual_explore_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-explore-stop" and manual_explore_stop["metrics"]["lastInteractionType"] == "cartan-matrix-select", str(manual_explore_stop))
-            check("Manual root exploration wins over tour scene", manual_explore_stop["state"]["selectedRoot"] == 1 and manual_explore_stop["state"]["subset"] == "simple_roots" and "Root #1 (alpha 3)" in manual_explore_stop["info"], str(manual_explore_stop))
-            page.evaluate("""() => {
-                const app = window.__mobileApp;
-                app.setState({
-                    modelMode: 'e8_2d',
-                    shape: 'icosahedron',
-                    polytope4d: '24cell',
-                    dynkinDiagram: 'E8',
-                    autoRotate: false,
-                    autoModel: false,
-                    autoColor: false,
-                    softFx: false,
-                    selectedRoot: null,
-                    subset: 'icosahedron',
-                    zoom: 1,
-                    panX: 0,
-                    panY: 0
-                });
-                app.flushSave();
-                app.startMobileTour({ schedule: false, status: false, closeSettings: false });
-                app.openSettings('view');
-            }""")
-            manual_view_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('[data-action="reset-view"]').click()
-            manual_view_stop = page.evaluate("""() => ({
-                state: window.__mobileApp.getState(),
-                metrics: window.__mobileApp.getMetrics()
-            })""")
-            check("Manual view action stops active tour", not manual_view_stop["metrics"]["mobileTourActive"] and not manual_view_stop["metrics"]["mobileTourTimerActive"] and manual_view_stop["metrics"]["mobileTourStopCount"] > manual_view_before["mobileTourStopCount"] and manual_view_stop["metrics"]["lastMobileTourAction"] == "mobile-tour-manual-explore-stop" and manual_view_stop["metrics"]["lastInteractionType"] == "reset-view", str(manual_view_stop))
-            page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.openSettings('info'); }")
+            check("Learn uses self-paced lessons without timed tour controls", not tour_removed["details"] and tour_removed["actions"] == 0 and tour_removed["lessonCount"] >= 12 and tour_removed["heading"] == "Learning paths", str(tour_removed))
+            page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.openSettings('learn'); document.getElementById('mobile-tools-details').open = true; }")
             cartan_select_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#cartan-matrix [data-cartan-root="3"]').first.click()
             cartan_select = page.evaluate("""() => ({
@@ -1082,7 +919,7 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             platonic_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Platonic dodecahedron renders twelve solid hull faces with occluded rear edges", platonic_metrics["lastModelMode"] == "platonic" and platonic_metrics["lastShape"] == "dodecahedron" and platonic_metrics["lastDrawStats"]["modelVertices"] == 20 and platonic_metrics["lastDrawStats"]["modelEdges"] == 30 and platonic_metrics["lastDrawStats"]["modelFaces"] == 12 and platonic_metrics["lastDrawStats"]["modelFaceFills"] == 12 and 0 < platonic_metrics["lastDrawStats"]["modelFrontFaces"] < 12 and platonic_metrics["lastDrawStats"]["modelVisibleEdges"] < 30 and platonic_metrics["lastDrawStats"]["modelHiddenEdges"] > 0 and platonic_metrics["lastDrawStats"]["modelFaceAlpha"] >= 0.7 and platonic_metrics["lastDrawStats"]["modelVertexFills"] == 0 and platonic_metrics["lastDrawStats"]["modelEdgeWidth"] >= 2.2 and platonic_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.95 and platonic_metrics["modelVertexFills"] == 0 and platonic_metrics["platonicDrawCount"] >= 1, str(platonic_metrics["lastDrawStats"]))
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
             platonic_mckay = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
                 text: document.getElementById('mckay-card').innerText,
@@ -1120,7 +957,7 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             poly_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("4D 600-cell renders brighter desktop polytope edges without vertex spheres", poly_metrics["lastModelMode"] == "poly4d" and poly_metrics["lastPolytope4D"] == "600cell" and poly_metrics["lastDrawStats"]["modelVertices"] == 120 and poly_metrics["lastDrawStats"]["modelProjectedVertices"] == 120 and poly_metrics["lastDrawStats"]["modelEdges"] == 720 and poly_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and poly_metrics["lastDrawStats"]["modelEdgeWidth"] >= 1.0 and poly_metrics["lastDrawStats"]["modelEdgeAlpha"] >= 0.7 and poly_metrics["lastDrawStats"]["modelVertexFills"] == 0 and poly_metrics["polytope4DDrawCount"] >= 1, str(poly_metrics["lastDrawStats"]))
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
             poly_info = page.evaluate("""() => ({
                 selection: document.getElementById('info-selection').innerText,
                 info: document.getElementById('info-copy').textContent,
@@ -1197,7 +1034,7 @@ def main() -> int:
             check("Root Lab touch inspector navigates to the opposite generated root", rootlab_opposite["selectedRootLabIndex"] == 6 and rootlab_opposite["selectedRootLab"]["oppositeIndex"] == 0, str(rootlab_opposite))
             check("Root Lab inspector collapses before clearing on Back", page.evaluate("() => window.__mobileApp.handleBackNavigation()") and page.evaluate("() => !window.__mobileApp.getMetrics().rootDrawerExpanded && window.__mobileApp.getMetrics().selectedRootLabIndex === 6"))
             check("Root Lab inspector clears on the next Back", page.evaluate("() => window.__mobileApp.handleBackNavigation()") and page.evaluate("() => window.__mobileApp.getMetrics().selectedRootLabIndex === null && document.getElementById('root-drawer').classList.contains('hidden')"))
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
             rootlab_info = page.evaluate("""() => ({
                 selection: document.getElementById('info-selection').innerText,
                 info: document.getElementById('info-copy').textContent,
@@ -1205,6 +1042,31 @@ def main() -> int:
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label')
             })""")
             check("Root Lab labels explain the active construction", "G₂ root system" in rootlab_info["selection"] and "12 roots" in rootlab_info["selection"] and "reflecting two simple roots" in rootlab_info["info"] and "G₂ rank-2 root system" in rootlab_info["topbar"] and "12 roots" in rootlab_info["canvas"], str(rootlab_info))
+            page.evaluate("""() => {
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({
+                    modelMode: 'tiling', tilingSystem: 'H2', tilingDensity: 5,
+                    tilingRelief: 0.08, tilingShowTiles: true, tilingShowEdges: true,
+                    tilingShowGrid: true, tilingShowRoots: true, tilingShowVertices: false,
+                    tilingAnimate: false, autoModel: false, autoRotate: false,
+                    selectedRoot: null, rotation: 0
+                });
+                window.__mobileApp.forceRender();
+            }""")
+            tiling_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("H2 Tiling Lab renders the generated dual multigrid", tiling_metrics["lastModelMode"] == "tiling" and tiling_metrics["lastTilingSystem"] == "H2" and tiling_metrics["lastDrawStats"]["tilingFamilies"] == 5 and tiling_metrics["lastDrawStats"]["tilingOrder"] == 10 and not tiling_metrics["lastDrawStats"]["tilingPeriodic"] and tiling_metrics["lastDrawStats"]["tilingTiles"] == 702 and tiling_metrics["lastDrawStats"]["modelEdges"] == 1459 and tiling_metrics["tilingDrawCount"] >= 1, str(tiling_metrics["lastDrawStats"]))
+            tiling_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
+            check("Tiling Lab data export includes construction and dual geometry", tiling_data["ok"] and tiling_data["geometry"]["kind"] == "coxeter-multigrid-tiling" and tiling_data["geometry"]["name"] == "H2" and len(tiling_data["geometry"]["tiles"]) == 702 and len(tiling_data["geometry"]["constructionLines"]) > 0, str(tiling_data["geometry"]))
+            tiling_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
+            check("Tiling Lab OBJ export preserves rhombus faces", tiling_obj["ok"] and tiling_obj["obj"]["kind"] == "coxeter-multigrid-tiling-obj" and tiling_obj["obj"]["faces"] == 702 and tiling_obj["obj"]["lines"] == 1459, str(tiling_obj["obj"]))
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
+            tiling_info = page.evaluate("""() => ({
+                selection: document.getElementById('info-selection').innerText,
+                info: document.getElementById('info-copy').textContent,
+                topbar: document.querySelector('.topbar').getAttribute('aria-label'),
+                canvas: document.getElementById('mobile-canvas').getAttribute('aria-label')
+            })""")
+            check("Tiling Lab labels explain multigrid duality", "Penrose pentagrid" in tiling_info["selection"] and "702 rhombi" in tiling_info["selection"] and "parallel line families" in tiling_info["info"] and "10-fold local symmetry" in tiling_info["topbar"] and "5 line families" in tiling_info["canvas"], str(tiling_info))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#model-select").evaluate("el => { el.value = 'dynkin'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             dynkin_select_probe = page.evaluate("""() => ({
@@ -1217,7 +1079,7 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             dynkin_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("E8 Dynkin diagram renders desktop graph data", dynkin_metrics["lastModelMode"] == "dynkin" and dynkin_metrics["lastDynkinDiagram"] == "E8" and dynkin_metrics["lastDrawStats"]["modelVertices"] == 8 and dynkin_metrics["lastDrawStats"]["modelEdges"] == 7 and dynkin_metrics["lastDrawStats"]["modelEdgeStrokes"] == 1 and dynkin_metrics["dynkinDrawCount"] >= 1, str(dynkin_metrics["lastDrawStats"]))
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
             dynkin_info = page.evaluate("""() => ({
                 selection: document.getElementById('info-selection').innerText,
                 info: document.getElementById('info-copy').textContent,
@@ -1894,10 +1756,12 @@ def main() -> int:
             check("Surprise sits beside Reset in View", surprise_layout["parentClass"] == "view-actions" and surprise_layout["action"] == "surprise" and surprise_layout["visualDuplicates"] == 0 and surprise_layout["surprise"]["height"] >= 40 and abs(surprise_layout["surprise"]["y"] - surprise_layout["reset"]["y"]) < 1, str(surprise_layout))
             check("Done replaces Fit all above the mobile navigation area", surprise_layout["fitAllCount"] == 0 and surprise_layout["footerCount"] == 0 and surprise_layout["done"]["height"] >= 40 and surprise_layout["done"]["width"] > surprise_layout["surprise"]["width"] * 1.8 and surprise_layout["done"]["y"] > surprise_layout["surprise"]["y"], str(surprise_layout))
             check("Done has a visible yellow treatment", surprise_layout["doneLabel"] == "Done" and surprise_layout["doneBackground"] == "rgb(244, 210, 122)" and surprise_layout["doneColor"] == "rgb(8, 8, 13)", str(surprise_layout))
-            check("View, Visuals, and Motion share the Done treatment", surprise_layout["sectionDoneButtons"] == [
+            check("Every mobile workspace shares the Done treatment", surprise_layout["sectionDoneButtons"] == [
                 {"id": "settings-done", "label": "Done", "section": "view", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
                 {"id": "visuals-done", "label": "Done", "section": "style", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
-                {"id": "motion-done", "label": "Done", "section": "motion", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"}
+                {"id": "motion-done", "label": "Done", "section": "motion", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
+                {"id": "learn-done", "label": "Done", "section": "learn", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"},
+                {"id": "learn-reader-done", "label": "Done", "section": "learn", "background": "rgb(244, 210, 122)", "color": "rgb(8, 8, 13)"}
             ], str(surprise_layout["sectionDoneButtons"]))
             surprise_before = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             page.locator("#surprise-button").click()
@@ -1956,21 +1820,15 @@ def main() -> int:
                 window.__mobileApp.openSettings('style');
             }""")
 
-            page.evaluate("() => window.__mobileApp.openSettings('quality')")
-            hidden_quality_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.locator('[data-quality="sharp"]').click()
-            hidden_quality = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("settings quality defers canvas resize", hidden_quality["state"]["quality"] == "sharp" and hidden_quality["metrics"]["settingsCanvasResizeDeferred"] and hidden_quality["metrics"]["settingsCanvasResizeDeferredCount"] > hidden_quality_before["settingsCanvasResizeDeferredCount"] and abs(hidden_quality["metrics"]["renderScale"] - hidden_quality_before["renderScale"]) < 0.01 and hidden_quality["metrics"]["canvas"]["width"] == hidden_quality_before["canvas"]["width"], str(hidden_quality))
-            check("settings quality skips full control sync", hidden_quality["metrics"]["settingsControlSyncSkipCount"] > hidden_quality_before["settingsControlSyncSkipCount"] and hidden_quality["metrics"]["lastSettingsControlSyncSkip"] == "quality-setting" and hidden_quality["metrics"]["controlSyncCount"] == hidden_quality_before["controlSyncCount"] and hidden_quality["metrics"]["liveControlSyncSkipCount"] == hidden_quality_before["liveControlSyncSkipCount"] and page.locator('[data-quality="sharp"].active').count() == 1, str(hidden_quality["metrics"]))
-            page.locator('[data-quality="sharp"]').click()
-            hidden_quality_noop = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("active settings quality skips no-op state work", hidden_quality_noop["settingsStateNoopSkipCount"] > hidden_quality["metrics"]["settingsStateNoopSkipCount"] and hidden_quality_noop["lastSettingsStateNoopSkip"] == "quality-setting" and hidden_quality_noop["settingsCanvasResizeDeferredCount"] == hidden_quality["metrics"]["settingsCanvasResizeDeferredCount"] and hidden_quality_noop["settingsDeferredRenderRequestCount"] == hidden_quality["metrics"]["settingsDeferredRenderRequestCount"] and hidden_quality_noop["settingsControlSyncSkipCount"] == hidden_quality["metrics"]["settingsControlSyncSkipCount"] and hidden_quality_noop["controlSyncCount"] == hidden_quality["metrics"]["controlSyncCount"] and hidden_quality_noop["saveCount"] == hidden_quality["metrics"]["saveCount"], str(hidden_quality_noop))
             page.evaluate("() => window.__mobileApp.closeSettings()")
-            page.wait_for_function("count => window.__mobileApp.getMetrics().renderCount > count", arg=hidden_quality["metrics"]["renderCount"])
-            hidden_quality_flush = page.evaluate("() => window.__mobileApp.getMetrics()")
-            check("settings close applies deferred quality resize", not hidden_quality_flush["settingsCanvasResizeDeferred"] and abs(hidden_quality_flush["renderScale"] - 1.5) < 0.01 and hidden_quality_flush["canvas"]["width"] > hidden_quality_before["canvas"]["width"], str(hidden_quality_flush))
+            sharp_quality_before = page.evaluate("() => window.__mobileApp.getMetrics()")
+            page.locator('#quality-chip').click()
+            page.locator('#quality-popover [data-quality="sharp"]').click()
+            sharp_quality = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
+            check("compact quality chooser exposes Sharp", sharp_quality["state"]["quality"] == "sharp" and abs(sharp_quality["metrics"]["renderScale"] - 1.5) < 0.01 and sharp_quality["metrics"]["canvas"]["width"] > sharp_quality_before["canvas"]["width"] and page.locator('[data-quality="sharp"].active').count() == 1, str(sharp_quality))
             page.evaluate("""() => {
-                window.__mobileApp.openSettings('quality');
+                window.__mobileApp.openSettings('learn');
+                document.getElementById('mobile-tools-details').open = true;
                 window.__mobileApp.setState({
                     staleExtraKey: 'remove-me',
                     quality: 'sharp',
@@ -2003,7 +1861,7 @@ def main() -> int:
             }""")
             defaults_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             defaults_button = page.locator("#defaults-button").bounding_box()
-            check("Quality section exposes compact Defaults action", bool(defaults_button) and defaults_button["height"] >= 40, str(defaults_button))
+            check("Learn tools expose compact Defaults action", bool(defaults_button) and defaults_button["height"] >= 40, str(defaults_button))
             page.locator("#defaults-button").click()
             defaults_after = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
@@ -2530,7 +2388,7 @@ def main() -> int:
             collapsed_by_back = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("back collapse keeps selected root", not collapsed_by_back["rootDrawerExpanded"] and collapsed_by_back["rootDrawerCollapseCount"] >= 1 and collapsed_by_back["lastRootDrawerToggleReason"] == "back-collapse-drawer" and page.evaluate("() => window.__mobileApp.getState().selectedRoot") == selected, str(collapsed_by_back))
             selection_dom_before = page.evaluate("() => window.__mobileApp.getMetrics()")
-            page.evaluate("() => window.__mobileApp.openSettings('info')")
+            page.evaluate("() => window.__mobileApp.openSettings('learn')")
             selection_dom_after = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("same selected root skips duplicate detail DOM", selection_dom_after["selectionUiFullDomSkipCount"] > selection_dom_before["selectionUiFullDomSkipCount"] and selection_dom_after["selectionUiFullDomWriteCount"] == selection_dom_before["selectionUiFullDomWriteCount"] and selection_dom_after["lastSelectionUiDomRoot"] == selected, str(selection_dom_after))
             info_detail_text = page.locator("#info-selection").inner_text()

@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 JS = r"""
 import { SIMPLE_ROOTS_8D } from './src/math/weyl.js';
 import { BRACKET_TRIANGLES } from './src/math/brackets.js';
-import { ESSAYS, ESSAY_CONTEXTS, TOUR_STOPS } from './src/content/essays.js';
+import { ESSAYS, ESSAY_CONTEXTS } from './src/content/essays.js';
+import { LEARNING_LESSONS } from './src/content/curriculum.js';
 import { FACT_SOURCES } from './src/content/sources.js';
 import fs from 'node:fs';
 
@@ -67,11 +68,11 @@ for (const t of BRACKET_TRIANGLES) {
   if (isRoot !== t.root) fails.push(`bracket (α${t.a + 1}, α${t.b + 1}): flag root=${t.root} but actual=${isRoot}`);
 }
 
-// Essay integrity: every essay referenced by a view context or the guided tour
+// Essay integrity: every essay referenced by a view context or self-paced lesson
 // must actually be defined (no dangling references / typos).
 const referenced = new Set();
 for (const ids of Object.values(ESSAY_CONTEXTS)) for (const id of ids) referenced.add(id);
-for (const stop of TOUR_STOPS) if (stop.essay) referenced.add(stop.essay);
+for (const lesson of LEARNING_LESSONS) for (const id of lesson.essayIds || []) referenced.add(id);
 for (const id of referenced) if (!ESSAYS[id]) fails.push(`essay reference '${id}' has no definition`);
 
 for (const [essayId, essay] of Object.entries(ESSAYS)) {

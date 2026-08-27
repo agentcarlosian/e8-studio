@@ -275,7 +275,7 @@
 .shape-icon[data-shape="dodecahedron"]{ -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2 L22 9 L18 21 L6 21 L2 9 Z M2 9 L22 9 M22 9 L18 21 M18 21 L6 21 M6 21 L2 9 M12 2 L6 21 M12 2 L18 21' fill='black' stroke='none'/></svg>") center/contain no-repeat; mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2 L22 9 L18 21 L6 21 L2 9 Z M2 9 L22 9 M22 9 L18 21 M18 21 L6 21 M6 21 L2 9 M12 2 L6 21 M12 2 L18 21' fill='black' stroke='none'/></svg>") center/contain no-repeat; }
 /* ---------- Essay panel ---------- */
 /* Docked to the bottom-right of the canvas (not viewport-centered) so it stays
-   off the central 3D shape and clear of the bottom-center tour bar. Anchored
+   off the central 3D shape and clear of the lower canvas controls. Anchored
    above the footer (which is 32px tall) and inboard of the corner HUD overlay
    (.ov-br sits at bottom:16px/right:16px). */
 .essay-host {
@@ -318,7 +318,17 @@
   align-items: center;
   margin-bottom: 8px;
 }
-.essay-header .essay-toggle { display: inline-block; width: 24px; height: 24px; font-size: 11px; }
+.essay-close {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-1);
+  font: 600 10px 'JetBrains Mono', monospace;
+  cursor: pointer;
+}
+.essay-close:hover { color: var(--accent); border-color: var(--accent); }
 .essay-nav {
   display: flex;
   align-items: center;

@@ -9,7 +9,7 @@ const STORAGE_KEY = 'e8_studio_config_v1';
 
 // Params we DO want to save (user preferences)
 const PERSISTABLE = new Set([
-  'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'palette', 'colorBy', 'autoSliders',
+  'view', 'shape', 'dynkin', 'poly4d', 'rootSystem', 'tilingSystem', 'palette', 'colorBy', 'autoSliders',
   'opacity', 'pointScale', 'showVertices', 'rotationSpeed',
   'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'showEdges', 'showRings', 'showPetrie',
   'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
@@ -28,6 +28,8 @@ const PERSISTABLE = new Set([
   'e8MorphT', 'e8ProjectionAuto', 'rootHaloDepth',
   'rootDiffusionSpeed', 'showWeylMirrors', 'weylOrbit', 'weylOrbitFast',
   'rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit', 'rootOrbitSpeed',
+  'tilingDensity', 'tilingRelief', 'tilingShowTiles', 'tilingShowEdges', 'tilingShowGrid',
+  'tilingShowRoots', 'tilingShowVertices', 'tilingAnimate', 'tilingFlowSpeed',
   'showInspector', 'compareMode',
   'sdfSphereR', 'sdfBlend', 'sdfBloom', 'sdfAniso', 'sdfEdges',
   'seed',
