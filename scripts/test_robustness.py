@@ -710,18 +710,24 @@ def main() -> int:
                   model_delta > 0.001 and camera_delta > 0.001,
                   str({"modelDelta": model_delta, "cameraDelta": camera_delta}))
 
-            e8_spin_before = pg.evaluate("""() => {
+            e8_spin_delta = pg.evaluate("""() => {
               window.__app.switchView('e8coxeter');
               window.__app.setParam('cameraOrbit', false);
               window.__app.setParam('cameraPath', 'manual');
               window.__app.setParam('autoRotate', true);
               window.__app.setParam('rotationSpeed', 0.02);
-              return window.__app.currentView.object3d.rotation.z;
+              const params = window.__app.params;
+              const wasPaused = params.paused;
+              params.paused = true;
+              const before = window.__app.currentView.object3d.rotation.z;
+              // Drive one deterministic 300 ms update. A wall-clock sleep is
+              // unreliable on heavily loaded headless CI runners because they
+              // may deliver only one or two animation frames in that window.
+              window.__app.currentView.update(0.3, performance.now() / 1000, params);
+              const after = window.__app.currentView.object3d.rotation.z;
+              params.paused = wasPaused;
+              return Math.abs(after - before);
             }""")
-            pg.wait_for_timeout(300)
-            e8_spin_after = pg.evaluate(
-                "() => window.__app.currentView.object3d.rotation.z")
-            e8_spin_delta = abs(e8_spin_after - e8_spin_before)
             check("E8 Spin reaches a clearly fast top speed",
                   e8_spin_delta > 0.18,
                   str({"rotationDelta": e8_spin_delta}))
