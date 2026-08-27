@@ -109,7 +109,7 @@ export const LEARNING_PATHS = [
         connections: [{ lessonId: 'coxeter-plane', label: 'Learn why this particular projection is special' }, { lessonId: 'roots-reflections', label: 'Explore the vector data behind the dots' }],
       },
       {
-        id: 'six-hundred-cell', title: 'The 600-cell', view: 'sixhundred', estimatedMinutes: 8, prerequisites: ['into-four-dimensions'],
+        id: 'six-hundred-cell', title: 'The 600-cell', view: 'polytope', estimatedMinutes: 8, prerequisites: ['into-four-dimensions'],
         shortAnswer: 'The 600-cell is the regular 4D polytope {3,3,5}: 600 tetrahedral cells meet around 120 vertices. Its vertex coordinates can also be read as the 120 unit quaternions of the binary icosahedral group, which is why it repeatedly appears near exceptional symmetry.',
         keyIdeas: ['Its 120 vertices and 720 edges are intrinsic even when a projection overlaps them.', 'It is dual to the 120-cell and carries strong icosahedral symmetry.'],
         objectives: ['Identify the 600-cell’s basic counts.', 'Relate its vertices to binary icosahedral unit quaternions.'],
@@ -119,9 +119,9 @@ export const LEARNING_PATHS = [
         experiment: {
           title: 'Separate structure from projection', intro: 'Hold the 600-cell still, then move it and change the highlighted icosahedral context.',
           steps: [
-            step('still', 'Read the still projection', 'Open the 600-cell with all edges visible and pause its rotation.', 'Which counts belong to the polytope even when the drawing overlaps?', 'The 120 vertices and 720 edges are intrinsic; overlap is a consequence of projection.', { view: 'sixhundred', params: { shape: 'icosahedron', showEdges: true, autoRotate: false } }),
-            step('rotate', 'Change the projection', 'Start a slow rotation and watch crossings appear and disappear.', 'Did the adjacency of any two vertices change?', 'Rotation changes screen positions but preserves the edge graph.', { view: 'sixhundred', params: { shape: 'icosahedron', showEdges: true, autoRotate: true, rotationSpeed: 0.003 } }),
-            step('context', 'Change the symmetry context', 'Use dodecahedral highlighting while keeping the same 600-cell.', 'What changed: the polytope or the subset being emphasized?', 'The underlying 600-cell is unchanged; the Studio is changing the explanatory highlight.', { view: 'sixhundred', params: { shape: 'dodecahedron', showEdges: true, autoRotate: false } }),
+            step('still', 'Read the still projection', 'Open the 600-cell inside the 4D Lab with all edges visible and pause its rotation.', 'Which counts belong to the polytope even when the drawing overlaps?', 'The 120 vertices and 720 edges are intrinsic; overlap is a consequence of projection.', { view: 'polytope', params: { poly4d: '600cell', showEdges: true, autoRotate: false } }),
+            step('rotate', 'Change the projection', 'Start a slow rotation and watch crossings appear and disappear.', 'Did the adjacency of any two vertices change?', 'Rotation changes screen positions but preserves the edge graph.', { view: 'polytope', params: { poly4d: '600cell', showEdges: true, autoRotate: true, rotationSpeed: 0.003 } }),
+            step('context', 'Compare the dual', 'Switch from the 600-cell to its dual 120-cell without changing the viewing style.', 'Which quantities exchange roles under duality?', 'Vertices and cells exchange roles: the 600-cell has 120 vertices and 600 cells, while the 120-cell has 600 vertices and 120 cells.', { view: 'polytope', params: { poly4d: '120cell', showEdges: true, autoRotate: false } }),
           ],
           reflection: 'Mathematical structure survives changes of projection, color, motion, and emphasis.',
         },
@@ -163,10 +163,38 @@ export const LEARNING_PATHS = [
           ],
           reflection: 'Symmetry can organize a plane globally without forcing the pattern to repeat by translation.',
         },
-        connections: [{ lessonId: 'coxeter-plane', label: 'Scale symmetry-adapted directions from rank 2 to E8' }, { lessonId: 'rank-two-reflections', label: 'Return to the roots that supply the line directions' }],
+        connections: [{ lessonId: 'e8-cut-project', label: 'Use all eight E8 dimensions in a cut-and-project pattern' }, { lessonId: 'rank-two-reflections', label: 'Return to the roots that supply the line directions' }],
       },
       {
-        id: 'coxeter-plane', title: 'The Coxeter plane', view: 'e8coxeter', estimatedMinutes: 8, prerequisites: ['coxeter-multigrids'],
+        id: 'e8-cut-project', title: 'Cut E8 into a quasicrystal', view: 'quasicrystal', estimatedMinutes: 10, prerequisites: ['coxeter-multigrids'],
+        shortAnswer: 'Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch, and a finite structure-factor calculation reveals its sharp diffraction peaks.',
+        keyIdeas: ['The six hidden coordinates decide which projected lattice points enter the pattern.', 'Moving the window changes local arrangements without turning the construction into random motion.'],
+        visualEvidence: {
+          columns: ['Reading', 'What it shows', 'What remains fixed'],
+          rows: [
+            ['Pattern', 'Accepted 2D projections and local links', 'The E8 lattice and projection basis'],
+            ['Window', 'A 2D reading of the hidden 6D acceptance test', 'Each lattice point’s visible projection'],
+            ['Diffraction', 'Finite structure-factor intensity', 'The accepted point set'],
+            ['Phason shift', 'A displaced acceptance window', 'The higher-dimensional lattice'],
+          ],
+        },
+        objectives: ['Explain the 8D → 2D + 6D split.', 'Connect the acceptance window to the visible pattern and its diffraction.'],
+        activity: 'Compare Pattern, Window, and Diffraction, then move the phason control slowly enough to identify which points enter and leave the patch.',
+        claimType: 'established-mathematics', claimNote: 'Cut-and-project sets and their diffraction are established; the finite norm cutoff, spherical window, local display links, palette, and relief are explicit Studio choices.',
+        essayIds: ['e8_cut_project', 'quasicrystal_diffraction', 'coxeter'], quizId: 'e8-quasicrystals', sourceIds: ['aim-e8-technical', 'mit-e8-plane', 'richard-strungaru-cut-project'],
+        experiment: {
+          title: 'Read a cut-and-project set from both sides', intro: 'Begin with accepted points, expose the hidden-space filter, then test the long-range order in reciprocal space.',
+          steps: [
+            step('pattern', 'Read the accepted pattern', 'Open Pattern with points, local links, and the thirtyfold guide visible.', 'Why are some projected E8 lattice points absent?', 'Only points whose hidden six-dimensional coordinate lies inside the acceptance window are retained.', { view: 'quasicrystal', params: { quasiMode: 'pattern', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0, quasiShowPoints: true, quasiShowLinks: true, quasiShowGuide: true, autoRotate: false } }),
+            step('window', 'Expose the hidden test', 'Switch to Window and move the phason slider slightly while watching points cross the boundary.', 'What changes when the acceptance window moves?', 'Some lattice points enter or leave the accepted set, producing a structured rearrangement in the visible patch.', { view: 'quasicrystal', params: { quasiMode: 'window', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0.38, quasiShowPoints: true, quasiShowLinks: false, quasiShowGuide: true, autoRotate: false } }),
+            step('diffraction', 'Look for long-range order', 'Switch to Diffraction and compare the strongest computed peaks with the thirtyfold guide.', 'Why can a non-periodic pattern still produce sharp peaks?', 'Coherent phases reinforce at a discrete Fourier module, so quasiperiodic order need not repeat by translation.', { view: 'quasicrystal', params: { quasiMode: 'diffraction', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0, quasiShowPoints: true, quasiShowLinks: false, quasiShowGuide: true, autoRotate: false } }),
+          ],
+          reflection: 'The hidden dimensions are operational: they select the visible points, while diffraction tests the order that survives without periodic repetition.',
+        },
+        connections: [{ lessonId: 'coxeter-plane', label: 'Study the symmetry-adapted plane used for the projection' }, { lessonId: 'coxeter-multigrids', label: 'Compare with a rank-2 pentagrid construction' }, { lessonId: 'roots-reflections', label: 'Return to E8 root data and Weyl reflections' }],
+      },
+      {
+        id: 'coxeter-plane', title: 'The Coxeter plane', view: 'e8coxeter', estimatedMinutes: 8, prerequisites: ['e8-cut-project'],
         shortAnswer: 'The Coxeter plane is a symmetry-adapted 2D slice on which a Coxeter element acts as an ordinary rotation. For E8 the Coxeter number is 30, so the projection turns an eight-dimensional symmetry operation into visible 30-step circular rhythm.',
         keyIdeas: ['The plane is invariant under the chosen Coxeter element.', 'E8’s 240 roots appear as eight orbits of 30 projected roots.'],
         objectives: ['Explain why the projection is structurally special.', 'Recognize the eight 30-root orbits.'],

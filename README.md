@@ -6,7 +6,7 @@
 
 <p align="center">
   An interactive WebGL studio for exploring the E8 root system,<br>
-  root systems, Coxeter multigrid tilings, Dynkin diagrams, Platonic solids, the 600-cell, and regular four-dimensional polytopes.
+  cut-and-project quasicrystals, root systems, Coxeter multigrid tilings, Dynkin diagrams, Platonic solids, and regular four-dimensional polytopes.
 </p>
 
 <p align="center">
@@ -37,8 +37,8 @@ Click **Launch E8 Studio** and start exploring immediately. The hosted Studio ru
 | **Bloom** | Watch a Platonic source shape pass through 600-cell-inspired stages and bloom into the E8 Coxeter projection. Animate the transformation and combine it with palettes, depth, and effects. |
 | **Platonic** | Explore the five Platonic solids and four Kepler–Poinsot star polyhedra. Switch between wireframe and solid treatments, compare duals, and apply live twist, spike, and jitter deformations. |
 | **E8 Coxeter** | Examine all 240 E8 roots in the Coxeter plane. Reveal the eight rings, edges, Petrie orbit, coordinate axes, Weyl mirrors, Cartan neighbors, projection modes, and mathematical color groupings. |
-| **600-cell** | Rotate and inspect the 120 vertices of the regular 600-cell, highlight quaternion/conjugacy classes, compare structural subsets, and see its relationship to icosahedral symmetry. |
-| **4D Polytope** | Move through all six convex regular 4-polytopes—from the 5-cell to the 120-cell. Rotate across six independent 4D planes and control the fourth-dimensional perspective depth. |
+| **E8 Quasicrystal** | Cut the E8 lattice from eight dimensions into a two-dimensional quasiperiodic patch. Move its six-dimensional acceptance window and compare the visible pattern, hidden-space window, and computed diffraction peaks. |
+| **4D Polytope** | Move through all six convex regular 4-polytopes—from the 5-cell through the 600-cell to the 120-cell. Rotate across six independent 4D planes and control the fourth-dimensional perspective depth. |
 | **E8 SDF** | See the roots as a raymarched, illuminated structure with smooth-union geometry, edge connections, ambient occlusion, reflections, and the animated “Living E8” extrusion effect. |
 | **Root Lab** | Generate the A₂, B₂, G₂, and H₂/I₂(5) rank-2 root systems from two simple roots. Reveal reflection mirrors, reflection chambers, root lengths, Cartan data, and a Coxeter orbit. |
 | **Tiling Lab** | Turn A₂, B₂, G₂, and H₂ root directions into dual rhombus tilings. Reveal the generating multigrid and compare periodic lattices with fivefold quasiperiodic order. |
@@ -104,7 +104,7 @@ E8 Studio separates three things:
 - **Interpretation** — carefully qualified visual connections, including the Studio’s presentation of the McKay correspondence.
 - **Artistic visualization** — lighting, color, Bloom transitions, signed-distance materials, and other explanatory display choices.
 
-Automated tests verify the rank-2 reflection and multigrid constructions, 240-root E8 Weyl closure, Cartan relations, the eight-by-thirty Coxeter projection, Lie-bracket adjacency, Platonic Euler characteristics, regular 4-polytope counts, and educational-source coverage. The source ledger is maintained in [`src/content/sources.js`](src/content/sources.js).
+Automated tests verify the rank-2 reflection and multigrid constructions, E8 lattice enumeration and cut-and-project selection, 240-root E8 Weyl closure, Cartan relations, the eight-by-thirty Coxeter projection, Lie-bracket adjacency, Platonic Euler characteristics, regular 4-polytope counts, and educational-source coverage. The source ledger is maintained in [`src/content/sources.js`](src/content/sources.js).
 
 ## Run locally
 

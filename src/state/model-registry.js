@@ -6,7 +6,7 @@
 // exports, Learn routing, and tests can agree on what each view represents.
 
 export const MODEL_VIEW_ORDER = Object.freeze([
-  'bloom', 'platonic', 'e8coxeter', 'sixhundred', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
+  'bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
 ]);
 
 export const MODEL_REGISTRY = Object.freeze({
@@ -33,6 +33,12 @@ export const MODEL_REGISTRY = Object.freeze({
     shortLabel: '600',
     exports: Object.freeze(['png', 'data']),
     controls: Object.freeze({ shape: true, rotate: true, lighting: true, bloom: false, e8: false, poly: false, sdf: false, extrude: true, math: '600' }),
+  }),
+  quasicrystal: Object.freeze({
+    label: 'E8 Quasicrystal Lab',
+    shortLabel: 'Quasi',
+    exports: Object.freeze(['png', 'data']),
+    controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'quasicrystal' }),
   }),
   polytope: Object.freeze({
     label: '4D Polytope',
@@ -116,6 +122,7 @@ export function modelDisplayName(view, params = {}) {
   if (view === 'dynkin') return `${params.dynkin || 'E8'} Dynkin Diagram`;
   if (view === 'rootlab') return `${params.rootSystem || 'A2'} Root System`;
   if (view === 'tiling') return TILING_LABELS[params.tilingSystem] || TILING_LABELS.H2;
+  if (view === 'quasicrystal') return 'E8 Quasicrystal Lab';
   return modelRecord(view).label;
 }
 
@@ -137,6 +144,8 @@ export function modelCanvasLabel(view, params = {}) {
                 ? 'showing generated roots, reflection mirrors, reflection chambers, and a Coxeter orbit'
               : view === 'tiling'
                 ? 'showing a dual multigrid of rhombus tiles generated from rank-2 root directions'
+              : view === 'quasicrystal'
+                ? 'showing an E8 lattice cut through a movable window in six hidden dimensions'
               : 'showing faces, edges, and optional vertex nodes';
   return `Interactive ${subject} visualization, ${detail}. Drag to rotate and scroll to zoom.`;
 }

@@ -882,8 +882,16 @@ button:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.model-shortcut-group[data-model-shortcut-group="quasicrystal"] .model-shortcut-grid {
+  grid-template-columns: 1fr;
+}
+
 .root-system-actions {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#quasicrystal-field .root-system-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .root-system-actions button.active {

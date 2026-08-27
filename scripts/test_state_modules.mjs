@@ -99,7 +99,7 @@ assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
 
-for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'sixhundred', 'rootlab', 'tiling', 'dynkin']) {
+for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'quasicrystal', 'rootlab', 'tiling', 'dynkin']) {
   const { near, far } = autoZoomBounds(view);
   const speed = 2;
   const halfSweep = Math.PI / (0.22 * speed);
@@ -117,7 +117,7 @@ const learning = new LearningProgressService({
   postcardsCreated: 0,
   explorationBadges: [],
 });
-assert.equal(learning.summary().quizTotal, 11);
+assert.equal(learning.summary().quizTotal, 12);
 assert.equal(learning.quizById('e8-roots')?.id, 'e8-roots');
 learning.recordPostcard('postcard-prime');
 assert.equal(learning.progress.postcardsCreated, 1);
@@ -166,8 +166,10 @@ assert.deepEqual(
 assert.equal(effectsForView('e8coxeter', 'high').length, 24);
 assert.equal(effectsForView('dynkin', 'high').length, 24);
 assert.equal(effectsForView('tiling', 'high').length, 24);
+assert.equal(effectsForView('quasicrystal', 'high').length, 0);
 assert.equal(effectAvailableForView('raymarched', 'trail', 'high'), true);
 assert.equal(effectAvailableForView('e8coxeter', 'voronoi', 'low'), false);
+assert.equal(coerceEffectMode('quasicrystal', 'plasma', 'high'), 'none');
 assert.equal(coerceEffectMode('raymarched', 'plasma', 'high'), 'plasma');
 const fxState = {
   view: 'raymarched', fxMode: 'glow', fxByView: {}, mobileQuality: 'high', reducedMode: false,

@@ -80,6 +80,17 @@ const VIEW_MODIFIER_DEFAULTS = Object.freeze({
     showEdges: false,
     e8MorphT: 0,
   }),
+  quasicrystal: Object.freeze({
+    quasiMode: 'pattern',
+    quasiReach: 8,
+    quasiWindow: 1.42,
+    quasiPhason: 0,
+    quasiRelief: 0.08,
+    quasiShowPoints: true,
+    quasiPointHalos: true,
+    quasiShowLinks: true,
+    quasiShowGuide: true,
+  }),
   polytope: Object.freeze({
     morph4d: 0,
     polyRotXY: 0,

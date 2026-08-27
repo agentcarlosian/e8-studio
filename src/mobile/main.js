@@ -9,6 +9,11 @@ import {
   COXETER_TILINGS,
   generateCoxeterTiling,
 } from '../math/coxeter-tilings.js';
+import {
+  QUASICRYSTAL_REACHES,
+  generateE8Quasicrystal,
+  quasicrystalReliefHeight,
+} from '../math/e8-quasicrystal.js';
 
 const STORAGE_KEY = 'e8_mobile_v2_config';
 const PROGRESS_KEY = 'e8_progress_v1';
@@ -32,6 +37,19 @@ const DEFAULT_STATE = {
   tilingShowVertices: false,
   tilingAnimate: true,
   tilingFlowSpeed: 0.55,
+  quasiMode: 'pattern',
+  quasiReach: 8,
+  quasiWindow: 1.42,
+  quasiPhason: 0,
+  quasiRelief: 0.08,
+  quasiReachAuto: false,
+  quasiWindowAuto: false,
+  quasiPhasonAuto: false,
+  quasiReliefAuto: false,
+  quasiShowPoints: true,
+  quasiPointHalos: true,
+  quasiShowLinks: true,
+  quasiShowGuide: true,
   learnTopic: 'auto',
   palette: 'gold',
   background: 'void',
@@ -81,9 +99,9 @@ const DEFAULT_STATE = {
 };
 
 const QUALITY = {
-  smooth: { label: 'Smooth', scale: 0.75 },
+  smooth: { label: 'Low', scale: 0.75 },
   balanced: { label: 'Balanced', scale: 1.0 },
-  sharp: { label: 'Sharp', scale: () => Math.min(window.devicePixelRatio || 1, 1.5) },
+  sharp: { label: 'High', scale: () => Math.min(window.devicePixelRatio || 1, 1.5) },
 };
 const MOTION_SPEED_PRESETS = [
   { id: 'slow', label: 'Slow', value: 0.4 },
@@ -98,8 +116,18 @@ const MANUAL_ZOOM_MIN = 0.55;
 const STANDARD_ZOOM_MAX = 3.2;
 const E8_COXETER_ZOOM_MAX = 25;
 const FX_SHIFT_INTERVAL_S = 3.2;
-const PALETTE_COMPACT_COUNT = 9;
+const PALETTE_COMPACT_NAMES = Object.freeze([
+  'gold', 'ember', 'ice',
+  'rainbow', 'aurora', 'sakura',
+  'ultraviolet', 'biolume', 'solar_flare',
+]);
 const AUTO_MOTION_RATE = 0.72;
+const QUASICRYSTAL_REACH_AUTO_INTERVAL_S = 2.8;
+const AUTO_QUASICRYSTAL_RANGES = Object.freeze({
+  window: Object.freeze({ key: 'quasiWindow', autoKey: 'quasiWindowAuto', min: 1.08, max: 1.58 }),
+  phason: Object.freeze({ key: 'quasiPhason', autoKey: 'quasiPhasonAuto', min: -0.75, max: 0.75 }),
+  relief: Object.freeze({ key: 'quasiRelief', autoKey: 'quasiReliefAuto', min: 0, max: 0.18 }),
+});
 const FX_PRESETS = [
   { id: 'clean', label: 'Static', autoColor: false, softFx: false },
   { id: 'pulse', label: 'Breathe', autoColor: false, softFx: true },
@@ -204,6 +232,20 @@ const PALETTES = {
   thread: ['#e0e0f0', '#d0e0e0', '#e0d0d0', '#d0d0e0'],
   vintage: ['#b09090', '#a09090', '#c0a0a0', '#a0a0a0'],
 };
+// Exact `buildPalette(...).bg` values from the desktop palette system. The
+// Quasicrystal Lab uses these for Void so the same palette is compared over
+// the same dark field instead of desktop gold-brown versus mobile blue-black.
+const DESKTOP_PALETTE_BACKGROUNDS = {
+  gold: '#120903', ember: '#0e0402', ice: '#0b0b12', cyan: '#090c11', ocean: '#130b18',
+  forest: '#0c1610', sunset: '#19110b', cosmic: '#0f0914', lavender: '#170d10', amber: '#1b0d04',
+  jade: '#0d1018', rainbow: '#0f0914', fire: '#181106', ocean_deep: '#0b0f11', neon: '#121307',
+  prism: '#0e0611', aurora: '#150b0e', plum: '#150d08', bronze: '#0d0305', sakura: '#0f1611',
+  mono: '#010101', void: '#010101', golden: '#140802', prime: '#100814', binary: '#000000',
+  terra: '#070804', abyss: '#070c0b', coral: '#0d1415', magma: '#0c0201', obsidian: '#000000',
+  cotton: '#1c1b16', spectral: '#161312', synthwave: '#0c0610', cyberpunk: '#100508', ultraviolet: '#0c0805',
+  biolume: '#0a0b09', opal: '#14110e', solar_flare: '#0a0201', rose_gold: '#050204', electric: '#050407',
+  viridian: '#0c0a05', midnight: '#080406', petrie: '#020202', thread: '#0c0c0d', vintage: '#0c0c0c',
+};
 const BACKGROUNDS = {
   void: { label: 'Void', color: '#07070c', renderer: 'flat' },
   starfield: { label: 'Space', color: '#020817', renderer: 'stars' },
@@ -246,9 +288,9 @@ const RENDER_PALETTES = Object.fromEntries(
 );
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
-const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'rootlab', 'tiling', 'dynkin']);
+const SUPPORTED_MODEL_MODES = new Set(['bloom', 'e8_2d', 'sdf', 'platonic', 'poly4d', 'rootlab', 'tiling', 'quasicrystal', 'dynkin']);
 const TOUCH_ORBIT_MODEL_MODES = new Set(['bloom', 'sdf', 'platonic', 'poly4d']);
-const TOUCH_PLANE_ROTATE_MODEL_MODES = new Set(['e8_2d', 'rootlab', 'tiling']);
+const TOUCH_PLANE_ROTATE_MODEL_MODES = new Set(['e8_2d', 'rootlab', 'tiling', 'quasicrystal']);
 const LEGACY_MODEL_MODE_MAP = Object.freeze({ e8_3d: 'bloom' });
 const STAR_SHAPES = new Set([
   'stellated_dodecahedron',
@@ -274,6 +316,7 @@ const MODEL_LABELS = {
   poly4d: '4D',
   rootlab: 'Roots',
   tiling: 'Tilings',
+  quasicrystal: 'Quasi',
   dynkin: 'Dynkin',
 };
 const SHAPE_LABELS = {
@@ -329,6 +372,7 @@ const SCENE_CHIP_SWIPE_SLOP_PX = 24;
 const SCENE_CHIP_LONG_PRESS_MS = 540;
 const STATUS_HIDE_MS = 1400;
 const MOTION_FRAME_INTERVAL_MS = 33;
+const QUASICRYSTAL_MOTION_FRAME_INTERVAL_MS = 16;
 // Full chords use a dedicated WebGL line layer. Canvas-composited FX still
 // rebuild several full-screen images, so those combinations retain the lower
 // pacing budget while clean and shader-native Ripple can run at 30 fps.
@@ -494,6 +538,66 @@ varying vec4 vColor;
 void main() {
   gl_FragColor = vColor;
 }`;
+const QUASICRYSTAL_LINE_VERTEX_STRIDE_FLOATS = 6;
+const QUASICRYSTAL_POINT_VERTEX_STRIDE_FLOATS = 6;
+const QUASICRYSTAL_LINE_VERTEX_SHADER = `
+precision highp float;
+attribute vec2 aPosition;
+attribute vec4 aColor;
+uniform vec2 uResolution;
+varying vec4 vColor;
+void main() {
+  vec2 clip = vec2(
+    aPosition.x / max(1.0, uResolution.x) * 2.0 - 1.0,
+    1.0 - aPosition.y / max(1.0, uResolution.y) * 2.0
+  );
+  gl_Position = vec4(clip, 0.0, 1.0);
+  vColor = aColor;
+}`;
+const QUASICRYSTAL_LINE_FRAGMENT_SHADER = `
+precision mediump float;
+varying vec4 vColor;
+void main() {
+  gl_FragColor = vColor;
+}`;
+const QUASICRYSTAL_POINT_VERTEX_SHADER = `
+precision highp float;
+attribute vec2 aPosition;
+attribute vec3 aColor;
+attribute float aSize;
+uniform vec2 uResolution;
+uniform float uPixelRatio;
+varying vec3 vColor;
+void main() {
+  vec2 clip = vec2(
+    aPosition.x / max(1.0, uResolution.x) * 2.0 - 1.0,
+    1.0 - aPosition.y / max(1.0, uResolution.y) * 2.0
+  );
+  gl_Position = vec4(clip, 0.0, 1.0);
+  gl_PointSize = aSize * uPixelRatio;
+  vColor = aColor;
+}`;
+// This is the same point treatment used by the desktop Quasicrystal view.
+// Keeping the shader shared in behavior (rather than approximating it with
+// Canvas strokes) preserves the bright core, clean gap, and antialiased rim.
+const QUASICRYSTAL_POINT_FRAGMENT_SHADER = `
+precision highp float;
+varying vec3 vColor;
+uniform float uOpacity;
+uniform float uShowRim;
+void main() {
+  vec2 c = gl_PointCoord - vec2(0.5);
+  float d = length(c);
+  if (d > 0.5) discard;
+  float disc = smoothstep(0.5, 0.36, d);
+  float core = smoothstep(0.22, 0.02, d);
+  float rim = smoothstep(0.5, 0.42, d) - smoothstep(0.39, 0.31, d);
+  float haloAlpha = max(core, rim * 0.95) * disc;
+  float solidAlpha = disc;
+  float alpha = mix(solidAlpha, haloAlpha, uShowRim);
+  vec3 color = vColor + core * vColor * mix(0.22, 0.48, uShowRim);
+  gl_FragColor = vec4(color, alpha * uOpacity);
+}`;
 const RIPPLE_COLOR_BANDS = 12;
 const RIPPLE_BRIGHTNESS_BANDS = 5;
 const DRAW_SUBSET = 1;
@@ -649,6 +753,13 @@ const MODEL_SHORTCUT_GROUPS = [
     })),
   },
   {
+    id: 'quasicrystal',
+    label: 'E8 Quasicrystal',
+    items: [
+      { id: 'quasi', label: 'Quasi', name: 'E8 Quasicrystal Lab', target: { modelMode: 'quasicrystal' } },
+    ],
+  },
+  {
     id: 'dynkin',
     label: 'Dynkin',
     items: [
@@ -673,7 +784,7 @@ let curriculumPaths = [];
 let curriculumLessons = [];
 let learningProgress = loadLearningProgress();
 const MOBILE_LEARN_LESSON_ORDER = [
-  'meet-e8', 'coxeter-plane', 'roots-reflections', 'rank-two-reflections', 'coxeter-multigrids', 'six-hundred-cell',
+  'meet-e8', 'coxeter-plane', 'roots-reflections', 'rank-two-reflections', 'coxeter-multigrids', 'e8-cut-project', 'six-hundred-cell',
   'why-five-solids', 'into-four-dimensions', 'reading-dynkin', 'mckay-bridge', 'designed-bloom', 'distance-fields',
 ];
 const LEGACY_LEARN_TOPIC_MAP = {
@@ -732,6 +843,19 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'tilingShowVertices',
   'tilingAnimate',
   'tilingFlowSpeed',
+  'quasiMode',
+  'quasiReach',
+  'quasiWindow',
+  'quasiPhason',
+  'quasiRelief',
+  'quasiReachAuto',
+  'quasiWindowAuto',
+  'quasiPhasonAuto',
+  'quasiReliefAuto',
+  'quasiShowPoints',
+  'quasiPointHalos',
+  'quasiShowLinks',
+  'quasiShowGuide',
 ];
 
 let metrics = {
@@ -984,6 +1108,10 @@ let metrics = {
   softFxFrameCount: 0,
   autoZoomFrameCount: 0,
   autoExtrudeFrameCount: 0,
+  quasiReachAutoSwitchCount: 0,
+  quasiWindowAutoFrameCount: 0,
+  quasiPhasonAutoFrameCount: 0,
+  quasiReliefAutoFrameCount: 0,
   lastStylePhase: 0,
   lastRuntimePalette: null,
   lastMotionFrameRenderMs: null,
@@ -1153,6 +1281,15 @@ let e8ChordUniforms;
 let e8ChordVertexCount = 0;
 let e8ChordWebglUnavailable = false;
 let e8ChordContextHandlersInstalled = false;
+let quasicrystalLineProgram;
+let quasicrystalLineBuffer;
+let quasicrystalLineAttributes;
+let quasicrystalLineUniforms;
+let quasicrystalPointProgram;
+let quasicrystalPointBuffer;
+let quasicrystalPointAttributes;
+let quasicrystalPointUniforms;
+let quasicrystalWebglUnavailable = false;
 let fxSourceCanvas;
 let fxSourceContext;
 let fxTintCanvas;
@@ -1191,6 +1328,9 @@ let fxShiftElapsed = 0;
 let motionPhase = 0;
 let autoZoomPhaseOffset = 0;
 let autoExtrudePhaseOffset = 0;
+const quasiAutoPhaseOffsets = { window: 0, phason: 0, relief: 0 };
+let quasiReachAutoElapsed = 0;
+let quasiReachAutoIndex = Math.max(0, QUASICRYSTAL_REACHES.indexOf(DEFAULT_STATE.quasiReach));
 let autoModelElapsed = 0;
 let autoModelIndex = 0;
 let drag = null;
@@ -1199,6 +1339,9 @@ let selectedRootLabIndex = null;
 let rootLabHitTargets = [];
 let tilingGeometryCache = null;
 let tilingGeometryCacheKey = '';
+let quasicrystalGeometryCache = null;
+let quasicrystalGeometryCacheKey = '';
+let quasicrystalHitTargets = [];
 const activePointers = new Map();
 let gestureReleaseIds = new Set();
 let gesture = null;
@@ -1307,7 +1450,7 @@ function applyMobileExperimentStep(lessonId, stepId) {
   if (!entry?.action) return false;
   const modelByView = {
     bloom: 'bloom', platonic: 'platonic', e8coxeter: 'e8_2d', sixhundred: 'poly4d',
-    polytope: 'poly4d', raymarched: 'sdf', rootlab: 'rootlab', tiling: 'tiling', dynkin: 'dynkin',
+    polytope: 'poly4d', raymarched: 'sdf', rootlab: 'rootlab', tiling: 'tiling', quasicrystal: 'quasicrystal', dynkin: 'dynkin',
   };
   const source = entry.action.params || {};
   const patch = { modelMode: modelByView[entry.action.view || experiment.lesson?.view] || state.modelMode };
@@ -1347,6 +1490,12 @@ function applyMobileExperimentStep(lessonId, stepId) {
   };
   for (const [sourceKey, stateKey] of Object.entries(tilingParamMap)) {
     if (Object.hasOwn(source, sourceKey)) patch[stateKey] = source[sourceKey];
+  }
+  for (const key of [
+    'quasiMode', 'quasiReach', 'quasiWindow', 'quasiPhason', 'quasiRelief',
+    'quasiShowPoints', 'quasiShowLinks', 'quasiShowGuide',
+  ]) {
+    if (Object.hasOwn(source, key)) patch[key] = source[key];
   }
   setManualModelState(patch, `learn-experiment-${lessonId}-${stepId}`);
   syncControls(`learn-experiment-${lessonId}-${stepId}`);
@@ -1423,6 +1572,8 @@ function normalizeState(next) {
   if (!SUPPORTED_DYNKIN_DIAGRAMS.has(next.dynkinDiagram)) next.dynkinDiagram = DEFAULT_STATE.dynkinDiagram;
   if (!RANK2_ROOT_SYSTEMS[next.rootSystem]) next.rootSystem = DEFAULT_STATE.rootSystem;
   if (!COXETER_TILINGS[next.tilingSystem]) next.tilingSystem = DEFAULT_STATE.tilingSystem;
+  if (!['pattern', 'window', 'diffraction'].includes(next.quasiMode)) next.quasiMode = DEFAULT_STATE.quasiMode;
+  if (!QUASICRYSTAL_REACHES.includes(Number(next.quasiReach))) next.quasiReach = DEFAULT_STATE.quasiReach;
   if (LEARN_TOPIC_IDS.size > 1 && !LEARN_TOPIC_IDS.has(next.learnTopic)) next.learnTopic = DEFAULT_STATE.learnTopic;
   if (!SUPPORTED_SUBSETS.has(next.subset)) next.subset = DEFAULT_STATE.subset;
   next.pointScale = clamp(Number(next.pointScale) || 1, 0.7, 1.8);
@@ -1449,6 +1600,10 @@ function normalizeState(next) {
   next.tilingDensity = Math.round(clamp(Number(next.tilingDensity) || DEFAULT_STATE.tilingDensity, 2, 6));
   next.tilingRelief = clamp(Number(next.tilingRelief) || 0, 0, 0.3);
   next.tilingFlowSpeed = clamp(Number(next.tilingFlowSpeed) || DEFAULT_STATE.tilingFlowSpeed, 0.1, 2);
+  next.quasiReach = Number(next.quasiReach);
+  next.quasiWindow = clamp(Number(next.quasiWindow) || DEFAULT_STATE.quasiWindow, 0.8, 2.4);
+  next.quasiPhason = clamp(Number(next.quasiPhason) || 0, -1.2, 1.2);
+  next.quasiRelief = clamp(Number(next.quasiRelief) || 0, 0, 0.24);
   next.panX = Number(next.panX) || 0;
   next.panY = Number(next.panY) || 0;
   next.zoom = clamp(Number(next.zoom) || 1, MANUAL_ZOOM_MIN, zoomMaxForModel(next.modelMode));
@@ -1472,6 +1627,14 @@ function normalizeState(next) {
   if (typeof next.tilingShowRoots !== 'boolean') next.tilingShowRoots = DEFAULT_STATE.tilingShowRoots;
   if (typeof next.tilingShowVertices !== 'boolean') next.tilingShowVertices = DEFAULT_STATE.tilingShowVertices;
   if (typeof next.tilingAnimate !== 'boolean') next.tilingAnimate = DEFAULT_STATE.tilingAnimate;
+  if (typeof next.quasiShowPoints !== 'boolean') next.quasiShowPoints = DEFAULT_STATE.quasiShowPoints;
+  if (typeof next.quasiPointHalos !== 'boolean') next.quasiPointHalos = DEFAULT_STATE.quasiPointHalos;
+  if (typeof next.quasiShowLinks !== 'boolean') next.quasiShowLinks = DEFAULT_STATE.quasiShowLinks;
+  if (typeof next.quasiShowGuide !== 'boolean') next.quasiShowGuide = DEFAULT_STATE.quasiShowGuide;
+  if (typeof next.quasiReachAuto !== 'boolean') next.quasiReachAuto = false;
+  if (typeof next.quasiWindowAuto !== 'boolean') next.quasiWindowAuto = false;
+  if (typeof next.quasiPhasonAuto !== 'boolean') next.quasiPhasonAuto = false;
+  if (typeof next.quasiReliefAuto !== 'boolean') next.quasiReliefAuto = false;
   if (typeof next.highlightSubset !== 'boolean') next.highlightSubset = true;
   if (typeof next.autoRotate !== 'boolean') next.autoRotate = false;
   if (typeof next.autoZoom !== 'boolean') next.autoZoom = false;
@@ -1483,7 +1646,7 @@ function normalizeState(next) {
   if (typeof next.autoFx !== 'boolean') next.autoFx = false;
   if (typeof next.softFx !== 'boolean') next.softFx = false;
   if (!SUPPORTED_MOBILE_FX.has(next.fxMode)) next.fxMode = DEFAULT_STATE.fxMode;
-  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d' || next.modelMode === 'rootlab' || next.modelMode === 'tiling') next.selectedRoot = null;
+  if (next.modelMode === 'sdf' || next.modelMode === 'platonic' || next.modelMode === 'poly4d' || next.modelMode === 'rootlab' || next.modelMode === 'tiling' || next.modelMode === 'quasicrystal') next.selectedRoot = null;
   return next;
 }
 
@@ -1615,6 +1778,27 @@ function cacheElements() {
   els.tilingRootsToggle = document.getElementById('tiling-roots-toggle');
   els.tilingVerticesToggle = document.getElementById('tiling-vertices-toggle');
   els.tilingAnimateToggle = document.getElementById('tiling-animate-toggle');
+  els.quasicrystalField = document.getElementById('quasicrystal-field');
+  els.quasiCountOutput = document.getElementById('quasi-count-output');
+  els.quasiFactPeaks = document.getElementById('quasi-fact-peaks');
+  els.quasiReach = document.getElementById('quasi-reach');
+  els.quasiReachOutput = document.getElementById('quasi-reach-output');
+  els.quasiReachAuto = document.getElementById('quasi-reach-auto');
+  els.quasiWindow = document.getElementById('quasi-window');
+  els.quasiWindowOutput = document.getElementById('quasi-window-output');
+  els.quasiWindowAuto = document.getElementById('quasi-window-auto');
+  els.quasiPhason = document.getElementById('quasi-phason');
+  els.quasiPhasonOutput = document.getElementById('quasi-phason-output');
+  els.quasiPhasonAuto = document.getElementById('quasi-phason-auto');
+  els.quasiReliefField = document.getElementById('quasi-relief-field');
+  els.quasiRelief = document.getElementById('quasi-relief');
+  els.quasiReliefOutput = document.getElementById('quasi-relief-output');
+  els.quasiReliefAuto = document.getElementById('quasi-relief-auto');
+  els.quasiPointsToggle = document.getElementById('quasi-points-toggle');
+  els.quasiPointHalosToggle = document.getElementById('quasi-point-halos-toggle');
+  els.quasiLinksField = document.getElementById('quasi-links-field');
+  els.quasiLinksToggle = document.getElementById('quasi-links-toggle');
+  els.quasiGuideToggle = document.getElementById('quasi-guide-toggle');
   els.sdfField = document.getElementById('sdf-field');
   els.sdfRadius = document.getElementById('sdf-radius');
   els.sdfRadiusOutput = document.getElementById('sdf-radius-output');
@@ -1646,6 +1830,8 @@ function cacheElements() {
   els.fxModeGrid = document.getElementById('fx-mode-grid');
   els.fxModeOutput = document.getElementById('fx-mode-output');
   els.fxModeDescription = document.getElementById('fx-mode-description');
+  els.quasiFxControls = [...document.querySelectorAll('[data-quasi-fx-control]')];
+  els.quasiCleanRenderNote = document.getElementById('quasi-clean-render-note');
   els.pointSize = document.getElementById('point-size');
   els.pointSizeOutput = document.getElementById('point-size-output');
   els.pointOpacity = document.getElementById('point-opacity');
@@ -1777,6 +1963,17 @@ function bindEvents() {
       selectTilingSystem(tilingSystem);
       return;
     }
+    const quasiMode = event.target.closest('[data-quasi-mode]')?.dataset.quasiMode;
+    if (quasiMode) {
+      setManualModelState({ modelMode: 'quasicrystal', quasiMode, selectedRoot: null }, `quasi-mode-${quasiMode}`);
+      return;
+    }
+    const quasiAuto = event.target.closest('[data-quasi-auto]')?.dataset.quasiAuto;
+    if (quasiAuto) {
+      event.preventDefault();
+      toggleQuasicrystalAuto(quasiAuto);
+      return;
+    }
     const bloomAction = event.target.closest('[data-bloom-action]')?.dataset.bloomAction;
     if (bloomAction) {
       handleBloomAction(bloomAction);
@@ -1900,6 +2097,30 @@ function bindEvents() {
   els.tilingRootsToggle.addEventListener('change', () => setSettingState({ tilingShowRoots: els.tilingRootsToggle.checked }, 'tiling-roots-toggle'));
   els.tilingVerticesToggle.addEventListener('change', () => setSettingState({ tilingShowVertices: els.tilingVerticesToggle.checked }, 'tiling-vertices-toggle'));
   els.tilingAnimateToggle.addEventListener('change', () => setSettingState({ tilingAnimate: els.tilingAnimateToggle.checked }, 'tiling-animate-toggle'));
+  els.quasiReach.addEventListener('input', () => {
+    previewState({ quasiReach: QUASICRYSTAL_REACHES[Number(els.quasiReach.value)], quasiReachAuto: false }, 'quasi-reach');
+    syncQuasicrystalControls();
+  });
+  els.quasiReach.addEventListener('change', () => commitLiveControl('quasi-reach'));
+  els.quasiWindow.addEventListener('input', () => {
+    previewState({ quasiWindow: Number(els.quasiWindow.value), quasiWindowAuto: false }, 'quasi-window');
+    syncQuasicrystalControls();
+  });
+  els.quasiWindow.addEventListener('change', () => commitLiveControl('quasi-window'));
+  els.quasiPhason.addEventListener('input', () => {
+    previewState({ quasiPhason: Number(els.quasiPhason.value), quasiPhasonAuto: false }, 'quasi-phason');
+    syncQuasicrystalControls();
+  });
+  els.quasiPhason.addEventListener('change', () => commitLiveControl('quasi-phason'));
+  els.quasiRelief.addEventListener('input', () => {
+    previewState({ quasiRelief: Number(els.quasiRelief.value), quasiReliefAuto: false }, 'quasi-relief');
+    syncQuasicrystalControls();
+  });
+  els.quasiRelief.addEventListener('change', () => commitLiveControl('quasi-relief'));
+  els.quasiPointsToggle.addEventListener('change', () => setSettingState({ quasiShowPoints: els.quasiPointsToggle.checked }, 'quasi-points-toggle'));
+  els.quasiPointHalosToggle.addEventListener('change', () => setSettingState({ quasiPointHalos: els.quasiPointHalosToggle.checked }, 'quasi-point-halos-toggle'));
+  els.quasiLinksToggle.addEventListener('change', () => setSettingState({ quasiShowLinks: els.quasiLinksToggle.checked }, 'quasi-links-toggle'));
+  els.quasiGuideToggle.addEventListener('change', () => setSettingState({ quasiShowGuide: els.quasiGuideToggle.checked }, 'quasi-guide-toggle'));
   els.modelSelect.addEventListener('change', () => setManualModelState({
     modelMode: els.modelSelect.value,
     autoModel: false,
@@ -1952,7 +2173,11 @@ function bindEvents() {
   els.subsetSelect.addEventListener('change', () => setManualExploreState({ subset: els.subsetSelect.value }, 'subset-select', { syncSubset: true }));
   els.rootRange.addEventListener('input', () => selectRoot(Number(els.rootRange.value), { save: false, interactionType: 'root-scrub' }));
   els.rootRange.addEventListener('change', () => selectRoot(Number(els.rootRange.value), { interactionType: 'root-commit' }));
-  els.paletteSelect.addEventListener('change', () => setSettingState({ palette: els.paletteSelect.value }, 'palette-select', { syncPalette: true }));
+  els.paletteSelect.addEventListener('change', () => setSettingState(
+    { palette: els.paletteSelect.value },
+    'palette-select',
+    { syncPalette: true, renderWhileSettingsOpen: true },
+  ));
   els.backgroundSelect.addEventListener('change', () => setSettingState({ background: els.backgroundSelect.value }, 'background-select'));
   els.backgroundBrightness.addEventListener('input', () => {
     previewState({ backgroundBrightness: Number(els.backgroundBrightness.value) }, 'background-brightness');
@@ -2074,7 +2299,7 @@ function handleInfoAction(action) {
 }
 
 function selectedRootForModelMode(modelMode) {
-  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d' || modelMode === 'rootlab' || modelMode === 'tiling') return null;
+  if (modelMode === 'sdf' || modelMode === 'platonic' || modelMode === 'poly4d' || modelMode === 'rootlab' || modelMode === 'tiling' || modelMode === 'quasicrystal') return null;
   if (modelMode === 'dynkin') return simpleRootIndices.includes(state.selectedRoot) ? state.selectedRoot : null;
   return state.selectedRoot;
 }
@@ -2261,6 +2486,10 @@ function activeGeometryRecord() {
       dynkinDiagram: state.dynkinDiagram,
       rootSystem: state.rootSystem,
       tilingSystem: state.tilingSystem,
+      quasiMode: state.quasiMode,
+      quasiReach: state.quasiReach,
+      quasiWindow: state.quasiWindow,
+      quasiPhason: state.quasiPhason,
       selectedRoot: state.selectedRoot,
       palette: state.palette,
       quality: state.quality,
@@ -2360,6 +2589,41 @@ function activeGeometryRecord() {
         families: [tile.familyA, tile.familyB],
         angleDegrees: tile.angleDegrees,
       }))),
+    };
+  }
+
+  if (state.modelMode === 'quasicrystal') {
+    // Exports are intentionally complete even though the live Pattern and
+    // Window renderers defer reciprocal/edge work they do not draw.
+    const patch = generateE8Quasicrystal(data.e8, {
+      maxNormSq: state.quasiReach,
+      windowRadius: state.quasiWindow,
+      phason: state.quasiPhason,
+    });
+    return {
+      ...base,
+      kind: patch.kind,
+      name: 'e8-quasicrystal',
+      label: patch.label,
+      sourceDimension: patch.sourceDimension,
+      physicalDimension: patch.physicalDimension,
+      internalDimension: patch.internalDimension,
+      symmetryOrder: patch.symmetryOrder,
+      maxNormSq: patch.maxNormSq,
+      windowRadius: patch.windowRadius,
+      phason: patch.phason,
+      candidateCount: patch.candidateCount,
+      pointCount: patch.pointCount,
+      projectionBasis: cloneJson(patch.projectionBasis),
+      points: cloneJson(patch.points.map(point => ({
+        coordinates8d: point.coords,
+        projected2d: point.projected,
+        hiddenRadius: point.shiftedInternalRadius,
+        normSq: point.normSq,
+        coset: point.coset,
+      }))),
+      edges: cloneJson(patch.edges),
+      diffraction: cloneJson(patch.diffraction),
     };
   }
 
@@ -2463,6 +2727,30 @@ function activeObjRecord() {
       faces: cloneJson(tiling.tiles.map(tile => tile.vertexIndices)),
       pointsOnly: false,
       note: 'Rhombus tiling dual to equally spaced line families aligned with rank-2 root directions.',
+    };
+    record.text = objTextFromParts(record);
+    return record;
+  }
+
+  if (state.modelMode === 'quasicrystal') {
+    const patch = mobileQuasicrystalGeometry();
+    const mode = state.quasiMode;
+    const sources = mode === 'diffraction' ? patch.diffraction : patch.points;
+    const record = {
+      kind: 'e8-quasicrystal-projected-obj',
+      name: 'e8-quasicrystal',
+      vertices: sources.map(point => {
+        const coordinates = mode === 'window' ? point.windowPlot : point.normalized;
+        return [
+          coordinates[0],
+          coordinates[1],
+          quasicrystalReliefHeight(point, mode, state.quasiRelief, 1),
+        ];
+      }),
+      lines: mode === 'pattern' ? cloneJson(patch.edges) : [],
+      faces: [],
+      pointsOnly: true,
+      note: `Finite E8 cut-and-project ${mode}; spherical acceptance window is a Studio visualization choice.`,
     };
     record.text = objTextFromParts(record);
     return record;
@@ -2663,6 +2951,11 @@ function postcardCaption() {
   if (state.modelMode === 'tiling') {
     const tiling = mobileTilingGeometry();
     return `${tiling.name} | ${tiling.tileCount} rhombi | ${tiling.periodic ? 'periodic' : 'quasiperiodic'}`;
+  }
+  if (state.modelMode === 'quasicrystal') {
+    const patch = mobileQuasicrystalGeometry();
+    if (state.quasiMode === 'diffraction') return `E8 Quasicrystal diffraction | ${patch.diffraction.length} peaks | ${patch.pointCount} accepted`;
+    return `E8 Quasicrystal ${state.quasiMode} | ${patch.pointCount} accepted | ${patch.candidateCount} tested`;
   }
   return scene.topbarLabel;
 }
@@ -3181,6 +3474,10 @@ function mobileSurprise() {
     autoRotate: false,
     autoZoom: false,
     autoExtrude: false,
+    quasiReachAuto: false,
+    quasiWindowAuto: false,
+    quasiPhasonAuto: false,
+    quasiReliefAuto: false,
     autoModel: false,
     autoColor: false,
     autoFx: false,
@@ -3226,6 +3523,10 @@ function setAutoPreset(mode) {
       autoRotate: true,
       autoZoom: false,
       autoExtrude: false,
+      quasiReachAuto: false,
+      quasiWindowAuto: false,
+      quasiPhasonAuto: false,
+      quasiReliefAuto: false,
       autoModel: true,
       autoColor: true,
       autoFx: false,
@@ -3237,6 +3538,10 @@ function setAutoPreset(mode) {
       autoRotate: true,
       autoZoom: false,
       autoExtrude: false,
+      quasiReachAuto: false,
+      quasiWindowAuto: false,
+      quasiPhasonAuto: false,
+      quasiReliefAuto: false,
       autoModel: false,
       autoFx: false,
       cameraPath: 'orbit',
@@ -3246,6 +3551,10 @@ function setAutoPreset(mode) {
       autoRotate: false,
       autoZoom: false,
       autoExtrude: false,
+      quasiReachAuto: false,
+      quasiWindowAuto: false,
+      quasiPhasonAuto: false,
+      quasiReliefAuto: false,
       autoModel: false,
       autoColor: false,
       autoFx: false,
@@ -3321,6 +3630,12 @@ function setState(patch, options = {}) {
   const previousAutoModel = state.autoModel;
   const previousAutoZoom = state.autoZoom;
   const previousAutoExtrude = state.autoExtrude;
+  const previousQuasiAutos = {
+    reach: state.quasiReachAuto,
+    window: state.quasiWindowAuto,
+    phason: state.quasiPhasonAuto,
+    relief: state.quasiReliefAuto,
+  };
   const previousModelMode = state.modelMode;
   const previousRootSystem = state.rootSystem;
   state = next;
@@ -3332,6 +3647,17 @@ function setState(patch, options = {}) {
   }
   if (state.autoZoom && (!previousAutoZoom || state.modelMode !== previousModelMode)) syncAutoMotionPhase('zoom');
   if (state.autoExtrude && !previousAutoExtrude) syncAutoMotionPhase('extrude');
+  if (state.quasiReachAuto && (!previousQuasiAutos.reach || state.modelMode !== previousModelMode)) {
+    quasiReachAutoIndex = Math.max(0, QUASICRYSTAL_REACHES.indexOf(state.quasiReach));
+    quasiReachAutoElapsed = 0;
+  } else if (!state.quasiReachAuto) {
+    quasiReachAutoElapsed = 0;
+  }
+  for (const [kind, config] of Object.entries(AUTO_QUASICRYSTAL_RANGES)) {
+    if (state[config.autoKey] && (!previousQuasiAutos[kind] || state.modelMode !== previousModelMode)) {
+      syncQuasicrystalAutoPhase(kind);
+    }
+  }
   if (state.autoModel && (!previousAutoModel || patch.modelMode != null || patch.shape != null || patch.polytope4d != null || patch.dynkinDiagram != null)) {
     autoModelIndex = currentAutoModelIndex();
     autoModelElapsed = AUTO_MODEL_INTERVAL_S;
@@ -3354,7 +3680,9 @@ function setState(patch, options = {}) {
     else resizeCanvas();
   }
   if (options.render === false) suppressRender(options.renderReason || options.interactionType || 'set-state');
-  else requestRender(options.renderReason || options.interactionType || 'set-state');
+  else requestRender(options.renderReason || options.interactionType || 'set-state', {
+    allowWhileSettingsOpen: options.renderWhileSettingsOpen === true,
+  });
   syncMotionLoop();
   return getState();
 }
@@ -3375,6 +3703,7 @@ function setSettingState(patch, interactionType, options = {}) {
     interactionType,
     render: options.render,
     renderReason: interactionType,
+    renderWhileSettingsOpen: options.renderWhileSettingsOpen,
   });
   metrics.settingsControlSyncSkipCount++;
   metrics.lastSettingsControlSyncSkip = interactionType;
@@ -3587,7 +3916,8 @@ function syncPaletteExpansion() {
 function syncPaletteCompactSwatches() {
   if (!els.paletteSwatchGrid) return 0;
   const buttons = [...els.paletteSwatchGrid.querySelectorAll('[data-palette-swatch]')];
-  const compact = buttons.slice(0, PALETTE_COMPACT_COUNT);
+  const byName = new Map(buttons.map(button => [button.dataset.paletteSwatch, button]));
+  const compact = PALETTE_COMPACT_NAMES.map(name => byName.get(name)).filter(Boolean);
   const active = buttons.find(button => button.dataset.paletteSwatch === state.palette);
   if (active && !compact.includes(active)) compact[compact.length - 1] = active;
   const compactSet = new Set(compact);
@@ -3622,7 +3952,11 @@ function syncPaletteControls() {
 function selectPaletteSwatch(name) {
   if (!PALETTES[name]) return false;
   const previousPalette = state.palette;
-  const result = setSettingState({ palette: name }, `palette-swatch-${name}`, { syncPalette: true });
+  const result = setSettingState(
+    { palette: name },
+    `palette-swatch-${name}`,
+    { syncPalette: true, renderWhileSettingsOpen: true },
+  );
   if (state.palette === previousPalette) return result;
   metrics.paletteSwatchSelectCount++;
   metrics.paletteSwatchSyncSkipCount++;
@@ -3690,7 +4024,15 @@ function syncVisualControls() {
   if (els.fxStrength) els.fxStrength.value = String(state.fxStrength);
   syncVisualRangeOutputs();
   syncFxModeControls();
+  syncQuasiFxAvailability();
   return true;
+}
+
+function syncQuasiFxAvailability() {
+  const cleanRender = state.modelMode === 'quasicrystal';
+  for (const control of els.quasiFxControls || []) control.classList.toggle('hidden', cleanRender);
+  if (els.quasiCleanRenderNote) els.quasiCleanRenderNote.classList.toggle('hidden', !cleanRender);
+  return cleanRender;
 }
 
 function selectFxPreset(id) {
@@ -3732,7 +4074,8 @@ function renderFxModes() {
 function syncFxSurface() {
   if (!els.shell) return false;
   const strength = clamp(state.fxStrength, 0.25, 1.5);
-  els.shell.dataset.fxMode = state.fxMode;
+  const effectiveMode = state.modelMode === 'quasicrystal' ? 'none' : state.fxMode;
+  els.shell.dataset.fxMode = effectiveMode;
   els.shell.style.setProperty('--mobile-fx-strength', strength.toFixed(2));
   els.shell.style.setProperty('--mobile-fx-brightness', (1 + strength * 0.13).toFixed(3));
   els.shell.style.setProperty('--mobile-fx-saturation', (1 + strength * 0.32).toFixed(3));
@@ -3976,14 +4319,25 @@ function motionPresetLabel(preset) {
   return preset?.name || preset?.label || 'Motion';
 }
 
+function hasQuasicrystalAutoMotion() {
+  return state.modelMode === 'quasicrystal'
+    && (state.quasiReachAuto || state.quasiWindowAuto || state.quasiPhasonAuto || state.quasiReliefAuto);
+}
+
+function hasContinuousQuasicrystalAutoMotion() {
+  return state.modelMode === 'quasicrystal'
+    && (state.quasiWindowAuto || state.quasiPhasonAuto || state.quasiReliefAuto);
+}
+
 function activeMotionPreset() {
-  if (state.autoRotate && state.autoModel && state.autoColor && !state.autoFx && state.softFx && !state.autoZoom && !state.autoExtrude) {
+  const quasiAuto = hasQuasicrystalAutoMotion();
+  if (state.autoRotate && state.autoModel && state.autoColor && !state.autoFx && state.softFx && !state.autoZoom && !state.autoExtrude && !quasiAuto) {
     return MOTION_PRESETS.find(preset => preset.id === 'showcase') || null;
   }
-  if (state.autoRotate && !state.autoModel && !state.autoFx && !state.autoZoom && !state.autoExtrude && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
+  if (state.autoRotate && !state.autoModel && !state.autoFx && !state.autoZoom && !state.autoExtrude && !quasiAuto && (state.cameraPath === 'orbit' || state.cameraPath === 'manual')) {
     return MOTION_PRESETS.find(preset => preset.id === 'orbit') || null;
   }
-  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.autoFx && !state.softFx) {
+  if (!state.autoRotate && !state.autoZoom && !state.autoExtrude && !state.autoModel && !state.autoColor && !state.autoFx && !state.softFx && !quasiAuto) {
     return MOTION_PRESETS.find(preset => preset.id === 'still') || null;
   }
   return null;
@@ -4057,6 +4411,10 @@ function resetCameraMotion() {
     autoRotate: false,
     autoZoom: false,
     autoExtrude: false,
+    quasiReachAuto: false,
+    quasiWindowAuto: false,
+    quasiPhasonAuto: false,
+    quasiReliefAuto: false,
     zoom: 1,
     e8MorphT: 0,
     panX: 0,
@@ -4100,6 +4458,10 @@ function selectMotionPreset(id) {
     autoRotate: state.autoRotate,
     autoZoom: state.autoZoom,
     autoExtrude: state.autoExtrude,
+    quasiReachAuto: state.quasiReachAuto,
+    quasiWindowAuto: state.quasiWindowAuto,
+    quasiPhasonAuto: state.quasiPhasonAuto,
+    quasiReliefAuto: state.quasiReliefAuto,
     autoModel: state.autoModel,
     autoColor: state.autoColor,
     autoFx: state.autoFx,
@@ -4109,6 +4471,10 @@ function selectMotionPreset(id) {
   const changed = previous.autoRotate !== state.autoRotate
     || previous.autoZoom !== state.autoZoom
     || previous.autoExtrude !== state.autoExtrude
+    || previous.quasiReachAuto !== state.quasiReachAuto
+    || previous.quasiWindowAuto !== state.quasiWindowAuto
+    || previous.quasiPhasonAuto !== state.quasiPhasonAuto
+    || previous.quasiReliefAuto !== state.quasiReliefAuto
     || previous.autoModel !== state.autoModel
     || previous.autoColor !== state.autoColor
     || previous.autoFx !== state.autoFx
@@ -4239,6 +4605,10 @@ function scenePatchForTarget(target) {
     autoRotate: false,
     autoZoom: false,
     autoExtrude: false,
+    quasiReachAuto: false,
+    quasiWindowAuto: false,
+    quasiPhasonAuto: false,
+    quasiReliefAuto: false,
     autoModel: false,
     autoColor: false,
     autoFx: false,
@@ -4403,6 +4773,7 @@ function syncModelControls() {
   if (els.rootSimpleToggle) els.rootSimpleToggle.checked = state.showRootSimple;
   if (els.rootOrbitToggle) els.rootOrbitToggle.checked = state.showRootOrbit;
   syncTilingControls();
+  syncQuasicrystalControls();
   if (els.shapeField) els.shapeField.classList.toggle('hidden', state.modelMode !== 'platonic');
   if (els.polytope4DField) els.polytope4DField.classList.toggle('hidden', state.modelMode !== 'poly4d');
   if (els.dynkinField) els.dynkinField.classList.toggle('hidden', state.modelMode !== 'dynkin');
@@ -4454,6 +4825,93 @@ function syncTilingControls() {
     });
   }
   return tiling;
+}
+
+function syncQuasicrystalControls() {
+  if (els.quasicrystalField) els.quasicrystalField.classList.toggle('hidden', state.modelMode !== 'quasicrystal');
+  syncQuasiFxAvailability();
+  if (state.modelMode !== 'quasicrystal') return null;
+  const patch = mobileQuasicrystalGeometry();
+  const reachIndex = Math.max(0, QUASICRYSTAL_REACHES.indexOf(state.quasiReach));
+  if (els.quasiCountOutput) els.quasiCountOutput.textContent = state.quasiMode === 'diffraction' ? `${patch.diffraction.length} peaks` : `${patch.pointCount} points`;
+  if (els.quasiFactPeaks) els.quasiFactPeaks.textContent = String(patch.diffractionCandidateCount);
+  if (els.quasiReach) els.quasiReach.value = String(reachIndex);
+  if (els.quasiReachOutput) els.quasiReachOutput.textContent = `norm² ≤ ${state.quasiReach}`;
+  syncQuasicrystalAutoButton(els.quasiReachAuto, state.quasiReachAuto);
+  if (els.quasiWindow) els.quasiWindow.value = String(state.quasiWindow);
+  if (els.quasiWindowOutput) els.quasiWindowOutput.textContent = state.quasiWindow.toFixed(2);
+  syncQuasicrystalAutoButton(els.quasiWindowAuto, state.quasiWindowAuto);
+  if (els.quasiPhason) els.quasiPhason.value = String(state.quasiPhason);
+  if (els.quasiPhasonOutput) els.quasiPhasonOutput.textContent = state.quasiPhason.toFixed(2);
+  syncQuasicrystalAutoButton(els.quasiPhasonAuto, state.quasiPhasonAuto);
+  if (els.quasiRelief) els.quasiRelief.value = String(state.quasiRelief);
+  if (els.quasiReliefOutput) els.quasiReliefOutput.textContent = state.quasiRelief.toFixed(2);
+  syncQuasicrystalAutoButton(els.quasiReliefAuto, state.quasiReliefAuto);
+  if (els.quasiPointsToggle) els.quasiPointsToggle.checked = state.quasiShowPoints;
+  if (els.quasiPointHalosToggle) els.quasiPointHalosToggle.checked = state.quasiPointHalos;
+  if (els.quasiLinksToggle) els.quasiLinksToggle.checked = state.quasiShowLinks;
+  if (els.quasiGuideToggle) els.quasiGuideToggle.checked = state.quasiShowGuide;
+  if (els.quasiReliefField) els.quasiReliefField.classList.remove('hidden');
+  if (els.quasiLinksField) els.quasiLinksField.classList.toggle('hidden', state.quasiMode !== 'pattern');
+  if (els.quasicrystalField) {
+    els.quasicrystalField.querySelectorAll('[data-quasi-mode]').forEach(button => {
+      const active = button.dataset.quasiMode === state.quasiMode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+  return patch;
+}
+
+function syncQuasicrystalAnimatedControls() {
+  if (state.modelMode !== 'quasicrystal') return false;
+  const reachIndex = Math.max(0, QUASICRYSTAL_REACHES.indexOf(state.quasiReach));
+  if (els.quasiReach) els.quasiReach.value = String(reachIndex);
+  if (els.quasiReachOutput) els.quasiReachOutput.textContent = `norm² ≤ ${state.quasiReach}`;
+  if (els.quasiWindow) els.quasiWindow.value = String(state.quasiWindow);
+  if (els.quasiWindowOutput) els.quasiWindowOutput.textContent = state.quasiWindow.toFixed(2);
+  if (els.quasiPhason) els.quasiPhason.value = String(state.quasiPhason);
+  if (els.quasiPhasonOutput) els.quasiPhasonOutput.textContent = state.quasiPhason.toFixed(2);
+  if (els.quasiRelief) els.quasiRelief.value = String(state.quasiRelief);
+  if (els.quasiReliefOutput) els.quasiReliefOutput.textContent = state.quasiRelief.toFixed(2);
+  const patch = mobileQuasicrystalGeometry();
+  if (els.quasiCountOutput) els.quasiCountOutput.textContent = state.quasiMode === 'diffraction' ? `${patch.diffraction.length} peaks` : `${patch.pointCount} points`;
+  if (els.quasiFactPeaks) els.quasiFactPeaks.textContent = String(patch.diffractionCandidateCount);
+  return true;
+}
+
+function syncQuasicrystalAutoButton(button, active) {
+  if (!button) return false;
+  button.classList.toggle('active', !!active);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  return true;
+}
+
+function toggleQuasicrystalAuto(kind) {
+  if (kind === 'reach') {
+    const enabled = !state.quasiReachAuto;
+    if (enabled) {
+      quasiReachAutoIndex = Math.max(0, QUASICRYSTAL_REACHES.indexOf(state.quasiReach));
+      quasiReachAutoElapsed = 0;
+    }
+    const result = setManualRuntimeState({ quasiReachAuto: enabled }, 'quasi-reach-auto-toggle', {
+      syncModel: true,
+      syncMotionPreset: true,
+    });
+    showStatus(`Lattice reach auto ${enabled ? 'on' : 'off'}`);
+    return result;
+  }
+  const config = AUTO_QUASICRYSTAL_RANGES[kind];
+  if (!config) return false;
+  const enabled = !state[config.autoKey];
+  const patch = { [config.autoKey]: enabled };
+  if (enabled) patch[config.key] = clamp(state[config.key], config.min, config.max);
+  const result = setManualRuntimeState(patch, `quasi-${kind}-auto-toggle`, {
+    syncModel: true,
+    syncMotionPreset: true,
+  });
+  showStatus(`${kind === 'window' ? 'Window' : kind === 'phason' ? 'Phason' : 'Relief'} auto ${enabled ? 'on' : 'off'}`);
+  return result;
 }
 
 function modelContextVisible(context) {
@@ -4584,6 +5042,23 @@ function activeSceneSummary() {
       topbarLabel: `${tiling.name}, ${tiling.tileCount} rhombi, ${tiling.order}-fold local symmetry`,
       canvasLabel: `${tiling.name} Coxeter tiling with ${tiling.tileCount} rhombi and ${tiling.familyCount} line families`,
       infoCopy: `${tiling.name} turns ${tiling.familyCount} root directions into parallel line families, then dualizes their crossings into rhombi. This finite window shows ${rhythm}; toggle Multigrid to expose the construction. Use one finger to orbit and tilt the surface, and two fingers to pan or pinch-zoom.`,
+    };
+  }
+  if (state.modelMode === 'quasicrystal') {
+    const patch = mobileQuasicrystalGeometry();
+    const reading = state.quasiMode === 'window' ? 'hidden-space window' : state.quasiMode === 'diffraction' ? 'diffraction' : 'projected pattern';
+    const displayCount = state.quasiMode === 'diffraction' ? patch.diffraction.length : patch.pointCount;
+    const displayUnit = state.quasiMode === 'diffraction' ? 'peaks' : 'points';
+    return {
+      chipStrong: MODEL_LABELS.quasicrystal,
+      chipSmall: `${displayCount} ${displayUnit}`,
+      topbarLabel: state.quasiMode === 'diffraction'
+        ? `E8 Quasicrystal diffraction, ${displayCount} reciprocal peaks from ${patch.pointCount} accepted points`
+        : `E8 Quasicrystal ${reading}, ${patch.pointCount} accepted points from ${patch.candidateCount} tested`,
+      canvasLabel: state.quasiMode === 'diffraction'
+        ? `E8 cut-and-project diffraction with ${displayCount} reciprocal peaks on concentric structure-factor rings`
+        : `E8 cut-and-project ${reading} with ${patch.pointCount} accepted lattice points and thirtyfold Coxeter-plane order`,
+      infoCopy: `The E8 lattice is split into a visible 2D Coxeter-plane coordinate and six hidden coordinates. ${patch.pointCount} of ${patch.candidateCount} points pass the current spherical acceptance window. Pattern shows their projections, Window exposes the hidden-space test, and Diffraction computes a finite structure factor. Drag to orbit and tilt; pinch to zoom.`,
     };
   }
   if (state.modelMode === 'dynkin') {
@@ -4759,6 +5234,13 @@ function activeCuriosityNotes() {
       body: `${tiling.familyCount} families of parallel lines generate ${tiling.tileCount} visible rhombi in this finite window.`,
       detail: `${tiling.label} has ${tiling.order}-fold local symmetry and ${tiling.periodic ? 'repeats by translation' : 'does not repeat periodically'}. Every line crossing becomes one rhombus in the dual tiling.`,
     });
+  } else if (state.modelMode === 'quasicrystal') {
+    const patch = mobileQuasicrystalGeometry();
+    notes.push({
+      title: 'Hidden dimensions choose the pattern',
+      body: `${patch.pointCount} of ${patch.candidateCount} tested E8 lattice points pass the current six-dimensional acceptance window.`,
+      detail: 'Pattern shows visible projections, Window exposes the hidden-space test, and Diffraction measures coherent long-range order.',
+    });
   }
   notes.push({
     title: 'McKay lens',
@@ -4808,6 +5290,7 @@ function sceneLearnTopicId() {
   if (state.modelMode === 'poly4d') return 'into-four-dimensions';
   if (state.modelMode === 'rootlab') return 'rank-two-reflections';
   if (state.modelMode === 'tiling') return 'coxeter-multigrids';
+  if (state.modelMode === 'quasicrystal') return 'e8-cut-project';
   if (state.modelMode === 'dynkin') return 'reading-dynkin';
   return 'meet-e8';
 }
@@ -5464,9 +5947,9 @@ function renderScale() {
   const scale = typeof q.scale === 'function' ? q.scale() : q.scale;
   // The SDF's continuous shading exposes upscaling artifacts far more than
   // points or wireframes do. Keep it at a full CSS-pixel backing store even
-  // in Smooth mode; its own raster still follows the selected quality tier.
+  // in Low mode; its own raster still follows the selected quality tier.
   if (state.modelMode === 'sdf') return Math.max(1, scale);
-  // Smooth mode intentionally uses a small backing store, but sub-pixel
+  // Low mode intentionally uses a small backing store, but sub-pixel
   // Coxeter chords become visibly stair-stepped when magnified. Raise the
   // floor only for close E8 edge inspection; the chord layer remains a single
   // GPU draw during pinch and orbit gestures.
@@ -5592,6 +6075,61 @@ function resetE8ChordWebglResources() {
   e8ChordVertexCount = 0;
 }
 
+function resetQuasicrystalWebglResources() {
+  quasicrystalLineProgram = null;
+  quasicrystalLineBuffer = null;
+  quasicrystalLineAttributes = null;
+  quasicrystalLineUniforms = null;
+  quasicrystalPointProgram = null;
+  quasicrystalPointBuffer = null;
+  quasicrystalPointAttributes = null;
+  quasicrystalPointUniforms = null;
+}
+
+function installMobileGeometryContextHandlers() {
+  if (!e8ChordCanvas || e8ChordContextHandlersInstalled) return;
+  e8ChordContextHandlersInstalled = true;
+  e8ChordCanvas.addEventListener('webglcontextlost', event => {
+    event.preventDefault();
+    metrics.e8ChordWebglContextLossCount++;
+    metrics.lastE8ChordWebglContextLossMs = performance.now();
+    e8ChordGl = null;
+    resetE8ChordWebglResources();
+    resetQuasicrystalWebglResources();
+    setE8ChordCanvasActive(false);
+    requestRender('mobile-geometry-context-lost');
+  });
+  e8ChordCanvas.addEventListener('webglcontextrestored', () => {
+    metrics.e8ChordWebglContextRestoreCount++;
+    metrics.lastE8ChordWebglContextRestoreMs = performance.now();
+    e8ChordGl = null;
+    e8ChordWebglUnavailable = false;
+    quasicrystalWebglUnavailable = false;
+    resetE8ChordWebglResources();
+    resetQuasicrystalWebglResources();
+    requestRender('mobile-geometry-context-restored');
+  });
+}
+
+function ensureMobileGeometryWebglContext() {
+  if (!e8ChordCanvas || e8ChordWebglUnavailable) return false;
+  if (!e8ChordGl) {
+    e8ChordGl = e8ChordCanvas.getContext('webgl', {
+      alpha: true,
+      antialias: true,
+      depth: false,
+      stencil: false,
+      premultipliedAlpha: true,
+      // Image exports composite this layer after WebGL submits it.
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+  }
+  if (!e8ChordGl) return false;
+  installMobileGeometryContextHandlers();
+  return true;
+}
+
 function buildE8ChordVertexData() {
   const data = new Float32Array(e8ChordEdges.length * 2 * E8_CHORD_VERTEX_STRIDE_FLOATS);
   let offset = 0;
@@ -5646,43 +6184,11 @@ function ensureE8ChordWebgl() {
   if (!e8ChordCanvas || e8ChordWebglUnavailable || !e8ChordEdges.length || !points.length) return false;
   if (e8ChordGl && e8ChordProgram && e8ChordBuffer && e8ChordUniforms && e8ChordAttributes) return true;
   try {
-    e8ChordGl = e8ChordCanvas.getContext('webgl', {
-      alpha: true,
-      antialias: true,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: true,
-      // Canvas FX and image exports read this layer after WebGL submits it.
-      // Chromium may clear a non-preserved buffer before drawImage observes it,
-      // which makes composited effects lose the chord mesh.
-      preserveDrawingBuffer: true,
-      powerPreference: 'high-performance',
-    });
-    if (!e8ChordGl) {
+    if (!ensureMobileGeometryWebglContext()) {
       e8ChordWebglUnavailable = true;
       metrics.e8ChordWebglFallbackCount++;
       metrics.lastE8ChordRenderer = 'canvas-fallback';
       return false;
-    }
-    if (!e8ChordContextHandlersInstalled) {
-      e8ChordContextHandlersInstalled = true;
-      e8ChordCanvas.addEventListener('webglcontextlost', event => {
-        event.preventDefault();
-        metrics.e8ChordWebglContextLossCount++;
-        metrics.lastE8ChordWebglContextLossMs = performance.now();
-        e8ChordGl = null;
-        resetE8ChordWebglResources();
-        setE8ChordCanvasActive(false);
-        requestRender('e8-chord-context-lost');
-      });
-      e8ChordCanvas.addEventListener('webglcontextrestored', () => {
-        metrics.e8ChordWebglContextRestoreCount++;
-        metrics.lastE8ChordWebglContextRestoreMs = performance.now();
-        e8ChordGl = null;
-        e8ChordWebglUnavailable = false;
-        resetE8ChordWebglResources();
-        requestRender('e8-chord-context-restored');
-      });
     }
 
     const gl = e8ChordGl;
@@ -6070,6 +6576,7 @@ function render() {
       backgroundMode: backgroundStats.mode,
       backgroundRenderer: backgroundStats.renderer,
       backgroundPrimitives: backgroundStats.primitives,
+      backgroundBaseColor: backgroundStats.baseColor,
       modelMode: state.modelMode,
       modelLabel: MODEL_LABELS[state.modelMode] || MODEL_LABELS.e8_2d,
       shape: state.shape,
@@ -6082,6 +6589,7 @@ function render() {
       rootSystemLabel: RANK2_ROOT_SYSTEMS[state.rootSystem]?.label || state.rootSystem,
       tilingSystem: state.tilingSystem,
       tilingSystemLabel: COXETER_TILINGS[state.tilingSystem]?.label || state.tilingSystem,
+      quasiMode: state.quasiMode,
       runtimePalette: paletteSet.name || state.palette,
       autoColor: state.autoColor,
       autoFx: state.autoFx,
@@ -6117,6 +6625,10 @@ function render() {
       modelFaces: 0,
       modelFaceFills: 0,
       modelVertexFills: 0,
+      quasiPointRingStrokes: 0,
+      quasiGuideRays: 0,
+      quasiGuideRings: 0,
+      quasiGuideAxes: 0,
       minPointRadius: null,
       maxPointRadius: null,
       sdfRasterSize: 0,
@@ -6150,6 +6662,12 @@ function render() {
 
     if (state.modelMode === 'tiling') {
       const projectedAllFrame = drawTilingModel(layout, paletteSet, drawStats, interactionLiteFrame);
+      completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
+      return;
+    }
+
+    if (state.modelMode === 'quasicrystal') {
+      const projectedAllFrame = drawQuasicrystalModel(layout, paletteSet, drawStats, interactionLiteFrame);
       completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame);
       return;
     }
@@ -6770,6 +7288,7 @@ function completeRender(t0, drawStats, projectedAllFrame, liveControlLiteFrame) 
   if (state.modelMode === 'poly4d') metrics.polytope4DDrawCount++;
   if (state.modelMode === 'rootlab') metrics.rootLabDrawCount = (metrics.rootLabDrawCount || 0) + 1;
   if (state.modelMode === 'tiling') metrics.tilingDrawCount = (metrics.tilingDrawCount || 0) + 1;
+  if (state.modelMode === 'quasicrystal') metrics.quasicrystalDrawCount = (metrics.quasicrystalDrawCount || 0) + 1;
   if (state.modelMode === 'dynkin') metrics.dynkinDrawCount++;
   metrics.lastRenderMs = performance.now() - t0;
   if (metrics.firstRenderMs == null) metrics.firstRenderMs = performance.now() - startedAt;
@@ -7594,7 +8113,7 @@ function drawSdfWebglModel(layout, paletteSet, drawStats, interactionLiteFrame) 
     const motionPixelBoost = profileKey === 'motion' ? selectedMotionBoost : 1;
     let pixelBoost = isStaticFrame ? Math.min(devicePixelRatio, 1.75) : motionPixelBoost;
     let rasterScale = profile.scale * pixelBoost;
-    // Sharp is the inspection tier: render at the display's native pixel grid
+    // High is the inspection tier: render at the display's native pixel grid
     // so WebView scaling cannot manufacture a dark filtered contour.
     if (isStaticFrame && profileKey === 'sharp') rasterScale = Math.max(rasterScale, devicePixelRatio);
     pixelBoost = rasterScale / profile.scale;
@@ -8519,6 +9038,666 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   return frame;
 }
 
+function mobileQuasicrystalGeometry() {
+  const includeDiffraction = state.quasiMode === 'diffraction';
+  const includeEdges = state.quasiMode === 'pattern';
+  const key = `${state.quasiReach}|${state.quasiWindow.toFixed(3)}|${state.quasiPhason.toFixed(3)}|${includeDiffraction ? 'd1' : 'd0'}|${includeEdges ? 'e1' : 'e0'}`;
+  if (key !== quasicrystalGeometryCacheKey || !quasicrystalGeometryCache) {
+    quasicrystalGeometryCacheKey = key;
+    quasicrystalGeometryCache = generateE8Quasicrystal(data.e8, {
+      maxNormSq: state.quasiReach,
+      windowRadius: state.quasiWindow,
+      phason: state.quasiPhason,
+      includeDiffraction,
+      includeEdges,
+    });
+  }
+  return quasicrystalGeometryCache;
+}
+
+const QUASICRYSTAL_COLOR_BUCKETS = 24;
+const QUASICRYSTAL_SIZE_BUCKETS = 4;
+// Match the canonical Three.js camera used by the desktop Studio. Quasicrystal
+// points are authored in a unit disc and expanded by baseScale = 1.6 there;
+// the camera sits six world units away at 30deg yaw / 30deg elevation.
+const QUASICRYSTAL_DESKTOP_RADIUS = 1.6;
+const QUASICRYSTAL_DESKTOP_CAMERA_DISTANCE = 6;
+const QUASICRYSTAL_DESKTOP_CAMERA_YAW = Math.PI / 6;
+const QUASICRYSTAL_DESKTOP_CAMERA_PITCH = Math.PI / 6;
+
+function quasicrystalUnitTurn(value) {
+  return ((value % 1) + 1) % 1;
+}
+
+function quasicrystalColorValue(point, patch, mode) {
+  const angle = quasicrystalUnitTurn(Math.atan2(point.normalized?.[1] || 0, point.normalized?.[0] || 0) / TAU);
+  if (mode === 'diffraction') return angle;
+  if (mode === 'window') return clamp(0.08 + (point.acceptance || 0) * 0.82, 0, 1);
+  const shell = quasicrystalUnitTurn((point.normSq || 0) / (patch.maxNormSq + 2));
+  return clamp(angle * 0.62 + shell * 0.38, 0, 1);
+}
+
+function quasicrystalPointOuterRadius(record) {
+  const strength = clamp(record.strength || 0, 0, 1);
+  let spriteSize;
+  let mobileRadiusScale;
+  if (state.quasiMode === 'diffraction') {
+    spriteSize = 0.34 + strength * 1.9;
+    mobileRadiusScale = 2.45;
+  } else if (state.quasiMode === 'window') {
+    spriteSize = 0.52 + strength * 0.86;
+    mobileRadiusScale = 2.05;
+  } else {
+    spriteSize = 0.62 + strength * 0.72 + ((record.source.normSq || Infinity) <= 2 ? 0.35 : 0);
+    mobileRadiusScale = 1.7;
+  }
+  return spriteSize * mobileRadiusScale * state.pointScale * (record.projected.perspective || 1);
+}
+
+function quasicrystalColorBucket(value) {
+  return Math.min(QUASICRYSTAL_COLOR_BUCKETS - 1, Math.floor(clamp(value, 0, 0.999999) * QUASICRYSTAL_COLOR_BUCKETS));
+}
+
+function projectQuasicrystalCoordinates(x, y, z = 0) {
+  const yaw = state.rotation + QUASICRYSTAL_DESKTOP_CAMERA_YAW;
+  const pitch = planeCameraPitch() + QUASICRYSTAL_DESKTOP_CAMERA_PITCH;
+  const yawCos = Math.cos(yaw);
+  const yawSin = Math.sin(yaw);
+  const pitchCos = Math.cos(pitch);
+  const pitchSin = Math.sin(pitch);
+  const rotatedX = x * yawCos - z * yawSin;
+  const rotatedZ = x * yawSin + z * yawCos;
+  const rotatedY = y * pitchCos - rotatedZ * pitchSin;
+  const depth = y * pitchSin + rotatedZ * pitchCos;
+  // Desktop camera-space distance is 6 - worldDepth. The earlier mobile path
+  // used 4.2 + depth, so positions shrank while their sprites grew whenever a
+  // relief point approached the camera. Keep both calculations on one model.
+  const worldDepth = depth * QUASICRYSTAL_DESKTOP_RADIUS;
+  const perspective = QUASICRYSTAL_DESKTOP_CAMERA_DISTANCE
+    / Math.max(1, QUASICRYSTAL_DESKTOP_CAMERA_DISTANCE - worldDepth);
+  const pathZoom = planeCameraPathZoom();
+  return {
+    x: rotatedX * perspective * pathZoom,
+    y: rotatedY * perspective * pathZoom,
+    z: depth,
+    perspective,
+  };
+}
+
+function projectQuasicrystalScreenPoint(x, y, z, layout, modelScale = 1) {
+  const projected = projectQuasicrystalCoordinates(x, y, z);
+  const scale = layout.scale * modelScale;
+  return {
+    x: layout.cx + state.panX + projected.x * scale,
+    y: layout.cy + state.panY - projected.y * scale,
+    z: projected.z,
+    perspective: projected.perspective,
+  };
+}
+
+function traceQuasicrystalCircle(project, radius, steps = 120) {
+  ctx.beginPath();
+  for (let step = 0; step <= steps; step++) {
+    const angle = step / steps * TAU;
+    const point = project([Math.cos(angle) * radius, Math.sin(angle) * radius, -0.04]);
+    if (step) ctx.lineTo(point.x, point.y);
+    else ctx.moveTo(point.x, point.y);
+  }
+}
+
+function drawQuasicrystalGuide(layout, paletteSet, patch, project, drawStats, interactionLiteFrame) {
+  if (!state.quasiShowGuide || interactionLiteFrame) return;
+  ctx.save();
+  ctx.lineWidth = 0.7;
+
+  if (state.quasiMode === 'diffraction') {
+    const radii = [...new Set(patch.diffraction.map(peak => peak.radius.toFixed(6)))]
+      .map(Number)
+      .sort((a, b) => a - b);
+    const maxRadius = Math.max(...radii, 1);
+    radii.forEach((ring, index) => {
+      const turn = index / Math.max(1, radii.length - 1);
+      traceQuasicrystalCircle(project, ring / maxRadius);
+      ctx.strokeStyle = colorWithAlpha(paletteColorAt(paletteSet, turn), 0.14 + turn * 0.08);
+      ctx.stroke();
+      drawStats.modelEdgeStrokes++;
+      drawStats.quasiGuideRings++;
+    });
+    ctx.restore();
+    return;
+  }
+
+  if (state.quasiMode === 'window') {
+    [0.25, 0.5, 0.75, 1].forEach((ring, index) => {
+      traceQuasicrystalCircle(project, ring);
+      ctx.strokeStyle = colorWithAlpha(paletteColorAt(paletteSet, 0.12 + index * 0.2), ring === 1 ? 0.72 : 0.17);
+      ctx.stroke();
+      drawStats.modelEdgeStrokes++;
+      drawStats.quasiGuideRings++;
+    });
+    const horizontalA = project([-1, 0, -0.05]);
+    const horizontalB = project([1, 0, -0.05]);
+    const verticalA = project([0, -1, -0.05]);
+    const verticalB = project([0, 1, -0.05]);
+    ctx.beginPath();
+    ctx.moveTo(horizontalA.x, horizontalA.y);
+    ctx.lineTo(horizontalB.x, horizontalB.y);
+    ctx.moveTo(verticalA.x, verticalA.y);
+    ctx.lineTo(verticalB.x, verticalB.y);
+    ctx.strokeStyle = colorWithAlpha(paletteColorAt(paletteSet, 0.55), 0.22);
+    ctx.stroke();
+    drawStats.modelEdgeStrokes++;
+    drawStats.quasiGuideAxes += 2;
+    ctx.restore();
+    return;
+  }
+
+  const origin = project([0, 0, -0.05]);
+  for (let index = 0; index < patch.symmetryOrder; index++) {
+    const angle = index * TAU / patch.symmetryOrder;
+    const endpoint = project([Math.cos(angle) * 1.03, Math.sin(angle) * 1.03, -0.05]);
+    ctx.beginPath();
+    ctx.moveTo(origin.x, origin.y);
+    ctx.lineTo(endpoint.x, endpoint.y);
+    ctx.strokeStyle = colorWithAlpha(paletteColorAt(paletteSet, index / patch.symmetryOrder), 0.12);
+    ctx.stroke();
+    drawStats.modelEdgeStrokes++;
+    drawStats.quasiGuideRays++;
+  }
+  ctx.restore();
+}
+
+function createQuasicrystalWebglProgram(gl, vertexSource, fragmentSource) {
+  const vertex = compileE8ChordShader(gl, gl.VERTEX_SHADER, vertexSource);
+  const fragment = compileE8ChordShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  const program = gl.createProgram();
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program) || 'Quasicrystal shader linking failed';
+    gl.deleteProgram(program);
+    throw new Error(message);
+  }
+  return program;
+}
+
+function ensureQuasicrystalWebgl() {
+  if (quasicrystalWebglUnavailable || !e8ChordCanvas) return false;
+  if (
+    e8ChordGl
+    && quasicrystalLineProgram
+    && quasicrystalLineBuffer
+    && quasicrystalLineAttributes
+    && quasicrystalPointProgram
+    && quasicrystalPointBuffer
+    && quasicrystalPointAttributes
+  ) return true;
+  try {
+    if (!ensureMobileGeometryWebglContext()) {
+      quasicrystalWebglUnavailable = true;
+      return false;
+    }
+    const gl = e8ChordGl;
+    quasicrystalLineProgram = createQuasicrystalWebglProgram(
+      gl,
+      QUASICRYSTAL_LINE_VERTEX_SHADER,
+      QUASICRYSTAL_LINE_FRAGMENT_SHADER,
+    );
+    quasicrystalLineBuffer = gl.createBuffer();
+    quasicrystalLineAttributes = {
+      position: gl.getAttribLocation(quasicrystalLineProgram, 'aPosition'),
+      color: gl.getAttribLocation(quasicrystalLineProgram, 'aColor'),
+    };
+    quasicrystalLineUniforms = {
+      resolution: gl.getUniformLocation(quasicrystalLineProgram, 'uResolution'),
+    };
+
+    quasicrystalPointProgram = createQuasicrystalWebglProgram(
+      gl,
+      QUASICRYSTAL_POINT_VERTEX_SHADER,
+      QUASICRYSTAL_POINT_FRAGMENT_SHADER,
+    );
+    quasicrystalPointBuffer = gl.createBuffer();
+    quasicrystalPointAttributes = {
+      position: gl.getAttribLocation(quasicrystalPointProgram, 'aPosition'),
+      color: gl.getAttribLocation(quasicrystalPointProgram, 'aColor'),
+      size: gl.getAttribLocation(quasicrystalPointProgram, 'aSize'),
+    };
+    quasicrystalPointUniforms = {
+      resolution: gl.getUniformLocation(quasicrystalPointProgram, 'uResolution'),
+      pixelRatio: gl.getUniformLocation(quasicrystalPointProgram, 'uPixelRatio'),
+      opacity: gl.getUniformLocation(quasicrystalPointProgram, 'uOpacity'),
+      showRim: gl.getUniformLocation(quasicrystalPointProgram, 'uShowRim'),
+    };
+    metrics.quasicrystalWebglInitCount = (metrics.quasicrystalWebglInitCount || 0) + 1;
+    metrics.lastQuasicrystalWebglInitMs = performance.now();
+    return true;
+  } catch (error) {
+    quasicrystalWebglUnavailable = true;
+    metrics.quasicrystalWebglFallbackCount = (metrics.quasicrystalWebglFallbackCount || 0) + 1;
+    metrics.lastQuasicrystalWebglError = error?.message || String(error);
+    resetQuasicrystalWebglResources();
+    return false;
+  }
+}
+
+function appendQuasicrystalLineVertex(target, point, paletteSet, colorValue, alpha) {
+  const color = paletteChannelsAt(paletteSet, colorValue);
+  target.push(
+    point.x,
+    point.y,
+    color[0] / 255,
+    color[1] / 255,
+    color[2] / 255,
+    alpha,
+  );
+}
+
+function appendQuasicrystalLine(target, a, b, paletteSet, colorValue, alpha) {
+  appendQuasicrystalLineVertex(target, a, paletteSet, colorValue, alpha);
+  appendQuasicrystalLineVertex(target, b, paletteSet, colorValue, alpha);
+}
+
+function appendQuasicrystalCircleLines(target, project, radius, paletteSet, colorValue, alpha, steps = 120) {
+  let previous = project([radius, 0, -0.04]);
+  for (let step = 1; step <= steps; step++) {
+    const angle = step / steps * TAU;
+    const next = project([Math.cos(angle) * radius, Math.sin(angle) * radius, -0.04]);
+    appendQuasicrystalLine(target, previous, next, paletteSet, colorValue, alpha);
+    previous = next;
+  }
+}
+
+function buildQuasicrystalGuideVertexData(patch, project, paletteSet, drawStats) {
+  const vertices = [];
+  if (!state.quasiShowGuide) return vertices;
+  if (state.quasiMode === 'diffraction') {
+    const radii = [...new Set(patch.diffraction.map(peak => peak.radius.toFixed(6)))]
+      .map(Number)
+      .sort((a, b) => a - b);
+    const maxRadius = Math.max(...radii, 1);
+    radii.forEach((ring, index) => {
+      const turn = index / Math.max(1, radii.length - 1);
+      appendQuasicrystalCircleLines(vertices, project, ring / maxRadius, paletteSet, turn, 0.14 + turn * 0.08);
+      drawStats.quasiGuideRings++;
+    });
+    return vertices;
+  }
+  if (state.quasiMode === 'window') {
+    [0.25, 0.5, 0.75, 1].forEach((ring, index) => {
+      appendQuasicrystalCircleLines(
+        vertices,
+        project,
+        ring,
+        paletteSet,
+        0.12 + index * 0.2,
+        ring === 1 ? 0.72 : 0.17,
+      );
+      drawStats.quasiGuideRings++;
+    });
+    appendQuasicrystalLine(vertices, project([-1, 0, -0.05]), project([1, 0, -0.05]), paletteSet, 0.55, 0.22);
+    appendQuasicrystalLine(vertices, project([0, -1, -0.05]), project([0, 1, -0.05]), paletteSet, 0.55, 0.22);
+    drawStats.quasiGuideAxes += 2;
+    return vertices;
+  }
+  const origin = project([0, 0, -0.05]);
+  for (let index = 0; index < patch.symmetryOrder; index++) {
+    const angle = index * TAU / patch.symmetryOrder;
+    const endpoint = project([Math.cos(angle) * 1.03, Math.sin(angle) * 1.03, -0.05]);
+    appendQuasicrystalLine(vertices, origin, endpoint, paletteSet, index / patch.symmetryOrder, 0.12);
+    drawStats.quasiGuideRays++;
+  }
+  return vertices;
+}
+
+function quasicrystalDesktopPointSize(record, visualScale) {
+  const strength = clamp(record.strength || 0, 0, 1);
+  let baseSize;
+  let size;
+  if (state.quasiMode === 'diffraction') {
+    // Desktop constructs this mode at 22px, then its shared update loop sets
+    // uBaseSize to 17px before the rendered frame. Match the value users
+    // actually see rather than the transient constructor default.
+    baseSize = 17;
+    size = 0.34 + strength * 1.9;
+  } else if (state.quasiMode === 'window') {
+    baseSize = 17;
+    size = 0.52 + strength * 0.86;
+  } else {
+    baseSize = 17;
+    size = 0.62 + strength * 0.72 + ((record.source.normSq || Infinity) <= 2 ? 0.35 : 0);
+  }
+  // Desktop's point shader scales by 6 / -modelViewZ with the camera at z=6.
+  // Mobile stores depth in normalized model units, so restore baseScale first.
+  const depthScale = QUASICRYSTAL_DESKTOP_CAMERA_DISTANCE / Math.max(
+    1,
+    QUASICRYSTAL_DESKTOP_CAMERA_DISTANCE
+      - (record.projected.z || 0) * QUASICRYSTAL_DESKTOP_RADIUS,
+  );
+  return baseSize * size * state.pointScale * depthScale * visualScale;
+}
+
+function buildQuasicrystalPointVertexData(records, paletteSet, visualScale) {
+  const vertices = [];
+  for (const record of records) {
+    const color = paletteChannelsAt(paletteSet, record.colorValue);
+    vertices.push(
+      record.projected.x,
+      record.projected.y,
+      color[0] / 255,
+      color[1] / 255,
+      color[2] / 255,
+      quasicrystalDesktopPointSize(record, visualScale),
+    );
+  }
+  return vertices;
+}
+
+function drawQuasicrystalWebglModel(layout, patch, records, project, paletteSet, drawStats) {
+  if (!ensureQuasicrystalWebgl()) return false;
+  try {
+    const started = performance.now();
+    const gl = e8ChordGl;
+    if (e8ChordCanvas.width !== canvas.width || e8ChordCanvas.height !== canvas.height) {
+      e8ChordCanvas.width = canvas.width;
+      e8ChordCanvas.height = canvas.height;
+    }
+    e8ChordCanvas.style.width = `${canvasCssWidth}px`;
+    e8ChordCanvas.style.height = `${canvasCssHeight}px`;
+    gl.viewport(0, 0, e8ChordCanvas.width, e8ChordCanvas.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    const guideVertices = buildQuasicrystalGuideVertexData(patch, project, paletteSet, drawStats);
+    const linkVertices = [];
+    if (state.quasiMode === 'pattern' && state.quasiShowLinks) {
+      for (const [aIndex, bIndex] of patch.edges) {
+        const a = records[aIndex];
+        const b = records[bIndex];
+        if (!a || !b) continue;
+        const midpointX = (a.normalized[0] + b.normalized[0]) * 0.5;
+        const midpointY = (a.normalized[1] + b.normalized[1]) * 0.5;
+        const turn = quasicrystalUnitTurn(Math.atan2(midpointY, midpointX) / TAU + 0.5);
+        appendQuasicrystalLine(linkVertices, a.projected, b.projected, paletteSet, turn, 0.46);
+      }
+    }
+    const lineVertices = new Float32Array([...guideVertices, ...linkVertices]);
+    const guideVertexCount = guideVertices.length / QUASICRYSTAL_LINE_VERTEX_STRIDE_FLOATS;
+    const linkVertexCount = linkVertices.length / QUASICRYSTAL_LINE_VERTEX_STRIDE_FLOATS;
+    if (lineVertices.length) {
+      gl.useProgram(quasicrystalLineProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quasicrystalLineBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, lineVertices, gl.DYNAMIC_DRAW);
+      const stride = QUASICRYSTAL_LINE_VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+      gl.enableVertexAttribArray(quasicrystalLineAttributes.position);
+      gl.vertexAttribPointer(quasicrystalLineAttributes.position, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(quasicrystalLineAttributes.color);
+      gl.vertexAttribPointer(
+        quasicrystalLineAttributes.color,
+        4,
+        gl.FLOAT,
+        false,
+        stride,
+        2 * Float32Array.BYTES_PER_ELEMENT,
+      );
+      gl.uniform2f(quasicrystalLineUniforms.resolution, window.innerWidth, window.innerHeight);
+      const lineRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE) || [1, 1];
+      gl.lineWidth(clamp(renderScale(), lineRange[0], lineRange[1]));
+      if (guideVertexCount) {
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.drawArrays(gl.LINES, 0, guideVertexCount);
+        drawStats.modelEdgeStrokes++;
+      }
+      if (linkVertexCount) {
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.drawArrays(gl.LINES, guideVertexCount, linkVertexCount);
+        drawStats.modelEdgeStrokes++;
+      }
+    }
+
+    const showPoints = state.quasiShowPoints;
+    if (showPoints && records.length) {
+      // Quality changes backing resolution, not the geometry's visual weight.
+      // Shrinking these fixed-pixel sprites made Low/Balanced Pattern look like
+      // a sparse wire network while desktop rendered the intended dense field.
+      // Keep the canonical desktop point shader at every tier; renderScale()
+      // still supplies the substantial fill-rate saving on lower qualities.
+      const visualScale = 1;
+      drawStats.quasiPointVisualScale = visualScale;
+      const pointVertices = new Float32Array(buildQuasicrystalPointVertexData(records, paletteSet, visualScale));
+      gl.useProgram(quasicrystalPointProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quasicrystalPointBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, pointVertices, gl.DYNAMIC_DRAW);
+      const stride = QUASICRYSTAL_POINT_VERTEX_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+      gl.enableVertexAttribArray(quasicrystalPointAttributes.position);
+      gl.vertexAttribPointer(quasicrystalPointAttributes.position, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(quasicrystalPointAttributes.color);
+      gl.vertexAttribPointer(
+        quasicrystalPointAttributes.color,
+        3,
+        gl.FLOAT,
+        false,
+        stride,
+        2 * Float32Array.BYTES_PER_ELEMENT,
+      );
+      gl.enableVertexAttribArray(quasicrystalPointAttributes.size);
+      gl.vertexAttribPointer(
+        quasicrystalPointAttributes.size,
+        1,
+        gl.FLOAT,
+        false,
+        stride,
+        5 * Float32Array.BYTES_PER_ELEMENT,
+      );
+      gl.uniform2f(quasicrystalPointUniforms.resolution, window.innerWidth, window.innerHeight);
+      gl.uniform1f(quasicrystalPointUniforms.pixelRatio, renderScale());
+      gl.uniform1f(quasicrystalPointUniforms.opacity, 0.96);
+      gl.uniform1f(quasicrystalPointUniforms.showRim, state.quasiPointHalos ? 1 : 0);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.drawArrays(gl.POINTS, 0, records.length);
+      drawStats.modelVertexFills++;
+      if (state.quasiPointHalos) drawStats.quasiPointRingStrokes++;
+    }
+
+    setE8ChordCanvasActive(true);
+    drawStats.quasiRenderer = 'webgl-desktop-shader';
+    drawStats.quasiGpuDrawCalls = (guideVertexCount ? 1 : 0) + (linkVertexCount ? 1 : 0) + (showPoints ? 1 : 0);
+    drawStats.quasiGpuLineVertices = guideVertexCount + linkVertexCount;
+    drawStats.quasiGpuPointVertices = showPoints ? records.length : 0;
+    metrics.quasicrystalWebglDrawCount = (metrics.quasicrystalWebglDrawCount || 0) + 1;
+    metrics.lastQuasicrystalWebglDrawMs = performance.now() - started;
+    metrics.lastQuasicrystalRenderer = drawStats.quasiRenderer;
+    return true;
+  } catch (error) {
+    quasicrystalWebglUnavailable = true;
+    metrics.quasicrystalWebglFallbackCount = (metrics.quasicrystalWebglFallbackCount || 0) + 1;
+    metrics.lastQuasicrystalWebglError = error?.message || String(error);
+    resetQuasicrystalWebglResources();
+    setE8ChordCanvasActive(false);
+    return false;
+  }
+}
+
+function drawQuasicrystalModel(layout, paletteSet, drawStats, interactionLiteFrame) {
+  const patch = mobileQuasicrystalGeometry();
+  // Desktop gives the reciprocal field substantially more screen-space than
+  // the original phone fit. Expanding Diffraction to the safe portrait width
+  // restores the desktop ratio between fixed-pixel peak sprites and the
+  // projected pattern; 1.22 is the largest canonical scale that keeps the
+  // asymmetric perspective frame inside the 28px/usable-right bounds.
+  const modelScale = state.quasiMode === 'diffraction' ? 1.22 : 1.05;
+  drawStats.quasiModelScale = modelScale;
+  const project = source => projectQuasicrystalScreenPoint(source[0], source[1], source[2] || 0, layout, modelScale);
+  let records;
+  if (state.quasiMode === 'window') {
+    records = patch.points.map(point => ({
+      source: point,
+      normalized: point.windowPlot,
+      strength: point.acceptance,
+      projected: project([
+        point.windowPlot[0],
+        point.windowPlot[1],
+        quasicrystalReliefHeight(point, 'window', state.quasiRelief, 1),
+      ]),
+    }));
+  } else if (state.quasiMode === 'diffraction') {
+    records = patch.diffraction.map(point => ({
+      source: point,
+      normalized: point.normalized,
+      strength: point.strength,
+      projected: project([
+        point.normalized[0],
+        point.normalized[1],
+        quasicrystalReliefHeight(point, 'diffraction', state.quasiRelief, 1),
+      ]),
+    }));
+  } else {
+    records = patch.points.map(point => ({
+      source: point,
+      normalized: point.normalized,
+      strength: point.acceptance,
+      projected: project([
+        point.normalized[0],
+        point.normalized[1],
+        quasicrystalReliefHeight(point, 'pattern', state.quasiRelief, 1),
+      ]),
+    }));
+  }
+  const projected = records.map(record => record.projected);
+  const perspectives = records.map(record => record.projected.perspective);
+  drawStats.quasiCameraYaw = state.rotation + QUASICRYSTAL_DESKTOP_CAMERA_YAW;
+  drawStats.quasiCameraPitch = planeCameraPitch() + QUASICRYSTAL_DESKTOP_CAMERA_PITCH;
+  drawStats.quasiPerspectiveMin = perspectives.length ? Math.min(...perspectives) : 1;
+  drawStats.quasiPerspectiveMax = perspectives.length ? Math.max(...perspectives) : 1;
+  drawStats.quasiProjection = 'desktop-camera';
+  quasicrystalHitTargets = state.quasiMode === 'diffraction' || isSettingsOpen() ? [] : records.map((record, index) => ({
+    index,
+    x: record.projected.x,
+    y: record.projected.y,
+    size: Math.max(5, 3 + record.strength * 4),
+  }));
+
+  for (const record of records) {
+    record.relief = quasicrystalReliefHeight(
+      record.source,
+      state.quasiMode,
+      state.quasiRelief,
+      1,
+    );
+    record.colorValue = quasicrystalColorValue(record.source, patch, state.quasiMode);
+    record.outerRadius = quasicrystalPointOuterRadius(record);
+  }
+
+  const gpuRendered = drawQuasicrystalWebglModel(layout, patch, records, project, paletteSet, drawStats);
+  if (!gpuRendered) {
+    drawStats.quasiRenderer = 'canvas-fallback';
+    drawQuasicrystalGuide(layout, paletteSet, patch, project, drawStats, interactionLiteFrame);
+
+    if (state.quasiMode === 'pattern' && state.quasiShowLinks && !interactionLiteFrame) {
+      const buckets = Array.from({ length: QUASICRYSTAL_COLOR_BUCKETS }, () => []);
+      for (const [aIndex, bIndex] of patch.edges) {
+        const a = records[aIndex];
+        const b = records[bIndex];
+        if (!a || !b) continue;
+        const midpoint = [
+          (a.normalized[0] + b.normalized[0]) / 2,
+          (a.normalized[1] + b.normalized[1]) / 2,
+        ];
+        const turn = quasicrystalUnitTurn(Math.atan2(midpoint[1], midpoint[0]) / TAU + 0.5);
+        buckets[quasicrystalColorBucket(turn)].push([a.projected, b.projected]);
+      }
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.globalCompositeOperation = 'lighter';
+      buckets.forEach((edges, index) => {
+        if (!edges.length) return;
+        ctx.beginPath();
+        for (const [a, b] of edges) {
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+        ctx.lineWidth = 0.72;
+        ctx.strokeStyle = colorWithAlpha(paletteColorAt(paletteSet, (index + 0.5) / QUASICRYSTAL_COLOR_BUCKETS), 0.46);
+        ctx.stroke();
+        drawStats.modelEdgeStrokes++;
+      });
+      ctx.restore();
+    }
+
+    if (state.quasiShowPoints) {
+      const buckets = Array.from({ length: QUASICRYSTAL_COLOR_BUCKETS }, () => []);
+      records.forEach(record => buckets[quasicrystalColorBucket(record.colorValue)].push(record));
+      const showPointHalos = state.quasiPointHalos && !interactionLiteFrame;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      buckets.forEach((items, bucketIndex) => {
+        if (!items.length) return;
+        const color = paletteColorAt(paletteSet, (bucketIndex + 0.5) / QUASICRYSTAL_COLOR_BUCKETS);
+        ctx.beginPath();
+        for (const record of items) {
+          const pointRadius = state.quasiPointHalos ? Math.max(0.58, record.outerRadius * 0.44) : record.outerRadius;
+          ctx.moveTo(record.projected.x + pointRadius, record.projected.y);
+          ctx.arc(record.projected.x, record.projected.y, pointRadius, 0, TAU);
+        }
+        ctx.fillStyle = colorWithAlpha(color, state.quasiMode === 'window' ? 0.82 : 0.96);
+        ctx.fill();
+        drawStats.modelVertexFills++;
+
+        if (showPointHalos) {
+          const sizeBuckets = Array.from({ length: QUASICRYSTAL_SIZE_BUCKETS }, () => []);
+          const maxRadius = Math.max(...items.map(item => item.outerRadius), 0.001);
+          for (const record of items) {
+            const band = Math.min(QUASICRYSTAL_SIZE_BUCKETS - 1, Math.floor(record.outerRadius / maxRadius * QUASICRYSTAL_SIZE_BUCKETS));
+            sizeBuckets[band].push(record);
+          }
+          for (const sizeItems of sizeBuckets) {
+            if (!sizeItems.length) continue;
+            ctx.beginPath();
+            let radiusTotal = 0;
+            for (const record of sizeItems) {
+              const haloRadius = record.outerRadius * 0.81;
+              radiusTotal += record.outerRadius;
+              ctx.moveTo(record.projected.x + haloRadius, record.projected.y);
+              ctx.arc(record.projected.x, record.projected.y, haloRadius, 0, TAU);
+            }
+            const representativeRadius = radiusTotal / sizeItems.length;
+            ctx.lineWidth = Math.max(0.82, representativeRadius * 0.34);
+            ctx.strokeStyle = colorWithAlpha(color, state.quasiMode === 'window' ? 0.68 : 0.88);
+            ctx.stroke();
+            drawStats.quasiPointRingStrokes++;
+          }
+        }
+      });
+      ctx.restore();
+    }
+  }
+
+  drawStats.points = records.length;
+  drawStats.modelVertices = records.length;
+  drawStats.modelProjectedVertices = records.length;
+  drawStats.modelEdges = state.quasiMode === 'pattern' ? patch.edgeCount : 0;
+  drawStats.quasiMode = state.quasiMode;
+  drawStats.quasiPoints = patch.pointCount;
+  drawStats.quasiCandidates = patch.candidateCount;
+  drawStats.quasiPeaks = patch.diffractionCandidateCount;
+  drawStats.quasiReach = patch.maxNormSq;
+  drawStats.quasiWindow = patch.windowRadius;
+  drawStats.quasiPhason = patch.phason;
+  drawStats.quasiRelief = state.quasiRelief;
+  drawStats.quasiReliefMin = records.length ? Math.min(...records.map(record => record.relief)) : 0;
+  drawStats.quasiReliefMax = records.length ? Math.max(...records.map(record => record.relief)) : 0;
+  drawStats.quasiDepthMin = records.length ? Math.min(...records.map(record => record.projected.z)) : 0;
+  drawStats.quasiDepthMax = records.length ? Math.max(...records.map(record => record.projected.z)) : 0;
+  return projectedModelFrameMetrics(projected);
+}
+
 function mobileTilingGeometry() {
   const key = `${state.tilingSystem}|${state.tilingDensity}`;
   if (key !== tilingGeometryCacheKey || !tilingGeometryCache) {
@@ -9253,8 +10432,14 @@ function drawPoint(p, paletteSet, mask, skipGlow = false) {
   return fills;
 }
 
-function colorWithAlpha(hex, alpha) {
-  const c = hex.replace('#', '');
+function colorWithAlpha(color, alpha) {
+  const source = String(color || '#ffffff').trim();
+  const rgb = source.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+  if (rgb) {
+    return `rgba(${Math.round(Number(rgb[1]))},${Math.round(Number(rgb[2]))},${Math.round(Number(rgb[3]))},${alpha})`;
+  }
+  let c = source.replace('#', '');
+  if (c.length === 3) c = c.split('').map(channel => channel + channel).join('');
   const r = parseInt(c.slice(0, 2), 16);
   const g = parseInt(c.slice(2, 4), 16);
   const b = parseInt(c.slice(4, 6), 16);
@@ -9567,7 +10752,10 @@ function drawPrismBackground(width, height) {
 
 function drawMobileBackground(width, height) {
   const preset = BACKGROUNDS[state.background] || BACKGROUNDS[DEFAULT_STATE.background];
-  fillBackgroundBase(width, height, preset.color);
+  const baseColor = state.modelMode === 'quasicrystal' && state.background === 'void'
+    ? (DESKTOP_PALETTE_BACKGROUNDS[state.palette] || DESKTOP_PALETTE_BACKGROUNDS.gold)
+    : preset.color;
+  fillBackgroundBase(width, height, baseColor);
   let primitives = 1;
   if (preset.renderer === 'stars') primitives += drawStarfieldBackground(width, height);
   else if (preset.renderer === 'grid') primitives += drawGridBackground(width, height);
@@ -9580,11 +10768,15 @@ function drawMobileBackground(width, height) {
   else if (preset.renderer === 'eclipse') primitives += drawEclipseBackground(width, height);
   else if (preset.renderer === 'synthwave') primitives += drawSynthwaveBackground(width, height);
   else if (preset.renderer === 'prism') primitives += drawPrismBackground(width, height);
-  return { mode: state.background, renderer: preset.renderer, primitives };
+  return { mode: state.background, renderer: preset.renderer, primitives, baseColor };
 }
 
-function requestRender(reason = 'render') {
-  if (isSettingsOpen()) return deferSettingsRender(reason);
+function requestRender(reason = 'render', options = {}) {
+  const settingsPreview = isSettingsOpen() && options.allowWhileSettingsOpen === true;
+  if (isSettingsOpen() && !settingsPreview) return deferSettingsRender(reason);
+  // A full preview reflects every pending visual change, so closing the sheet
+  // does not need to repeat the same frame.
+  if (settingsPreview) settingsDeferredRenderReason = null;
   if (renderRafId) return;
   renderRafId = requestAnimationFrame(() => {
     renderRafId = null;
@@ -9720,7 +10912,7 @@ function advanceAutoModel() {
 
 function syncMotionLoop() {
   metrics.motionFrameTargetMs = mobileMotionFrameIntervalMs();
-  if (hasRuntimeAnimation() && !document.hidden && !isSettingsOpen() && !hasActiveInput()) startMotion();
+  if (hasRuntimeAnimation() && !document.hidden && !settingsPauseRuntimeAnimation() && !hasActiveInput()) startMotion();
   else stopMotion();
 }
 
@@ -9729,6 +10921,7 @@ function mobileMotionFrameIntervalMs() {
     !e8ChordGl || (state.fxMode !== 'none' && state.fxMode !== 'ripple')
   );
   const denseTiling = state.modelMode === 'tiling' && state.tilingAnimate && state.tilingDensity >= 5;
+  if (hasQuasicrystalAutoMotion()) return QUASICRYSTAL_MOTION_FRAME_INTERVAL_MS;
   if (denseCanvasFx) return DENSE_E8_MOTION_FRAME_INTERVAL_MS;
   if (denseTiling) return DENSE_TILING_MOTION_FRAME_INTERVAL_MS;
   return MOTION_FRAME_INTERVAL_MS;
@@ -9746,21 +10939,39 @@ function syncAutoMotionPhase(kind) {
   return offset;
 }
 
+function syncQuasicrystalAutoPhase(kind) {
+  const config = AUTO_QUASICRYSTAL_RANGES[kind];
+  if (!config) return 0;
+  const value = clamp(state[config.key], config.min, config.max);
+  const normalized = clamp((value - config.min) / (config.max - config.min), 0, 1);
+  const offset = Math.asin(clamp(normalized * 2 - 1, -1, 1)) - motionPhase * AUTO_MOTION_RATE;
+  quasiAutoPhaseOffsets[kind] = offset;
+  return offset;
+}
+
 function autoMotionValue(min, max, phaseOffset) {
   const wave = 0.5 + 0.5 * Math.sin(motionPhase * AUTO_MOTION_RATE + phaseOffset);
   return min + (max - min) * wave;
 }
 
 function hasRuntimeAnimation() {
-  const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || state.autoModel || state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'bloom' && state.bloomAuto) || (state.modelMode === 'tiling' && state.tilingAnimate));
+  const cleanQuasicrystal = state.modelMode === 'quasicrystal';
+  const nativeFxAnimation = !cleanQuasicrystal && ANIMATED_MOBILE_FX.has(state.fxMode);
+  return !!(state.autoRotate || state.autoZoom || state.autoExtrude || hasQuasicrystalAutoMotion() || state.autoModel || state.autoColor
+    || (!cleanQuasicrystal && (state.autoFx || state.softFx || nativeFxAnimation))
+    || (state.modelMode === 'bloom' && state.bloomAuto)
+    || (state.modelMode === 'tiling' && state.tilingAnimate));
+}
+
+function settingsPauseRuntimeAnimation() {
+  return isSettingsOpen() && !hasQuasicrystalAutoMotion();
 }
 
 function startMotion() {
-  if (motionRafId || !hasRuntimeAnimation() || document.hidden || isSettingsOpen() || hasActiveInput()) return;
+  if (motionRafId || !hasRuntimeAnimation() || document.hidden || settingsPauseRuntimeAnimation() || hasActiveInput()) return;
   let last = performance.now();
   const tick = (now) => {
-    if (!hasRuntimeAnimation() || document.hidden || isSettingsOpen() || hasActiveInput()) {
+    if (!hasRuntimeAnimation() || document.hidden || settingsPauseRuntimeAnimation() || hasActiveInput()) {
       motionRafId = null;
       return;
     }
@@ -9773,9 +10984,11 @@ function startMotion() {
       motionRafId = requestAnimationFrame(tick);
       return;
     }
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const elapsedSeconds = Math.min(0.5, elapsed / 1000);
+    const dt = Math.min(0.05, elapsedSeconds);
     last = now;
-    if (state.autoRotate || state.autoZoom || state.autoExtrude) {
+    const quasiAutoMotion = hasQuasicrystalAutoMotion();
+    if (state.autoRotate || state.autoZoom || state.autoExtrude || hasContinuousQuasicrystalAutoMotion()) {
       motionPhase = (motionPhase + dt * state.rotationSpeed) % 4096;
     }
     if (state.autoRotate) {
@@ -9794,6 +11007,27 @@ function startMotion() {
       state.e8MorphT = autoMotionValue(0, 1, autoExtrudePhaseOffset);
       metrics.autoExtrudeFrameCount++;
     }
+    if (quasiAutoMotion) {
+      if (state.quasiReachAuto) {
+        quasiReachAutoElapsed += elapsedSeconds;
+        if (quasiReachAutoElapsed >= QUASICRYSTAL_REACH_AUTO_INTERVAL_S) {
+          quasiReachAutoElapsed %= QUASICRYSTAL_REACH_AUTO_INTERVAL_S;
+          quasiReachAutoIndex = (quasiReachAutoIndex + 1) % QUASICRYSTAL_REACHES.length;
+          state.quasiReach = QUASICRYSTAL_REACHES[quasiReachAutoIndex];
+          metrics.quasiReachAutoSwitchCount++;
+        }
+      }
+      for (const [kind, config] of Object.entries(AUTO_QUASICRYSTAL_RANGES)) {
+        if (!state[config.autoKey]) continue;
+        state[config.key] = autoMotionValue(config.min, config.max, quasiAutoPhaseOffsets[kind]);
+        const metricKey = kind === 'window'
+          ? 'quasiWindowAutoFrameCount'
+          : kind === 'phason'
+            ? 'quasiPhasonAutoFrameCount'
+            : 'quasiReliefAutoFrameCount';
+        metrics[metricKey]++;
+      }
+    }
     if (state.modelMode === 'bloom' && state.bloomAuto) {
       state.bloomAmount = (state.bloomAmount + dt * state.bloomSpeed) % 1;
       metrics.bloomAutoFrameCount++;
@@ -9807,7 +11041,8 @@ function startMotion() {
         advanceAutoModel();
       }
     }
-    if (state.autoFx) {
+    const cleanQuasicrystal = state.modelMode === 'quasicrystal';
+    if (state.autoFx && !cleanQuasicrystal) {
       fxShiftElapsed += dt * state.colorSpeed;
       metrics.autoFxFrameCount++;
       if (fxShiftElapsed >= FX_SHIFT_INTERVAL_S) {
@@ -9815,23 +11050,24 @@ function startMotion() {
         advanceFxShift();
       }
     }
-    const nativeFxAnimation = ANIMATED_MOBILE_FX.has(state.fxMode);
-    if (state.autoColor || state.autoFx || state.softFx || nativeFxAnimation || (state.modelMode === 'tiling' && state.tilingAnimate)) {
-      const styleRate = state.autoColor || state.autoFx
+    const nativeFxAnimation = !cleanQuasicrystal && ANIMATED_MOBILE_FX.has(state.fxMode);
+    if (state.autoColor || (!cleanQuasicrystal && (state.autoFx || state.softFx || nativeFxAnimation)) || (state.modelMode === 'tiling' && state.tilingAnimate)) {
+      const styleRate = state.autoColor || (!cleanQuasicrystal && state.autoFx)
         ? state.colorSpeed
-        : state.softFx
+        : !cleanQuasicrystal && state.softFx
           ? 0.42 * state.fxStrength
           : nativeFxAnimation
             ? 0.26 * state.fxStrength
             : 0.18 * state.tilingFlowSpeed;
       stylePhase = (stylePhase + dt * styleRate) % 4096;
       if (state.autoColor) metrics.autoColorFrameCount++;
-      if (state.softFx) metrics.softFxFrameCount++;
+      if (state.softFx && !cleanQuasicrystal) metrics.softFxFrameCount++;
     }
     metrics.motionFrameRenderCount++;
     metrics.lastMotionFrameRenderMs = now;
     metrics.lastMotionFrameDeltaMs = elapsed;
     render();
+    if (isSettingsOpen() && quasiAutoMotion) syncQuasicrystalAnimatedControls();
     motionRafId = requestAnimationFrame(tick);
   };
   motionRafId = requestAnimationFrame(tick);

@@ -21,14 +21,14 @@
         <strong>E8</strong>
         <small>240 / 8 rings</small>
       </button>
-      <button id="quality-chip" class="quality-chip" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="quality-popover">Smooth</button>
+      <button id="quality-chip" class="quality-chip" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="quality-popover">Low</button>
     </div>
 
     <div id="quality-popover" class="quality-popover hidden" role="group" aria-label="Render quality">
       <span>Render quality</span>
-      <button type="button" data-quality="smooth"><strong>Smooth</strong><small>Fastest</small></button>
+      <button type="button" data-quality="smooth"><strong>Low</strong><small>Fastest</small></button>
       <button type="button" data-quality="balanced"><strong>Balanced</strong><small>Recommended</small></button>
-      <button type="button" data-quality="sharp"><strong>Sharp</strong><small>Most detail</small></button>
+      <button type="button" data-quality="sharp"><strong>High</strong><small>Most detail</small></button>
     </div>
 
     <button id="settings-button" class="settings-button" type="button" aria-label="Settings" aria-haspopup="dialog" aria-controls="settings-sheet">
@@ -114,6 +114,7 @@
                 <option value="poly4d">4D polytope</option>
                 <option value="rootlab">Root system lab</option>
                 <option value="tiling">Tiling lab</option>
+                <option value="quasicrystal">E8 Quasicrystal Lab</option>
                 <option value="dynkin">Dynkin diagram</option>
               </select>
             </label>
@@ -264,6 +265,68 @@
               <label class="toggle-row">
                 <span><strong>Flow</strong><small>Animate color through the tiling.</small></span>
                 <input id="tiling-animate-toggle" type="checkbox">
+              </label>
+            </div>
+            <div id="quasicrystal-field" class="model-control-panel hidden" aria-label="E8 quasicrystal controls">
+              <div class="browse-head">
+                <strong>E8 Quasicrystal Lab</strong>
+                <output id="quasi-count-output">0 points</output>
+              </div>
+              <div class="browse-actions root-system-actions" aria-label="Quasicrystal readings">
+                <button type="button" data-quasi-mode="pattern">Pattern</button>
+                <button type="button" data-quasi-mode="window">Window</button>
+                <button type="button" data-quasi-mode="diffraction">Diffraction</button>
+              </div>
+              <div class="root-system-facts" aria-label="Active cut-and-project facts">
+                <div><strong id="quasi-fact-source">8D</strong><span>source</span></div>
+                <div><strong id="quasi-fact-split">2 + 6</strong><span>split</span></div>
+                <div><strong id="quasi-fact-order">30</strong><span>symmetry</span></div>
+                <div><strong id="quasi-fact-peaks">240</strong><span>peaks</span></div>
+              </div>
+              <output class="root-system-matrix">Keep an E8 lattice point when its hidden 6D coordinate falls inside the window.</output>
+              <label class="field">
+                <span class="field-heading">
+                  <span>Lattice reach <output id="quasi-reach-output">norm² ≤ 6</output></span>
+                  <button id="quasi-reach-auto" class="motion-auto-toggle" type="button" data-quasi-auto="reach" aria-pressed="false" aria-label="Auto-cycle Lattice reach">⟳ Auto</button>
+                </span>
+                <input id="quasi-reach" type="range" min="0" max="2" step="1" value="1">
+              </label>
+              <label class="field">
+                <span class="field-heading">
+                  <span>Window radius <output id="quasi-window-output">1.42</output></span>
+                  <button id="quasi-window-auto" class="motion-auto-toggle" type="button" data-quasi-auto="window" aria-pressed="false" aria-label="Auto-animate Window radius">⟳ Auto</button>
+                </span>
+                <input id="quasi-window" type="range" min="0.8" max="2.4" step="0.02" value="1.42">
+              </label>
+              <label class="field">
+                <span class="field-heading">
+                  <span>Phason shift <output id="quasi-phason-output">0.00</output></span>
+                  <button id="quasi-phason-auto" class="motion-auto-toggle" type="button" data-quasi-auto="phason" aria-pressed="false" aria-label="Auto-animate Phason shift">⟳ Auto</button>
+                </span>
+                <input id="quasi-phason" type="range" min="-1.2" max="1.2" step="0.02" value="0">
+              </label>
+              <label class="field" id="quasi-relief-field">
+                <span class="field-heading">
+                  <span>Relief <output id="quasi-relief-output">0.06</output></span>
+                  <button id="quasi-relief-auto" class="motion-auto-toggle" type="button" data-quasi-auto="relief" aria-pressed="false" aria-label="Auto-animate Relief">⟳ Auto</button>
+                </span>
+                <input id="quasi-relief" type="range" min="0" max="0.24" step="0.01" value="0.06">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Points</strong><small>Show accepted lattice projections.</small></span>
+                <input id="quasi-points-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>Point halos</strong><small>Draw a luminous ring around each projected point.</small></span>
+                <input id="quasi-point-halos-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row" id="quasi-links-field">
+                <span><strong>Local links</strong><small>Expose the patch’s nearby-point structure.</small></span>
+                <input id="quasi-links-toggle" type="checkbox">
+              </label>
+              <label class="toggle-row">
+                <span><strong>30-fold guide</strong><small>Show the Coxeter-plane symmetry axes.</small></span>
+                <input id="quasi-guide-toggle" type="checkbox">
               </label>
             </div>
             <label class="toggle-row" data-model-context="e8-roots">
@@ -425,21 +488,21 @@
               </span>
               <input id="rings-toggle" type="checkbox">
             </label>
-            <div class="fx-preset-panel" aria-label="Color and motion presets">
+            <div class="fx-preset-panel" data-quasi-fx-control aria-label="Color and motion presets">
               <div class="browse-head">
                 <strong>Color &amp; motion</strong>
                 <output id="fx-preset-output">Static</output>
               </div>
               <div id="fx-preset-grid" class="fx-preset-grid"></div>
             </div>
-            <label class="toggle-row">
+            <label class="toggle-row" data-quasi-fx-control>
               <span>
                 <strong>FX shift</strong>
                 <small>Cycle automatically through effects using Shift speed.</small>
               </span>
               <input id="auto-fx-toggle" type="checkbox">
             </label>
-            <div class="fx-mode-panel" aria-label="Effects">
+            <div class="fx-mode-panel" data-quasi-fx-control aria-label="Effects">
               <div class="browse-head">
                 <strong>Effects</strong>
                 <output id="fx-mode-output">Off</output>
@@ -448,17 +511,18 @@
               <small id="fx-mode-description" class="panel-note">Use clean, unmodified shading.</small>
               <small class="panel-note fx-cost-note">Cost badges indicate approximate GPU work. E8 full chords use a dedicated GPU layer; Canvas-composited FX are paced near 20 fps to protect touch response.</small>
             </div>
-            <label class="toggle-row">
+            <label class="toggle-row" data-quasi-fx-control>
               <span>
                 <strong>Motion pulse</strong>
                 <small>Add a lightweight breathing animation to points and models.</small>
               </span>
               <input id="soft-fx-toggle" type="checkbox">
             </label>
-            <label class="field">
+            <label class="field" data-quasi-fx-control>
               <span class="field-heading">FX strength <output id="fx-strength-output">100%</output></span>
               <input id="fx-strength" type="range" min="0.25" max="1.5" step="0.05">
             </label>
+            <div id="quasi-clean-render-note" class="panel-note hidden">Quasicrystal Lab uses a clean, effects-free render path to keep the full E8 construction responsive. Palette and color shift remain available.</div>
           </div>
         </section>
 

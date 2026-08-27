@@ -350,6 +350,24 @@ That distinction explains why H₂ can look highly ordered without behaving like
 Turn on Multigrid, compare A₂ with H₂, and look for the difference between local rotational order and global translational repetition.`,
   },
 
+  e8_cut_project: {
+    title: 'Cutting eight dimensions into two',
+    body: `A cut-and-project construction begins with an ordinary lattice in a higher-dimensional space. E8 Studio splits each E₈ lattice point into two parts: a visible coordinate in the Coxeter plane and a hidden coordinate in the six perpendicular dimensions. A point enters the pattern only when its hidden coordinate falls inside an acceptance window.
+
+This rule explains how a discrete 8D lattice can cast an ordered but non-periodic 2D pattern. The visible points are not selected randomly, and the hidden dimensions have not disappeared: they decide which projected points survive. The Pattern view shows the accepted projections; Window shows the hidden-space test; Diffraction computes a finite structure factor from the accepted patch.
+
+The Studio uses a spherical window because its radius and displacement are easy to inspect. That particular window is a transparent visualization choice, not a claim that there is one uniquely canonical E₈ quasicrystal window.`,
+  },
+
+  quasicrystal_diffraction: {
+    title: 'Why ordered patterns make sharp peaks',
+    body: `A periodic crystal repeats by translation, so its diffraction is concentrated on a reciprocal lattice. A regular cut-and-project set can also produce sharp, discrete diffraction even though no nonzero translation repeats the complete pattern.
+
+For each reciprocal candidate, the Studio adds a complex phase from every accepted point. When many phases align, their amplitudes reinforce one another and the corresponding peak becomes bright. When they disagree, they cancel. This finite structure-factor calculation is why the Diffraction view contains organized rings and peaks rather than a decorative blur.
+
+The finite patch, displayed peak threshold, palette, and glow affect the picture. The underlying lesson is structural: quasiperiodicity can preserve long-range order without translational periodicity.`,
+  },
+
   // ── Round 13: the 120-cell, completing the regular 4-polytope set ──
 
   the_120cell: {
@@ -400,6 +418,8 @@ export const ESSAY_PROVENANCE = {
   sdf_smooth_union: ['rendering-technique', ['hart-sphere-tracing'], 'Distance operations motivate the renderer; blend parameters and selected rods are app-designed.'],
   coxeter_multigrids: ['established-mathematics', ['magma-rank2-root-systems', 'debruijn-pentagrids'], 'Root directions and pentagrid duality are established; finite cropping, relief, colors, and motion are Studio choices.'],
   quasiperiodic_order: ['established-mathematics', ['debruijn-pentagrids'], 'The periodic-versus-non-periodic comparison follows the pentagrid construction; wording is introductory and the rendered window is finite.'],
+  e8_cut_project: ['established-mathematics', ['aim-e8-technical', 'mit-e8-plane', 'richard-strungaru-cut-project'], 'The lattice split and cut-and-project rule are mathematical; the spherical window, finite cutoff, and display layers are explicit Studio choices.'],
+  quasicrystal_diffraction: ['established-mathematics', ['richard-strungaru-cut-project'], 'Pure-point diffraction for regular cut-and-project sets is established; this finite structure-factor sample and its visual threshold are Studio choices.'],
   the_120cell: ['established-mathematics', ['mathworld-120-cell'], 'Element counts, duality, and Schläfli symbol are established; the projection is app-designed.'],
 };
 
@@ -582,6 +602,7 @@ export const ESSAY_CONTEXTS = {
   polytope: ['e8_dim', 'affine_e8', 'rotation_planes_4d', 'schlafli_symbols', 'the_120cell'],
   raymarched: ['sdf_raymarching', 'sdf_smooth_union', 'e8_overview'],
   tiling: ['coxeter_multigrids', 'quasiperiodic_order', 'simple_roots'],
+  quasicrystal: ['e8_cut_project', 'quasicrystal_diffraction', 'coxeter', 'quasiperiodic_order'],
   dynkin: ['dynkin', 'simple_roots'],
 };
 

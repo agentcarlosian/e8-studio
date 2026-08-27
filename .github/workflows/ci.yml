@@ -37,6 +37,7 @@ jobs:
       - run: npm run test:image-exports
       - run: npm run test:visual-system
       - run: npm run test:curriculum
+      - run: npm run test:e8-quasicrystal
       - run: npm run smoke:mobile-v2
 
   windows-build:
@@ -65,3 +66,4 @@ jobs:
       - run: npm run test:image-exports
       - run: npm run test:visual-system
       - run: npm run test:curriculum
+      - run: npm run test:e8-quasicrystal

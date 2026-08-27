@@ -51,7 +51,7 @@ def main() -> int:
             metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("mobile entrypoint exposes __mobileApp", bool(state), str(state))
             check("first render completes", 0 <= metrics["firstRenderMs"] < 1000, str(metrics))
-            check("default quality is Smooth", state["quality"] == "smooth", str(state))
+            check("default quality is Low", state["quality"] == "smooth", str(state))
             check("canvas has mobile-sized backing store", metrics["canvas"]["width"] > 0 and metrics["canvas"]["height"] > 0, str(metrics))
             initial_draw = metrics["lastDrawStats"]
             check("initial draw renders all roots", initial_draw["points"] == 240 and initial_draw["rings"] == 8, str(initial_draw))
@@ -118,7 +118,7 @@ def main() -> int:
             }""")
             check("top scene chip keeps compact canvas footprint", top_chrome["scene"]["width"] <= 124 and top_chrome["scene"]["height"] <= 38 and top_chrome["scene"]["text"] == "E8 240 / 8 rings", str(top_chrome))
             check("top scene chip is a tappable scene control", top_chrome["sceneTag"] == "BUTTON" and "Tap to switch" in top_chrome["sceneLabel"], str(top_chrome))
-            check("top quality chip stays compact and accessible", top_chrome["quality"]["width"] <= 88 and top_chrome["quality"]["height"] <= 38 and top_chrome["quality"]["text"] == "Smooth" and "240 roots" in top_chrome["ariaLabel"], str(top_chrome))
+            check("top quality chip stays compact and accessible", top_chrome["quality"]["width"] <= 88 and top_chrome["quality"]["height"] <= 38 and top_chrome["quality"]["text"] == "Low" and "240 roots" in top_chrome["ariaLabel"], str(top_chrome))
             check("default scene labels describe E8 Coxeter", "8 rings" in top_chrome["canvasLabel"] and "eight concentric rings of 30 roots" in top_chrome["infoCopy"] and top_chrome["metrics"]["lastSceneLabel"] == "E8 Coxeter, 240 roots, 8 rings", str(top_chrome))
             steady_canvas_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.evaluate("() => window.__mobileApp.forceRender()")
@@ -145,9 +145,9 @@ def main() -> int:
             quality_menu = page.evaluate("""() => ({
                 open: !document.getElementById('quality-popover').classList.contains('hidden'),
                 expanded: document.getElementById('quality-chip').getAttribute('aria-expanded'),
-                buttons: [...document.querySelectorAll('#quality-popover [data-quality]')].map(button => ({ id: button.dataset.quality, box: button.getBoundingClientRect() }))
+                buttons: [...document.querySelectorAll('#quality-popover [data-quality]')].map(button => ({ id: button.dataset.quality, label: button.querySelector('strong').textContent, box: button.getBoundingClientRect() }))
             })""")
-            check("quality chip opens a compact three-tier chooser", quality_menu["open"] and quality_menu["expanded"] == "true" and [item["id"] for item in quality_menu["buttons"]] == ["smooth", "balanced", "sharp"] and all(item["box"]["height"] >= 44 for item in quality_menu["buttons"]), str(quality_menu))
+            check("quality chip opens a compact Low, Balanced, High chooser", quality_menu["open"] and quality_menu["expanded"] == "true" and [item["id"] for item in quality_menu["buttons"]] == ["smooth", "balanced", "sharp"] and [item["label"] for item in quality_menu["buttons"]] == ["Low", "Balanced", "High"] and all(item["box"]["height"] >= 44 for item in quality_menu["buttons"]), str(quality_menu))
             page.locator('#quality-popover [data-quality="balanced"]').click()
             quality_feedback = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             check("quality chooser selects Balanced", quality_feedback["state"]["quality"] == "balanced", str(quality_feedback))
@@ -157,7 +157,7 @@ def main() -> int:
             page.locator("#quality-chip").click()
             page.locator('#quality-popover [data-quality="smooth"]').click()
             safe_quality_feedback = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("quality chooser returns to Smooth", safe_quality_feedback["state"]["quality"] == "smooth" and abs(safe_quality_feedback["metrics"]["renderScale"] - 0.75) < 0.01 and safe_quality_feedback["metrics"]["statusText"] == "Quality: Smooth", str(safe_quality_feedback))
+            check("quality chooser returns to Low", safe_quality_feedback["state"]["quality"] == "smooth" and abs(safe_quality_feedback["metrics"]["renderScale"] - 0.75) < 0.01 and safe_quality_feedback["metrics"]["statusText"] == "Quality: Low", str(safe_quality_feedback))
             check("quality chooser stays on focused sync path", safe_quality_feedback["metrics"]["controlSyncCount"] == quality_feedback["metrics"]["controlSyncCount"], str(safe_quality_feedback["metrics"]))
             page.evaluate("() => window.__mobileApp.hideStatus()")
 
@@ -248,9 +248,9 @@ def main() -> int:
             })""")
             model_shortcut_ids = [button["id"] for group in model_shortcuts["groups"] for button in group["buttons"]]
             model_shortcut_group_counts = {group["id"]: len(group["buttons"]) for group in model_shortcuts["groups"]}
-            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 29 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 29 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "rootlab": 4, "tiling": 4, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "root-G2" in model_shortcut_ids and "root-H2" in model_shortcut_ids and "tiling-A2" in model_shortcut_ids and "tiling-H2" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
+            check("View section exposes full grouped model shortcuts", len(model_shortcut_ids) == 30 and model_shortcuts["metrics"]["modelShortcutButtonCount"] == 30 and model_shortcut_group_counts == {"views": 3, "solids": 5, "stars": 4, "poly4d": 6, "rootlab": 4, "tiling": 4, "quasicrystal": 1, "dynkin": 3} and "bloom" in model_shortcut_ids and "sdf" in model_shortcut_ids and "shape-icosahedron" in model_shortcut_ids and "shape-great_icosahedron" in model_shortcut_ids and "poly-120cell" in model_shortcut_ids and "root-G2" in model_shortcut_ids and "root-H2" in model_shortcut_ids and "tiling-A2" in model_shortcut_ids and "tiling-H2" in model_shortcut_ids and "quasi" in model_shortcut_ids and "dynkin-E6" in model_shortcut_ids and "dynkin-E8" in model_shortcut_ids, str(model_shortcuts))
             model_options = page.locator("#model-select option").evaluate_all("options => options.map(option => option.value)")
-            check("model selector includes Root Lab and Tiling Lab", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "rootlab", "tiling", "dynkin"], str(model_options))
+            check("model selector includes Root Lab, Tiling Lab, and E8 Quasicrystal Lab", model_options == ["bloom", "e8_2d", "sdf", "platonic", "poly4d", "rootlab", "tiling", "quasicrystal", "dynkin"], str(model_options))
             fallback_selectors_hidden = page.evaluate("""() => [
                 document.getElementById('model-select').closest('label'),
                 document.getElementById('shape-field'),
@@ -411,6 +411,10 @@ def main() -> int:
                     autoRotate: true,
                     autoZoom: true,
                     autoExtrude: true,
+                    quasiReachAuto: true,
+                    quasiWindowAuto: true,
+                    quasiPhasonAuto: true,
+                    quasiReliefAuto: true,
                     autoModel: true,
                     rotationSpeed: 1.2,
                     cameraPath: 'spiral',
@@ -435,7 +439,7 @@ def main() -> int:
                     }
                 };
             }""")
-            check("model replacement resets runtime state without changing desktop behavior", not model_replacement_sync["state"]["autoColor"] and not model_replacement_sync["state"]["autoFx"] and not model_replacement_sync["state"]["softFx"] and not model_replacement_sync["state"]["autoRotate"] and not model_replacement_sync["state"]["autoZoom"] and not model_replacement_sync["state"]["autoExtrude"] and not model_replacement_sync["state"]["autoModel"] and abs(model_replacement_sync["state"]["rotationSpeed"] - 0.7) < 0.01 and model_replacement_sync["state"]["cameraPath"] == "manual" and abs(model_replacement_sync["state"]["cameraTilt"] - 0.28) < 0.01, str(model_replacement_sync))
+            check("model replacement resets runtime state without changing desktop behavior", not model_replacement_sync["state"]["autoColor"] and not model_replacement_sync["state"]["autoFx"] and not model_replacement_sync["state"]["softFx"] and not model_replacement_sync["state"]["autoRotate"] and not model_replacement_sync["state"]["autoZoom"] and not model_replacement_sync["state"]["autoExtrude"] and not model_replacement_sync["state"]["quasiReachAuto"] and not model_replacement_sync["state"]["quasiWindowAuto"] and not model_replacement_sync["state"]["quasiPhasonAuto"] and not model_replacement_sync["state"]["quasiReliefAuto"] and not model_replacement_sync["state"]["autoModel"] and abs(model_replacement_sync["state"]["rotationSpeed"] - 0.7) < 0.01 and model_replacement_sync["state"]["cameraPath"] == "manual" and abs(model_replacement_sync["state"]["cameraTilt"] - 0.28) < 0.01, str(model_replacement_sync))
             check("model replacement immediately synchronizes Visuals and Motion controls", not model_replacement_sync["controls"]["autoColor"] and not model_replacement_sync["controls"]["autoFx"] and not model_replacement_sync["controls"]["softFx"] and not model_replacement_sync["controls"]["motion"] and not model_replacement_sync["controls"]["autoModel"] and model_replacement_sync["controls"]["activeFx"] == "clean" and model_replacement_sync["controls"]["fxOutput"] == "Static" and model_replacement_sync["controls"]["activeMotion"] == "still" and model_replacement_sync["controls"]["motionOutput"] == "Still" and model_replacement_sync["controls"]["activeSpeed"] == "medium" and model_replacement_sync["controls"]["speedOutput"] == "Medium" and model_replacement_sync["controls"]["cameraPath"] == "Manual", str(model_replacement_sync["controls"]))
             page.evaluate("() => { window.__mobileApp.selectModelShortcut('e8_2d'); window.__mobileApp.hideStatus(); }")
             contextual_controls = page.evaluate("""() => {
@@ -560,7 +564,7 @@ def main() -> int:
                 paths: [...document.querySelectorAll('[data-learn-path]')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
                 done: document.querySelector('.learn-done-action').getBoundingClientRect()
             })""")
-            check("Learn opens as a navigable library", learn_library["libraryVisible"] and learn_library["readerHidden"] and "What am I looking at?" in learn_library["recommended"] and learn_library["progress"].endswith("/ 12") and len(learn_library["paths"]) == 4, str(learn_library))
+            check("Learn opens as a navigable library", learn_library["libraryVisible"] and learn_library["readerHidden"] and "What am I looking at?" in learn_library["recommended"] and learn_library["progress"].endswith("/ 13") and len(learn_library["paths"]) == 4, str(learn_library))
             check("Learn library uses readable touch targets", learn_library["done"]["height"] >= 44 and all(path["box"]["height"] >= 64 for path in learn_library["paths"]), str(learn_library))
             page.locator('[data-learn-path="solid-foundations"]').click()
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")
@@ -1067,6 +1071,164 @@ def main() -> int:
                 canvas: document.getElementById('mobile-canvas').getAttribute('aria-label')
             })""")
             check("Tiling Lab labels explain multigrid duality", "Penrose pentagrid" in tiling_info["selection"] and "702 rhombi" in tiling_info["selection"] and "parallel line families" in tiling_info["info"] and "10-fold local symmetry" in tiling_info["topbar"] and "5 line families" in tiling_info["canvas"], str(tiling_info))
+            quasi_reset = page.evaluate("""() => {
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({
+                    modelMode: 'quasicrystal', quasiMode: 'diffraction', quasiReach: 4,
+                    quasiWindow: 1.18, quasiPhason: 0.4, quasiRelief: 0.17
+                });
+                window.__mobileApp.resetView();
+                return window.__mobileApp.getState();
+            }""")
+            check("Quasicrystal Reset matches the desktop reach and relief defaults", quasi_reset["modelMode"] == "quasicrystal" and quasi_reset["quasiMode"] == "pattern" and quasi_reset["quasiReach"] == 8 and abs(quasi_reset["quasiWindow"] - 1.42) < 0.001 and abs(quasi_reset["quasiPhason"]) < 0.001 and abs(quasi_reset["quasiRelief"] - 0.08) < 0.001, str(quasi_reset))
+            page.evaluate("""() => {
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({
+                    modelMode: 'quasicrystal', quasiMode: 'pattern', quasiReach: 6,
+                    quasiWindow: 1.42, quasiPhason: 0, quasiRelief: 0.06,
+                    quasiShowPoints: true, quasiShowLinks: true, quasiShowGuide: true,
+                    autoModel: false, autoRotate: false, selectedRoot: null, rotation: 0
+                });
+                window.__mobileApp.forceRender();
+            }""")
+            page.wait_for_function("() => window.__mobileApp.getState().modelMode === 'quasicrystal' && window.__mobileApp.getMetrics().lastModelMode === 'quasicrystal'")
+            quasi_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
+            check("E8 Quasicrystal Lab preserves desktop Pattern density and palette field at Low quality", quasi_metrics["lastModelMode"] == "quasicrystal" and quasi_metrics["lastDrawStats"]["quasiMode"] == "pattern" and quasi_metrics["lastDrawStats"]["quasiPoints"] == 781 and quasi_metrics["lastDrawStats"]["quasiCandidates"] == 9121 and quasi_metrics["lastDrawStats"]["modelEdges"] == 1852 and quasi_metrics["lastDrawStats"]["quasiRenderer"] == "webgl-desktop-shader" and quasi_metrics["lastDrawStats"]["quasiGpuPointVertices"] == 781 and quasi_metrics["lastDrawStats"]["quasiGpuLineVertices"] > 3700 and quasi_metrics["lastDrawStats"]["quasiPointVisualScale"] == 1 and quasi_metrics["lastDrawStats"]["backgroundBaseColor"] == "#120903" and quasi_metrics["lastDrawStats"]["quasiPointRingStrokes"] > 0 and quasi_metrics["lastDrawStats"]["quasiGuideRays"] == 30 and quasi_metrics["lastDrawStats"]["quasiGuideRings"] == 0 and quasi_metrics["quasicrystalWebglDrawCount"] >= 1 and quasi_metrics["quasicrystalDrawCount"] >= 1, str(quasi_metrics["lastDrawStats"]))
+            page.evaluate("() => window.__mobileApp.openSettings('view')")
+            halo_toggle = page.evaluate("() => { const input = document.getElementById('quasi-point-halos-toggle'); return { checked: input.checked, touchHeight: input.closest('label').getBoundingClientRect().height }; }")
+            check("mobile Quasicrystal controls expose Point halos as an enabled touch toggle", halo_toggle["checked"] and halo_toggle["touchHeight"] >= 44, str(halo_toggle))
+            page.locator('#quasi-point-halos-toggle').uncheck()
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            halo_off = page.evaluate("() => ({ state: window.__mobileApp.getState(), draw: window.__mobileApp.getMetrics().lastDrawStats })")
+            check("Point halos off keeps solid points and removes annular rims", not halo_off["state"]["quasiPointHalos"] and halo_off["draw"]["quasiPointRingStrokes"] == 0 and halo_off["draw"]["modelVertexFills"] > 0, str(halo_off))
+            page.locator('#quasi-point-halos-toggle').check()
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            halo_on = page.evaluate("() => ({ state: window.__mobileApp.getState(), draw: window.__mobileApp.getMetrics().lastDrawStats })")
+            check("Point halos on keeps solid points and adds subtle outer rings", halo_on["state"]["quasiPointHalos"] and halo_on["draw"]["modelVertexFills"] > 0 and halo_on["draw"]["quasiPointRingStrokes"] > 0, str(halo_on))
+            relief_modes = page.evaluate("""() => {
+                const readDepth = () => {
+                    const draw = window.__mobileApp.getMetrics().lastDrawStats;
+                    return {
+                        min: draw.quasiDepthMin,
+                        max: draw.quasiDepthMax,
+                        reliefMin: draw.quasiReliefMin,
+                        reliefMax: draw.quasiReliefMax,
+                        renderer: draw.quasiRenderer,
+                        projection: draw.quasiProjection,
+                        perspectiveMin: draw.quasiPerspectiveMin,
+                        perspectiveMax: draw.quasiPerspectiveMax,
+                    };
+                };
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({ quasiMode: 'window', quasiRelief: 0, rotation: 0, cameraTilt: 0.28 });
+                window.__mobileApp.forceRender();
+                const windowFlat = readDepth();
+                window.__mobileApp.setState({ quasiRelief: 0.18 });
+                window.__mobileApp.forceRender();
+                window.__mobileApp.openSettings('view');
+                const windowRaised = readDepth();
+                const windowControlVisible = !document.getElementById('quasi-relief-field').classList.contains('hidden');
+                window.__mobileApp.closeSettings();
+                window.__mobileApp.setState({ quasiMode: 'diffraction', quasiRelief: 0 });
+                window.__mobileApp.forceRender();
+                const diffractionFlat = readDepth();
+                window.__mobileApp.setState({ quasiRelief: 0.18 });
+                window.__mobileApp.forceRender();
+                window.__mobileApp.openSettings('view');
+                const diffractionRaised = readDepth();
+                const diffractionControlVisible = !document.getElementById('quasi-relief-field').classList.contains('hidden');
+                window.__mobileApp.setState({ quasiMode: 'pattern', quasiRelief: 0.06 });
+                window.__mobileApp.forceRender();
+                return { windowFlat, windowRaised, windowControlVisible, diffractionFlat, diffractionRaised, diffractionControlVisible };
+            }""")
+            check("Window and Diffraction expose Relief through the desktop camera model", relief_modes["windowControlVisible"] and relief_modes["diffractionControlVisible"] and abs(relief_modes["windowFlat"]["reliefMax"] - relief_modes["windowFlat"]["reliefMin"]) < 1e-6 and relief_modes["windowRaised"]["reliefMax"] - relief_modes["windowRaised"]["reliefMin"] > 0.04 and abs(relief_modes["diffractionFlat"]["reliefMax"] - relief_modes["diffractionFlat"]["reliefMin"]) < 1e-6 and relief_modes["diffractionRaised"]["reliefMax"] - relief_modes["diffractionRaised"]["reliefMin"] > 0.04 and relief_modes["windowRaised"]["renderer"] == "webgl-desktop-shader" and relief_modes["diffractionRaised"]["renderer"] == "webgl-desktop-shader" and relief_modes["windowRaised"]["projection"] == "desktop-camera" and relief_modes["diffractionRaised"]["projection"] == "desktop-camera" and relief_modes["windowRaised"]["perspectiveMax"] - relief_modes["windowRaised"]["perspectiveMin"] > 0.1 and relief_modes["diffractionRaised"]["perspectiveMax"] - relief_modes["diffractionRaised"]["perspectiveMin"] > 0.1, str(relief_modes))
+            quasi_auto_controls = page.evaluate("""() => ({
+                buttons: [...document.querySelectorAll('[data-quasi-auto]')].map(button => ({
+                    kind: button.dataset.quasiAuto,
+                    height: button.getBoundingClientRect().height,
+                    text: button.textContent.trim(),
+                    pressed: button.getAttribute('aria-pressed'),
+                })),
+                metrics: window.__mobileApp.getMetrics(),
+                state: window.__mobileApp.getState(),
+            })""")
+            check("Reach, Window, Phason, and Relief expose touch-friendly Auto controls", [button["kind"] for button in quasi_auto_controls["buttons"]] == ["reach", "window", "phason", "relief"] and all(button["height"] >= 30 and button["text"] == "⟳ Auto" and button["pressed"] == "false" for button in quasi_auto_controls["buttons"]), str(quasi_auto_controls["buttons"]))
+            for kind in ["reach", "window", "phason", "relief"]:
+                page.locator(f'[data-quasi-auto="{kind}"]').click()
+            quasi_auto_armed = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics(), pressed: [...document.querySelectorAll('[data-quasi-auto]')].map(button => button.getAttribute('aria-pressed')), motion: document.getElementById('motion-preset-output').textContent })")
+            check("Quasicrystal Auto controls arm independently", quasi_auto_armed["state"]["quasiReachAuto"] and quasi_auto_armed["state"]["quasiWindowAuto"] and quasi_auto_armed["state"]["quasiPhasonAuto"] and quasi_auto_armed["state"]["quasiReliefAuto"] and quasi_auto_armed["pressed"] == ["true", "true", "true", "true"] and quasi_auto_armed["motion"] == "Custom", str(quasi_auto_armed))
+            page.wait_for_function("before => { const m = window.__mobileApp.getMetrics(); return m.quasiWindowAutoFrameCount > before.window && m.quasiPhasonAutoFrameCount > before.phason && m.quasiReliefAutoFrameCount > before.relief; }", arg={"window": quasi_auto_controls["metrics"]["quasiWindowAutoFrameCount"], "phason": quasi_auto_controls["metrics"]["quasiPhasonAutoFrameCount"], "relief": quasi_auto_controls["metrics"]["quasiReliefAutoFrameCount"]}, timeout=2500)
+            page.wait_for_function("before => window.__mobileApp.getMetrics().quasiReachAutoSwitchCount > before", arg=quasi_auto_controls["metrics"]["quasiReachAutoSwitchCount"], timeout=4500)
+            quasi_auto_running = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                metrics: window.__mobileApp.getMetrics(),
+                controls: {
+                    reach: document.getElementById('quasi-reach').value,
+                    reachOutput: document.getElementById('quasi-reach-output').textContent,
+                    window: Number(document.getElementById('quasi-window').value),
+                    windowOutput: document.getElementById('quasi-window-output').textContent,
+                    phason: Number(document.getElementById('quasi-phason').value),
+                    phasonOutput: document.getElementById('quasi-phason-output').textContent,
+                }
+            })""")
+            check("Quasicrystal Auto controls animate visibly at the 60 Hz target while View remains open", quasi_auto_running["metrics"]["motionActive"] and quasi_auto_running["metrics"]["motionFrameTargetMs"] == 16 and quasi_auto_running["metrics"]["quasiReachAutoSwitchCount"] > quasi_auto_controls["metrics"]["quasiReachAutoSwitchCount"] and quasi_auto_running["metrics"]["quasiWindowAutoFrameCount"] > quasi_auto_controls["metrics"]["quasiWindowAutoFrameCount"] and quasi_auto_running["metrics"]["quasiPhasonAutoFrameCount"] > quasi_auto_controls["metrics"]["quasiPhasonAutoFrameCount"] and quasi_auto_running["metrics"]["quasiReliefAutoFrameCount"] > quasi_auto_controls["metrics"]["quasiReliefAutoFrameCount"] and int(quasi_auto_running["controls"]["reach"]) == [4, 6, 8].index(quasi_auto_running["state"]["quasiReach"]) and str(quasi_auto_running["state"]["quasiReach"]) in quasi_auto_running["controls"]["reachOutput"] and abs(quasi_auto_running["controls"]["window"] - quasi_auto_running["state"]["quasiWindow"]) <= 0.011 and quasi_auto_running["controls"]["windowOutput"] == f'{quasi_auto_running["state"]["quasiWindow"]:.2f}' and abs(quasi_auto_running["controls"]["phason"] - quasi_auto_running["state"]["quasiPhason"]) <= 0.011 and quasi_auto_running["controls"]["phasonOutput"] == f'{quasi_auto_running["state"]["quasiPhason"]:.2f}', str(quasi_auto_running))
+            page.locator('#quasi-reach').evaluate("el => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }")
+            page.locator('#quasi-window').evaluate("el => { el.value = '1.30'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }")
+            page.locator('[data-quasi-auto="phason"]').click()
+            page.locator('[data-quasi-auto="relief"]').click()
+            quasi_auto_stopped = page.evaluate("() => window.__mobileApp.getState()")
+            check("Manual Quasi sliders take control back from Auto", not quasi_auto_stopped["quasiReachAuto"] and not quasi_auto_stopped["quasiWindowAuto"] and not quasi_auto_stopped["quasiPhasonAuto"] and not quasi_auto_stopped["quasiReliefAuto"] and quasi_auto_stopped["quasiReach"] == 6 and abs(quasi_auto_stopped["quasiWindow"] - 1.3) < 0.01, str(quasi_auto_stopped))
+            page.evaluate("() => window.__mobileApp.setState({ quasiReach: 6, quasiWindow: 1.42, quasiPhason: 0, quasiRelief: 0.06 })")
+            page.evaluate("() => window.__mobileApp.closeSettings()")
+            quasi_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
+            check("E8 Quasicrystal data export preserves 8D sources and diffraction", quasi_data["ok"] and quasi_data["geometry"]["kind"] == "e8-cut-and-project" and quasi_data["geometry"]["sourceDimension"] == 8 and quasi_data["geometry"]["internalDimension"] == 6 and len(quasi_data["geometry"]["points"]) == 781 and len(quasi_data["geometry"]["diffraction"]) == 240, str(quasi_data["geometry"].keys()))
+            page.evaluate("() => { window.__mobileApp.setState({ quasiMode: 'diffraction', quality: 'sharp' }); window.__mobileApp.forceRender(); window.__mobileApp.openSettings('view'); }")
+            quasi_controls = page.evaluate("""() => ({
+                state: window.__mobileApp.getState(),
+                visible: !document.getElementById('quasicrystal-field').classList.contains('hidden'),
+                activeMode: document.querySelector('#quasicrystal-field [data-quasi-mode].active')?.dataset.quasiMode,
+                count: document.getElementById('quasi-count-output').textContent.trim(),
+                scene: document.querySelector('.topbar').getAttribute('aria-label'),
+                draw: window.__mobileApp.getMetrics().lastDrawStats,
+                luminance: (() => {
+                    const foreground = document.getElementById('mobile-canvas');
+                    const gpu = document.getElementById('mobile-e8-chord-canvas');
+                    const composite = document.createElement('canvas');
+                    composite.width = foreground.width;
+                    composite.height = foreground.height;
+                    const context = composite.getContext('2d');
+                    if (gpu.classList.contains('active')) context.drawImage(gpu, 0, 0, composite.width, composite.height);
+                    context.drawImage(foreground, 0, 0, composite.width, composite.height);
+                    const pixels = context.getImageData(0, 0, composite.width, composite.height).data;
+                    let litSamples = 0;
+                    let maxChannel = 0;
+                    for (let offset = 0; offset < pixels.length; offset += 64) {
+                        const peak = Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+                        maxChannel = Math.max(maxChannel, peak);
+                        if (peak >= 48 && pixels[offset + 3] >= 32) litSamples++;
+                    }
+                    return { litSamples, maxChannel };
+                })()
+            })""")
+            check("High-quality Diffraction preserves the desktop point shader and fitted field", quasi_controls["state"]["quasiMode"] == "diffraction" and quasi_controls["state"]["quality"] == "sharp" and quasi_controls["visible"] and quasi_controls["activeMode"] == "diffraction" and quasi_controls["count"] == "240 peaks" and quasi_controls["draw"]["modelVertices"] == 240 and quasi_controls["draw"]["quasiRenderer"] == "webgl-desktop-shader" and quasi_controls["draw"]["quasiGpuPointVertices"] == 240 and quasi_controls["draw"]["quasiPointVisualScale"] == 1 and quasi_controls["draw"]["quasiModelScale"] == 1.22 and quasi_controls["draw"]["quasiGuideRings"] > 0 and quasi_controls["draw"]["quasiGuideRays"] == 0 and quasi_controls["luminance"]["litSamples"] > 100 and quasi_controls["luminance"]["maxChannel"] > 160 and "240 reciprocal peaks" in quasi_controls["scene"].lower(), str(quasi_controls))
+            page.locator('#quasi-points-toggle').uncheck()
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            diffraction_points_off = page.evaluate("() => window.__mobileApp.getMetrics().lastDrawStats")
+            check("Diffraction honors the shared Points visibility toggle", diffraction_points_off["quasiGpuPointVertices"] == 0 and diffraction_points_off["modelVertexFills"] == 0 and diffraction_points_off["quasiGuideRings"] > 0, str(diffraction_points_off))
+            page.locator('#quasi-points-toggle').check()
+            page.evaluate("() => window.__mobileApp.forceRender()")
+            quasi_fx = page.evaluate("""() => {
+                window.__mobileApp.setState({ fxMode: 'plasma', autoFx: true, softFx: true });
+                window.__mobileApp.openSettings('style');
+                return {
+                    hiddenControls: [...document.querySelectorAll('[data-quasi-fx-control]')].every(control => control.classList.contains('hidden')),
+                    noteVisible: !document.getElementById('quasi-clean-render-note').classList.contains('hidden'),
+                    effectiveMode: document.querySelector('.mobile-shell').dataset.fxMode,
+                    stateMode: window.__mobileApp.getState().fxMode,
+                };
+            }""")
+            check("Quasicrystal mobile view suspends FX without discarding the user's other-view choice", quasi_fx["hiddenControls"] and quasi_fx["noteVisible"] and quasi_fx["effectiveMode"] == "none" and quasi_fx["stateMode"] == "plasma", str(quasi_fx))
+            page.evaluate("() => window.__mobileApp.setState({ fxMode: 'none', autoFx: false, softFx: false, quality: 'smooth' })")
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#model-select").evaluate("el => { el.value = 'dynkin'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             dynkin_select_probe = page.evaluate("""() => ({
@@ -1194,10 +1356,11 @@ def main() -> int:
                 metrics: window.__mobileApp.getMetrics()
             })""")
             palette_ids = [button["id"] for button in palette_grid["buttons"]]
+            compact_palette_ids = [button["id"] for button in palette_grid["buttons"] if button["visible"]]
             check("Visuals section exposes the full desktop palette catalog", len(palette_grid["buttons"]) == 45 and palette_grid["metrics"]["paletteSwatchButtonCount"] == 45 and palette_ids[:4] == ["gold", "ember", "ice", "cyan"] and all(name in palette_ids for name in ["rainbow", "aurora", "ultraviolet", "solar_flare", "petrie", "vintage"]), str(palette_grid))
             check("palette swatches mark active Gold palette", palette_grid["output"] == "Gold" and palette_grid["select"] == "gold" and any(button["id"] == "gold" and button["active"] and button["pressed"] == "true" for button in palette_grid["buttons"]), str(palette_grid))
             palette_expand_box = page.locator("#palette-expand-button").bounding_box()
-            check("palette catalog starts as a complete three-row tray", not palette_grid["expanded"] and palette_grid["expandText"] == "Expand" and palette_grid["expandAria"] == "false" and sum(button["visible"] for button in palette_grid["buttons"]) == 9, str(palette_grid))
+            check("palette catalog starts with nine rich multi-color showcases", not palette_grid["expanded"] and palette_grid["expandText"] == "Expand" and palette_grid["expandAria"] == "false" and compact_palette_ids == ["gold", "ember", "ice", "rainbow", "aurora", "sakura", "ultraviolet", "biolume", "solar_flare"], str(compact_palette_ids))
             check("palette Expand is a full touch target", bool(palette_expand_box) and palette_expand_box["height"] >= 44 and palette_expand_box["width"] >= 84, str(palette_expand_box))
             palette_expand_before = palette_grid["metrics"]
             page.locator("#palette-expand-button").click()
@@ -1231,9 +1394,15 @@ def main() -> int:
             check("compact palette tray includes a selected later palette without opening gaps", selected_late_palette["visible"] == 9 and selected_late_palette["activeVisible"] and selected_late_palette["active"] == "vintage", str(selected_late_palette))
             palette_swatch_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator('#palette-swatch-grid [data-palette-swatch="ember"]').click()
+            page.wait_for_function("""count => {
+                const metrics = window.__mobileApp.getMetrics();
+                return metrics.renderCount > count
+                    && metrics.lastDrawStats?.runtimePalette === 'ember';
+            }""", arg=palette_swatch_before["renderCount"])
             palette_swatch_after = page.evaluate("""() => ({
                 state: window.__mobileApp.getState(),
                 metrics: window.__mobileApp.getMetrics(),
+                settingsOpen: window.__mobileApp.getMetrics().settingsOpen,
                 controls: {
                     select: document.getElementById('palette-select').value,
                     output: document.getElementById('palette-output').textContent.trim(),
@@ -1241,9 +1410,15 @@ def main() -> int:
                 }
             })""")
             check("palette swatch changes state and controls", palette_swatch_after["state"]["palette"] == "ember" and palette_swatch_after["controls"]["select"] == "ember" and palette_swatch_after["controls"]["output"] == "Ember" and palette_swatch_after["controls"]["activeSwatch"] == "ember", str(palette_swatch_after))
+            check("palette swatch previews immediately while Visuals remains open", palette_swatch_after["settingsOpen"] and palette_swatch_after["metrics"]["renderCount"] > palette_swatch_before["renderCount"] and palette_swatch_after["metrics"]["lastDrawStats"]["runtimePalette"] == "ember" and not palette_swatch_after["metrics"]["settingsDeferredRenderPending"], str(palette_swatch_after["metrics"]))
             check("palette swatch uses lightweight settings sync", palette_swatch_after["metrics"]["paletteSwatchSelectCount"] > palette_swatch_before["paletteSwatchSelectCount"] and palette_swatch_after["metrics"]["paletteSwatchSyncSkipCount"] > palette_swatch_before["paletteSwatchSyncSkipCount"] and palette_swatch_after["metrics"]["settingsControlSyncSkipCount"] > palette_swatch_before["settingsControlSyncSkipCount"] and palette_swatch_after["metrics"]["controlSyncCount"] == palette_swatch_before["controlSyncCount"] and palette_swatch_after["metrics"]["lastPaletteSwatch"] == "ember" and palette_swatch_after["metrics"]["lastSettingsControlSyncSkip"] == "palette-swatch-ember", str(palette_swatch_after["metrics"]))
             palette_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.locator("#palette-select").select_option("cyan")
+            page.wait_for_function("""count => {
+                const metrics = window.__mobileApp.getMetrics();
+                return metrics.renderCount > count
+                    && metrics.lastDrawStats?.runtimePalette === 'cyan';
+            }""", arg=palette_before["renderCount"])
             palette_metrics = page.evaluate("""() => ({
                 metrics: window.__mobileApp.getMetrics(),
                 activeSwatch: document.querySelector('#palette-swatch-grid button.active')?.dataset.paletteSwatch,
@@ -1251,6 +1426,7 @@ def main() -> int:
                 storedPalette: window.__mobileApp.getStoredState()?.palette
             })""")
             check("palette changes state", page.evaluate("() => window.__mobileApp.getState().palette") == "cyan")
+            check("palette dropdown also previews immediately", palette_metrics["metrics"]["renderCount"] > palette_before["renderCount"] and palette_metrics["metrics"]["lastDrawStats"]["runtimePalette"] == "cyan" and not palette_metrics["metrics"]["settingsDeferredRenderPending"], str(palette_metrics["metrics"]))
             check("palette setting skips full control sync", palette_metrics["metrics"]["settingsControlSyncSkipCount"] > palette_before["settingsControlSyncSkipCount"] and palette_metrics["metrics"]["lastSettingsControlSyncSkip"] == "palette-select" and palette_metrics["metrics"]["controlSyncCount"] == palette_before["controlSyncCount"] and palette_metrics["metrics"]["liveControlSyncSkipCount"] == palette_before["liveControlSyncSkipCount"], str(palette_metrics))
             check("palette select syncs swatches", palette_metrics["activeSwatch"] == "cyan" and palette_metrics["output"] == "Cyan", str(palette_metrics))
             check("state save is pending or persisted", palette_metrics["metrics"]["savePending"] or palette_metrics["metrics"]["saveCount"] > palette_before["saveCount"] or palette_metrics["storedPalette"] == "cyan", str(palette_metrics))
@@ -1785,7 +1961,7 @@ def main() -> int:
                 }
             })""")
             check("Surprise shuffles safe mobile state", surprise_after["state"]["palette"] != surprise_before["state"]["palette"] and surprise_after["state"]["subset"] != surprise_before["state"]["subset"] and surprise_after["state"]["quality"] == "smooth" and not surprise_after["state"]["autoRotate"] and not surprise_after["state"]["autoModel"] and not surprise_after["state"]["autoColor"] and not surprise_after["state"]["softFx"] and surprise_after["state"]["selectedRoot"] is None and abs(surprise_after["state"]["zoom"] - 1) < 0.01 and surprise_after["state"]["panX"] == 0 and surprise_after["state"]["panY"] == 0, str(surprise_after))
-            check("Surprise syncs visible controls without full sync", surprise_after["controls"]["palette"] == surprise_after["state"]["palette"] and surprise_after["controls"]["subset"] == surprise_after["state"]["subset"] and abs(surprise_after["controls"]["pointScale"] - surprise_after["state"]["pointScale"]) < 0.01 and surprise_after["controls"]["rings"] == surprise_after["state"]["showRings"] and not surprise_after["controls"]["autoModel"] and not surprise_after["controls"]["autoColor"] and not surprise_after["controls"]["softFx"] and surprise_after["controls"]["petrie"] == surprise_after["state"]["showPetrie"] and surprise_after["controls"]["mirrors"] == surprise_after["state"]["showMirrors"] and not surprise_after["controls"]["vertices"] and not surprise_after["state"]["showVertices"] and not surprise_after["controls"]["motion"] and surprise_after["controls"]["quality"] == "Smooth" and surprise_after["metrics"]["controlSyncCount"] == surprise_before["metrics"]["controlSyncCount"] and surprise_after["metrics"]["settingsControlSyncSkipCount"] > surprise_before["metrics"]["settingsControlSyncSkipCount"] and surprise_after["metrics"]["lastSettingsControlSyncSkip"] == "surprise", str(surprise_after))
+            check("Surprise syncs visible controls without full sync", surprise_after["controls"]["palette"] == surprise_after["state"]["palette"] and surprise_after["controls"]["subset"] == surprise_after["state"]["subset"] and abs(surprise_after["controls"]["pointScale"] - surprise_after["state"]["pointScale"]) < 0.01 and surprise_after["controls"]["rings"] == surprise_after["state"]["showRings"] and not surprise_after["controls"]["autoModel"] and not surprise_after["controls"]["autoColor"] and not surprise_after["controls"]["softFx"] and surprise_after["controls"]["petrie"] == surprise_after["state"]["showPetrie"] and surprise_after["controls"]["mirrors"] == surprise_after["state"]["showMirrors"] and not surprise_after["controls"]["vertices"] and not surprise_after["state"]["showVertices"] and not surprise_after["controls"]["motion"] and surprise_after["controls"]["quality"] == "Low" and surprise_after["metrics"]["controlSyncCount"] == surprise_before["metrics"]["controlSyncCount"] and surprise_after["metrics"]["settingsControlSyncSkipCount"] > surprise_before["metrics"]["settingsControlSyncSkipCount"] and surprise_after["metrics"]["lastSettingsControlSyncSkip"] == "surprise", str(surprise_after))
             check("Surprise defers hidden render and records telemetry", surprise_after["metrics"]["surpriseCount"] > surprise_before["metrics"]["surpriseCount"] and surprise_after["metrics"]["lastInteractionType"] == "surprise" and surprise_after["metrics"]["lastSurprisePatch"]["palette"] == surprise_after["state"]["palette"] and surprise_after["metrics"]["settingsDeferredRenderRequestCount"] > surprise_before["metrics"]["settingsDeferredRenderRequestCount"] and surprise_after["metrics"]["lastSettingsDeferredRenderReason"] == "surprise" and surprise_after["metrics"]["renderCount"] == surprise_before["metrics"]["renderCount"] and surprise_after["metrics"]["statusText"] == "Surprise ready", str(surprise_after["metrics"]))
             page.evaluate("""() => {
                 window.__mobileApp.setState({
@@ -1825,7 +2001,7 @@ def main() -> int:
             page.locator('#quality-chip').click()
             page.locator('#quality-popover [data-quality="sharp"]').click()
             sharp_quality = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
-            check("compact quality chooser exposes Sharp", sharp_quality["state"]["quality"] == "sharp" and abs(sharp_quality["metrics"]["renderScale"] - 1.5) < 0.01 and sharp_quality["metrics"]["canvas"]["width"] > sharp_quality_before["canvas"]["width"] and page.locator('[data-quality="sharp"].active').count() == 1, str(sharp_quality))
+            check("compact quality chooser exposes High", sharp_quality["state"]["quality"] == "sharp" and abs(sharp_quality["metrics"]["renderScale"] - 1.5) < 0.01 and sharp_quality["metrics"]["canvas"]["width"] > sharp_quality_before["canvas"]["width"] and page.locator('[data-quality="sharp"].active').count() == 1, str(sharp_quality))
             page.evaluate("""() => {
                 window.__mobileApp.openSettings('learn');
                 document.getElementById('mobile-tools-details').open = true;
@@ -1895,7 +2071,7 @@ def main() -> int:
             })""")
             expected_default_state = defaults_after["state"]["quality"] == "smooth" and defaults_after["state"]["palette"] == "gold" and defaults_after["state"]["modelMode"] == "e8_2d" and defaults_after["state"]["shape"] == "icosahedron" and defaults_after["state"]["polytope4d"] == "24cell" and defaults_after["state"]["dynkinDiagram"] == "E8" and defaults_after["state"]["subset"] == "icosahedron" and abs(defaults_after["state"]["pointScale"] - 1) < 0.01 and defaults_after["state"]["showRings"] and defaults_after["state"]["showContext"] and defaults_after["state"]["showEdges"] and defaults_after["state"]["highlightSubset"] and not defaults_after["state"]["showPetrie"] and not defaults_after["state"]["showMirrors"] and not defaults_after["state"]["showVertices"] and not defaults_after["state"]["autoRotate"] and not defaults_after["state"]["autoModel"] and not defaults_after["state"]["autoColor"] and not defaults_after["state"]["autoFx"] and not defaults_after["state"]["softFx"] and defaults_after["state"]["selectedRoot"] is None and abs(defaults_after["state"]["zoom"] - 1) < 0.01 and defaults_after["state"]["panX"] == 0 and defaults_after["state"]["panY"] == 0 and defaults_after["state"]["rotation"] == 0 and "staleExtraKey" not in defaults_after["state"]
             check("Defaults restores exact safe mobile state", expected_default_state, str(defaults_after["state"]))
-            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Smooth" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["edges"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["vertices"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["autoFx"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
+            check("Defaults syncs controls without full sync", defaults_after["controls"]["quality"] == "Low" and defaults_after["controls"]["activeSmooth"] and defaults_after["controls"]["palette"] == "gold" and defaults_after["controls"]["modelMode"] == "e8_2d" and defaults_after["controls"]["polytope4d"] == "24cell" and defaults_after["controls"]["dynkinDiagram"] == "E8" and defaults_after["controls"]["subset"] == "icosahedron" and abs(defaults_after["controls"]["pointScale"] - 1) < 0.01 and defaults_after["controls"]["rings"] and defaults_after["controls"]["context"] and defaults_after["controls"]["edges"] and defaults_after["controls"]["highlight"] and not defaults_after["controls"]["petrie"] and not defaults_after["controls"]["mirrors"] and not defaults_after["controls"]["vertices"] and not defaults_after["controls"]["autoModel"] and not defaults_after["controls"]["autoColor"] and not defaults_after["controls"]["autoFx"] and not defaults_after["controls"]["softFx"] and not defaults_after["controls"]["motion"] and abs(defaults_after["controls"]["speed"] - 0.7) < 0.01 and defaults_after["controls"]["root"] == "None" and defaults_after["controls"]["zoom"] == "100%" and defaults_after["metrics"]["controlSyncCount"] == defaults_before["controlSyncCount"] and defaults_after["metrics"]["settingsControlSyncSkipCount"] > defaults_before["settingsControlSyncSkipCount"] and defaults_after["metrics"]["lastSettingsControlSyncSkip"] == "defaults-reset", str(defaults_after))
             check("Defaults rewrites storage and records telemetry", defaults_after["stored"]["palette"] == "gold" and defaults_after["stored"]["quality"] == "smooth" and defaults_after["stored"]["modelMode"] == "e8_2d" and defaults_after["stored"]["polytope4d"] == "24cell" and defaults_after["stored"]["dynkinDiagram"] == "E8" and "staleExtraKey" not in defaults_after["stored"] and defaults_after["metrics"]["defaultsResetCount"] > defaults_before["defaultsResetCount"] and defaults_after["metrics"]["lastInteractionType"] == "defaults-reset" and defaults_after["metrics"]["saveCount"] > defaults_before["saveCount"] and not defaults_after["metrics"]["savePending"] and defaults_after["metrics"]["settingsDeferredRenderRequestCount"] > defaults_before["settingsDeferredRenderRequestCount"] and defaults_after["metrics"]["lastSettingsDeferredRenderReason"] == "defaults-reset" and defaults_after["metrics"]["statusText"] == "Defaults restored", str(defaults_after["metrics"]))
             page.evaluate("() => window.__mobileApp.closeSettings()")
             page.wait_for_function("() => !window.__mobileApp.getMetrics().settingsCanvasResizeDeferred")
