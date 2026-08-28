@@ -419,36 +419,63 @@ def main() -> int:
               window.__app.switchView('platonic');
               window.__app.setPanelMode('style');
               window.__app.setMobileQuality('low');
+              const menu = document.getElementById('global-quality-menu');
+              menu.open = true;
               const low = {
-                buttons: [...document.querySelectorAll('.ps-global-quality [data-act="setMobileQuality"]')]
+                chip: menu.querySelector('summary').textContent.trim(),
+                buttons: [...menu.querySelectorAll('[data-act="setMobileQuality"]')]
                   .map(button => button.textContent.trim()),
                 disabled: document.querySelectorAll('.fx-catalog-item:disabled').length,
                 backgrounds: document.querySelectorAll('[data-section="style"] [data-act="setBgMode"]').length,
               };
-              document.querySelector('.ps-global-quality [data-arg="high"]').click();
+              menu.querySelector('[data-arg="high"]').click();
               const high = {
                 quality: window.__app.params.mobileQuality,
                 reduced: window.__app.params.reducedMode,
+                chip: document.querySelector('#global-quality-menu summary')?.textContent.trim(),
+                menuOpen: document.getElementById('global-quality-menu')?.open,
                 disabled: document.querySelectorAll('.fx-catalog-item:disabled').length,
                 backgrounds: document.querySelectorAll('[data-section="style"] [data-act="setBgMode"]').length,
               };
               window.__app.setPanelMode('learn');
-              const persistsInLearn = !!document.querySelector('.ps-global-quality [data-arg="high"].on');
+              const globalPlacement = {
+                outsidePanel: !document.getElementById('panel').contains(document.getElementById('global-quality-menu')),
+                panelMenus: document.querySelectorAll('#panel [data-act="setMobileQuality"]').length,
+                persistsAcrossTabs: document.querySelector('#global-quality-menu summary')?.textContent.trim() === 'High',
+                label: document.querySelector('.global-quality-label')?.textContent.trim(),
+                labelVisible: getComputedStyle(document.querySelector('.global-quality-label')).display !== 'none',
+              };
+              const proofButton = document.querySelector('.interactive-proofs-launch');
+              const learnPolish = {
+                moreLearningLabels: [...document.querySelectorAll('[data-section="learn"] .ps-subtitle')]
+                  .filter(label => label.textContent.trim() === 'More learning').length,
+                proofText: proofButton?.querySelector('span')?.textContent.trim(),
+                proofHeight: proofButton?.getBoundingClientRect().height || 0,
+              };
               window.__app.setPanelMode('style');
               return {
-                low, high, persistsInLearn,
+                low, high, globalPlacement, learnPolish,
                 toolsLabel: document.querySelector('[data-act="togglePerf"]')?.textContent.trim(),
               };
             }""")
-            check("global quality selector is visible and unlocks FX from every workspace",
-                  global_quality["low"]["buttons"] == ["Low", "Balanced", "High"]
+            check("quality is a single global top-right control outside the workspaces",
+                  global_quality["low"]["chip"] == "Low"
+                  and global_quality["low"]["buttons"] == ["Low", "Balanced", "High"]
                   and global_quality["low"]["disabled"] > 0
                   and global_quality["low"]["backgrounds"] == 4
                   and global_quality["high"]["quality"] == "high"
                   and global_quality["high"]["reduced"] is False
+                  and global_quality["high"]["chip"] == "High"
+                  and global_quality["high"]["menuOpen"] is False
                   and global_quality["high"]["disabled"] == 0
                   and global_quality["high"]["backgrounds"] > global_quality["low"]["backgrounds"]
-                  and global_quality["persistsInLearn"] is True
+                  and global_quality["globalPlacement"] == {
+                      "outsidePanel": True, "panelMenus": 0, "persistsAcrossTabs": True,
+                      "label": "Quality", "labelVisible": True
+                  }
+                  and global_quality["learnPolish"] == {
+                      "moreLearningLabels": 0, "proofText": "Interactive proofs", "proofHeight": 72
+                  }
                   and global_quality["toolsLabel"] == "FPS overlay",
                   str(global_quality))
 
@@ -1194,6 +1221,297 @@ def main() -> int:
                   touch_metrics["native"] == 3 and touch_metrics["touchShell"] is True
                   and touch_metrics["renderer"] <= 1.35 + 1e-6,
                   str(touch_metrics))
+
+            visual_viewport_recovery = touch.evaluate("""() => {
+              const body = document.body;
+              const rect = selector => {
+                const box = document.querySelector(selector)?.getBoundingClientRect();
+                return box ? { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height } : null;
+              };
+              body.style.setProperty('--desktop-touch-vv-left', '37px');
+              body.style.setProperty('--desktop-touch-vv-top', '51px');
+              body.style.setProperty('--desktop-touch-vw', '320px');
+              body.style.setProperty('--desktop-touch-vh', '260px');
+              const panel = document.getElementById('panel');
+              panel.style.transition = 'none';
+              const closed = {
+                toggle: rect('#desktop-controls-toggle'),
+                quality: rect('#global-quality-menu > summary'),
+                info: rect('.essay-toggle'),
+                title: rect('#ov-tl'),
+                right: rect('#ov-tr'),
+                bottomRight: rect('#ov-br'),
+              };
+              body.classList.add('desktop-controls-open');
+              const open = {
+                close: rect('#desktop-controls-close'),
+                panel: rect('#panel'),
+                backdrop: rect('#desktop-controls-backdrop'),
+              };
+              body.classList.remove('desktop-controls-open');
+              panel.style.removeProperty('transition');
+              window.dispatchEvent(new Event('resize'));
+              return {
+                closed,
+                open,
+                synced: {
+                  width: parseFloat(body.style.getPropertyValue('--desktop-touch-vw')),
+                  height: parseFloat(body.style.getPropertyValue('--desktop-touch-vh')),
+                  left: parseFloat(body.style.getPropertyValue('--desktop-touch-vv-left')),
+                  top: parseFloat(body.style.getPropertyValue('--desktop-touch-vv-top')),
+                  expectedWidth: Math.round(visualViewport.width),
+                  expectedHeight: Math.round(visualViewport.height),
+                  expectedLeft: Math.round(visualViewport.offsetLeft),
+                  expectedTop: Math.round(visualViewport.offsetTop),
+                },
+              };
+            }""")
+            check("touch recovery chrome follows visual viewport offsets and size",
+                  visual_viewport_recovery["closed"]["toggle"]["left"] >= 51
+                  and visual_viewport_recovery["closed"]["toggle"]["top"] >= 65
+                  and visual_viewport_recovery["closed"]["quality"]["right"] <= 343
+                  and visual_viewport_recovery["closed"]["quality"]["top"] >= 109
+                  and visual_viewport_recovery["closed"]["info"]["right"] <= 343
+                  and visual_viewport_recovery["closed"]["info"]["bottom"] <= 297
+                  and visual_viewport_recovery["closed"]["bottomRight"]["right"] + 8 <= visual_viewport_recovery["closed"]["info"]["left"]
+                  and visual_viewport_recovery["closed"]["title"]["left"] >= 113
+                  and visual_viewport_recovery["closed"]["right"]["right"] <= 341
+                  and abs(visual_viewport_recovery["open"]["panel"]["left"] - 37) < 1
+                  and abs(visual_viewport_recovery["open"]["panel"]["top"] - 51) < 1
+                  and abs(visual_viewport_recovery["open"]["panel"]["width"] - 320) < 1
+                  and abs(visual_viewport_recovery["open"]["panel"]["height"] - 260) < 1
+                  and visual_viewport_recovery["open"]["close"]["left"] >= 51
+                  and visual_viewport_recovery["open"]["close"]["top"] >= 65
+                  and abs(visual_viewport_recovery["open"]["backdrop"]["left"] - 37) < 1
+                  and abs(visual_viewport_recovery["open"]["backdrop"]["top"] - 51) < 1
+                  and visual_viewport_recovery["synced"]["width"] == visual_viewport_recovery["synced"]["expectedWidth"]
+                  and visual_viewport_recovery["synced"]["height"] == visual_viewport_recovery["synced"]["expectedHeight"]
+                  and visual_viewport_recovery["synced"]["left"] == visual_viewport_recovery["synced"]["expectedLeft"]
+                  and visual_viewport_recovery["synced"]["top"] == visual_viewport_recovery["synced"]["expectedTop"],
+                  str(visual_viewport_recovery))
+
+            phone_quality = touch.evaluate("""() => {
+              const menu = document.getElementById('global-quality-menu');
+              const chip = menu?.querySelector('summary');
+              const chipBox = chip?.getBoundingClientRect();
+              const toggleBox = document.getElementById('desktop-controls-toggle')?.getBoundingClientRect();
+              menu.open = true;
+              const result = {
+                chipText: chip?.textContent.trim(),
+                chipHeight: chipBox?.height || 0,
+                topRight: (chipBox?.right || 0) > window.innerWidth * 0.7,
+                oppositeHamburger: (chipBox?.left || 0) > (toggleBox?.right || 0),
+                outsidePanel: !document.getElementById('panel').contains(menu),
+                labelHidden: getComputedStyle(document.querySelector('.global-quality-label')).display === 'none',
+                choices: [...menu.querySelectorAll('[data-act="setMobileQuality"]')]
+                  .map(button => button.textContent.trim()),
+              };
+              menu.open = false;
+              return result;
+            }""")
+
+            touch.evaluate("() => { window.__app.setPanelMode('learn'); document.getElementById('desktop-controls-toggle').click(); }")
+            touch.wait_for_function("() => document.body.classList.contains('desktop-controls-open')")
+            phone_learn_header = touch.evaluate("""() => ({
+              globalQualityHidden: getComputedStyle(document.querySelector('.global-quality-control')).display === 'none',
+              panelQualityControls: document.querySelectorAll('#panel [data-act="setMobileQuality"]').length,
+              proofHeight: document.querySelector('.interactive-proofs-launch')?.getBoundingClientRect().height || 0,
+              moreLearningLabels: [...document.querySelectorAll('[data-section="learn"] .ps-subtitle')]
+                .filter(label => label.textContent.trim() === 'More learning').length,
+            })""")
+            check("touch quality is top-right globally and leaves the controls drawer uncluttered",
+                  phone_quality["chipText"] in ["Low", "Balanced", "High"]
+                  and phone_quality["chipHeight"] >= 44
+                  and phone_quality["topRight"] is True
+                  and phone_quality["oppositeHamburger"] is True
+                  and phone_quality["outsidePanel"] is True
+                  and phone_quality["labelHidden"] is True
+                  and phone_quality["choices"] == ["Low", "Balanced", "High"]
+                  and phone_learn_header["globalQualityHidden"] is True
+                  and phone_learn_header["panelQualityControls"] == 0
+                  and phone_learn_header["proofHeight"] >= 64
+                  and phone_learn_header["moreLearningLabels"] == 0,
+                  str(phone_learn_header))
+            touch.locator("#desktop-controls-close").click()
+            touch.wait_for_function("() => !document.body.classList.contains('desktop-controls-open')")
+            touch.evaluate("() => window.__app.setPanelMode('scene')")
+
+            touch.evaluate("() => window.__app.switchView('quasicrystal')")
+            touch.wait_for_timeout(100)
+            quasi_header = touch.evaluate("""() => {
+              const rect = element => element?.getBoundingClientRect().toJSON() || null;
+              return {
+                title: document.getElementById('ov-tl')?.textContent.trim(),
+                titleBox: rect(document.getElementById('ov-tl')),
+                controlsBox: rect(document.getElementById('desktop-controls-toggle')),
+                rightBox: rect(document.getElementById('ov-tr')),
+              };
+            }""")
+            check("touch Quasicrystal title shares the menu row without count clutter",
+                  quasi_header["title"] == "E8 QUASICRYSTAL"
+                  and quasi_header["titleBox"]["left"] >= quasi_header["controlsBox"]["right"] + 8
+                  and abs((quasi_header["titleBox"]["top"] + quasi_header["titleBox"]["height"] / 2)
+                          - (quasi_header["controlsBox"]["top"] + quasi_header["controlsBox"]["height"] / 2)) < 12
+                  and quasi_header["titleBox"]["right"] <= quasi_header["rightBox"]["left"],
+                  str(quasi_header))
+            touch.evaluate("() => window.__app.switchView('e8coxeter')")
+            e8_header = touch.evaluate("""() => {
+              const rect = element => element?.getBoundingClientRect().toJSON() || null;
+              return {
+                title: document.getElementById('ov-tl')?.textContent.trim(),
+                titleBox: rect(document.getElementById('ov-tl')),
+                controlsBox: rect(document.getElementById('desktop-controls-toggle')),
+                rightBox: rect(document.getElementById('ov-tr')),
+                qualityBox: rect(document.querySelector('#global-quality-menu > summary')),
+                rightText: document.getElementById('ov-tr')?.innerText,
+              };
+            }""")
+            check("touch model labels consistently begin beside the menu",
+                  e8_header["title"].startswith("E8 ROOT SYSTEM")
+                  and e8_header["titleBox"]["left"] >= e8_header["controlsBox"]["right"] + 8
+                  and abs(e8_header["titleBox"]["top"] - quasi_header["titleBox"]["top"]) < 1
+                  and e8_header["titleBox"]["right"] <= e8_header["rightBox"]["left"]
+                  and e8_header["rightBox"]["bottom"] + 6 <= e8_header["qualityBox"]["top"]
+                  and e8_header["rightText"].startswith("8 rings")
+                  and "30 roots each" in e8_header["rightText"]
+                  and "Highlighted" not in e8_header["rightText"],
+                  str(e8_header))
+
+            tooltip_bounds = {}
+            for tooltip_view in ["rootlab", "quasicrystal"]:
+                touch.evaluate("view => window.__app.switchView(view)", tooltip_view)
+                touch.wait_for_timeout(120)
+                hovered = touch.evaluate("""() => {
+                  const canvas = document.getElementById('canvas');
+                  const canvasBox = canvas.getBoundingClientRect();
+                  const camera = window.__app.camera;
+                  const root = window.__app.currentView.object3d;
+                  camera.updateMatrixWorld(true);
+                  root.updateMatrixWorld(true);
+                  let best = null;
+                  root.traverse(object => {
+                    if (!object.isPoints || !object.userData.tooltipData) return;
+                    const positions = object.geometry?.attributes?.position;
+                    if (!positions) return;
+                    for (let index = 0; index < positions.count; index += 1) {
+                      const point = camera.position.clone().set(
+                        positions.getX(index), positions.getY(index), positions.getZ(index)
+                      );
+                      object.localToWorld(point);
+                      point.project(camera);
+                      if (point.z < -1 || point.z > 1 || point.x < -1 || point.x > 1 || point.y < -1 || point.y > 1) continue;
+                      if (!best || point.x > best.x) best = { x: point.x, y: point.y };
+                    }
+                  });
+                  if (!best) return null;
+                  const clientX = canvasBox.left + (best.x + 1) * canvasBox.width / 2;
+                  const clientY = canvasBox.top + (1 - best.y) * canvasBox.height / 2;
+                  canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    bubbles: true, pointerId: 41, pointerType: 'mouse', clientX, clientY
+                  }));
+                  return { clientX, clientY };
+                }""")
+                touch.wait_for_function("() => document.getElementById('tooltip')?.classList.contains('visible')")
+                tooltip_bounds[tooltip_view] = touch.evaluate("""() => {
+                  const tooltip = document.getElementById('tooltip');
+                  const host = tooltip.offsetParent || tooltip.parentElement;
+                  const box = tooltip.getBoundingClientRect();
+                  const hostBox = host.getBoundingClientRect();
+                  return {
+                    left: box.left, right: box.right, top: box.top, bottom: box.bottom,
+                    hostLeft: hostBox.left, hostRight: hostBox.right,
+                    hostTop: hostBox.top, hostBottom: hostBox.bottom,
+                    contentFits: tooltip.scrollWidth <= tooltip.clientWidth + 1,
+                  };
+                }""")
+                check(f"touch {tooltip_view} point tooltip stays inside the canvas",
+                      hovered is not None
+                      and tooltip_bounds[tooltip_view]["left"] >= tooltip_bounds[tooltip_view]["hostLeft"] + 8
+                      and tooltip_bounds[tooltip_view]["right"] <= tooltip_bounds[tooltip_view]["hostRight"] - 8
+                      and tooltip_bounds[tooltip_view]["top"] >= tooltip_bounds[tooltip_view]["hostTop"] + 8
+                      and tooltip_bounds[tooltip_view]["bottom"] <= tooltip_bounds[tooltip_view]["hostBottom"] - 8
+                      and tooltip_bounds[tooltip_view]["contentFits"] is True,
+                      str(tooltip_bounds[tooltip_view]))
+            touch.evaluate("() => window.__app.switchView('e8coxeter')")
+            touch.wait_for_timeout(100)
+
+            touch.locator(".essay-toggle").click()
+            touch.wait_for_selector(".essay-panel", timeout=5000)
+            reader_metrics = touch.evaluate("""() => {
+              const rect = element => element?.getBoundingClientRect().toJSON() || null;
+              const host = document.querySelector('.essay-host');
+              const panel = document.querySelector('.essay-panel');
+              const close = document.querySelector('.essay-close');
+              const controls = document.getElementById('desktop-controls-toggle');
+              return {
+                viewport: { width: innerWidth, height: innerHeight },
+                hostOpen: host?.classList.contains('is-open'),
+                panel: rect(panel),
+                panelClientHeight: panel?.clientHeight || 0,
+                panelScrollHeight: panel?.scrollHeight || 0,
+                panelOverflowY: panel ? getComputedStyle(panel).overflowY : null,
+                panelFontSize: panel ? parseFloat(getComputedStyle(panel).fontSize) : 0,
+                title: document.querySelector('.essay-title')?.textContent,
+                provenanceCount: document.querySelectorAll('.essay-provenance').length,
+                close: rect(close),
+                controls: rect(controls),
+                controlsVisible: controls ? getComputedStyle(controls).display !== 'none' : false,
+              };
+            }""")
+            reader_box = reader_metrics["panel"] or {}
+            close_box = reader_metrics["close"] or {}
+            controls_box = reader_metrics["controls"] or {}
+            check("touch reading is bounded, readable, and independently scrollable",
+                  reader_metrics["hostOpen"]
+                  and reader_box.get("left", -1) >= 0
+                  and reader_box.get("right", 1e9) <= reader_metrics["viewport"]["width"]
+                  and reader_box.get("top", -1) >= 0
+                  and reader_box.get("bottom", 1e9) <= reader_metrics["viewport"]["height"]
+                  and reader_metrics["panelClientHeight"] <= reader_metrics["viewport"]["height"]
+                  and reader_metrics["panelOverflowY"] in ("auto", "scroll")
+                  and reader_metrics["panelFontSize"] >= 15,
+                  str(reader_metrics))
+            check("touch reading leads with educational prose rather than provenance chrome",
+                  reader_metrics["title"] == "Reading the E₈ projection"
+                  and reader_metrics["provenanceCount"] == 0,
+                  str(reader_metrics))
+            check("touch reading keeps Close and controls recovery on screen",
+                  close_box.get("top", -1) >= reader_box.get("top", 0)
+                  and close_box.get("bottom", 1e9) <= reader_metrics["viewport"]["height"]
+                  and close_box.get("height", 0) >= 44
+                  and reader_metrics["controlsVisible"]
+                  and controls_box.get("top", -1) >= 0
+                  and controls_box.get("bottom", 1e9) <= reader_metrics["viewport"]["height"],
+                  str(reader_metrics))
+
+            touch.locator(".essay-close").click()
+            touch.wait_for_selector(".essay-panel", state="detached", timeout=5000)
+            check("touch Close reading restores the compact info control",
+                  touch.locator(".essay-toggle").is_visible()
+                  and touch.locator(".essay-toggle").get_attribute("aria-expanded") == "false",
+                  str(touch.locator(".essay-toggle").bounding_box()))
+
+            touch.locator(".essay-toggle").click()
+            touch.wait_for_selector(".essay-panel", timeout=5000)
+            touch.locator("#desktop-controls-toggle").click()
+            touch.wait_for_function("() => document.body.classList.contains('desktop-controls-open')")
+            recovery_metrics = touch.evaluate("""() => ({
+              controlsOpen: document.body.classList.contains('desktop-controls-open'),
+              readerOpen: !!document.querySelector('.essay-panel'),
+              closeVisible: getComputedStyle(document.getElementById('desktop-controls-close')).display !== 'none',
+              closeBox: document.getElementById('desktop-controls-close').getBoundingClientRect().toJSON(),
+            })""")
+            check("touch controls recover directly from an open reading",
+                  recovery_metrics["controlsOpen"]
+                  and not recovery_metrics["readerOpen"]
+                  and recovery_metrics["closeVisible"]
+                  and recovery_metrics["closeBox"]["height"] >= 44,
+                  str(recovery_metrics))
+            touch.locator("#desktop-controls-close").click()
+            touch.wait_for_function("() => !document.body.classList.contains('desktop-controls-open')")
+            check("touch controls toggle returns after closing the drawer",
+                  touch.locator("#desktop-controls-toggle").is_visible(),
+                  str(touch.locator("#desktop-controls-toggle").bounding_box()))
             touch_context.close()
 
             # No stray console errors during the whole clean-page run

@@ -1304,14 +1304,14 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     if completed_lesson != {"stored": True, "label": "complete", "pressed": "true"}:
         fail(f"Learning Center completion persistence failed: {completed_lesson}")
     page.click('[data-learning-essay="e8_mckay"]')
-    page.wait_for_selector('.essay-provenance[data-claim-type="interpretation"]', timeout=5000)
-    essay_provenance = page.evaluate("""() => ({
-      label: document.querySelector('.essay-provenance strong')?.textContent,
-      sources: document.querySelectorAll('.essay-provenance a').length,
-      body: document.querySelector('.essay-provenance')?.textContent,
+    page.wait_for_selector('.essay-panel', timeout=5000)
+    essay_reader = page.evaluate("""() => ({
+      title: document.querySelector('.essay-title')?.textContent,
+      provenance: document.querySelectorAll('.essay-provenance').length,
+      sourceLinks: document.querySelectorAll('.essay-panel a[href]').length,
     })""")
-    if essay_provenance["label"] != "Interpretation" or essay_provenance["sources"] != 2 or "not its construction" not in essay_provenance["body"]:
-        fail(f"Essay claim provenance failed: {essay_provenance}")
+    if essay_reader != {"title": "The McKay correspondence", "provenance": 0, "sourceLinks": 0}:
+        fail(f"Essay reader did not keep provenance in Learn: {essay_reader}")
     if page.locator('.essay-close').text_content().strip() != "Close reading" or page.locator('.essay-close').bounding_box()["height"] < 40:
         fail("Essay reader lacks an explicit close action")
     page.click('.essay-close')

@@ -7,11 +7,11 @@
 export const ESSAYS = {
   // ===== E₈ root system =====
   e8_overview: {
-    title: 'Why E₈ matters',
+    title: 'Reading the E₈ projection',
     sourceIds: ['mit-e8-plane', 'aim-e8-technical'],
-    body: `E₈ is the largest exceptional simple Lie group. Its root system is a configuration of 240 vectors in 8-dimensional space. The Coxeter-plane view is an orthogonal projection onto a distinguished 2D plane, where the roots form eight concentric circles of 30 projected roots each.
+    body: `E₈ is the largest of the five exceptional simple Lie groups. Its root system contains 240 vectors in eight-dimensional space. This view projects those vectors onto the Coxeter plane, where they form eight rings with 30 projected roots on each ring.
 
-The group W(E₈) — its symmetries — has order 696,729,600. That's 2¹⁴ · 3⁵ · 5² · 7. It acts on the 4₂₁ polytope, the 8-dimensional convex hull of the 240 roots. Because human vision is bound to 3D, we cannot intuit E₈ the way we intuit a cube or an icosahedron — but the Coxeter projection here, and the Petrie polygon, are two of the most informative shadows we've found.`,
+The Weyl group W(E₈) contains 696,729,600 symmetries. The projection cannot display all eight dimensions at once, just as a drawing of a cube cannot contain the full three-dimensional cube. What it preserves is the rotational order: follow one ring or turn on the Petrie path to see the 30-step Coxeter cycle.`,
   },
 
   e8_mckay: {
