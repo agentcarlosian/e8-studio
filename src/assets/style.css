@@ -209,6 +209,87 @@ header::after {
 .brand-title-prefix { display: none; }
 .brand-sub   { color: var(--ink-2); font-size: 12px; max-width: 480px; }
 
+/* Render quality is application-level state, not part of any one workspace.
+   Keep one compact control in the top-right chrome across desktop, the public
+   responsive interface, and the native mobile layout. */
+.global-quality-control {
+  position: fixed;
+  z-index: 900;
+  top: 4px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.global-quality-label {
+  color: var(--ink-2);
+  font: 8px 'JetBrains Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.global-quality-menu {
+  position: relative;
+  min-width: 64px;
+}
+.global-quality-menu > summary {
+  display: grid;
+  min-width: 64px;
+  min-height: 28px;
+  padding: 4px 9px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(14, 14, 22, 0.94);
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  font: 9px 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-sm);
+}
+.global-quality-menu > summary::-webkit-details-marker { display: none; }
+.global-quality-menu > summary:hover,
+.global-quality-menu[open] > summary {
+  border-color: var(--accent);
+  background: var(--bg-2);
+  color: var(--ink-0);
+}
+.global-quality-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(8, 8, 14, 0.98);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+.global-quality-popover button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 3px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-1);
+  color: var(--ink-2);
+  cursor: pointer;
+  font: 9px 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.global-quality-popover button:hover { border-color: var(--accent); color: var(--ink-0); }
+.global-quality-popover button.on {
+  border-color: var(--accent);
+  background: var(--bg-2);
+  color: var(--accent);
+}
+body.presentation-mode .global-quality-control { display: none; }
+
 .tabs {
   display: flex;
   border: 1px solid var(--line);
@@ -552,12 +633,14 @@ main {
   color: var(--ink-1);
   line-height: 1.6;
   letter-spacing: 0.04em;
-  white-space: nowrap;
+  width: max-content;
+  max-width: min(320px, calc(100% - 20px));
+  white-space: normal;
+  overflow-wrap: anywhere;
   opacity: 0;
   transition: opacity 120ms var(--ease);
   z-index: 10;
   box-shadow: var(--shadow-md);
-  max-width: 320px;
 }
 .tooltip.visible { opacity: 1; }
 .tooltip b { color: var(--accent); font-weight: 500; }
@@ -573,6 +656,8 @@ main {
   color: var(--accent-4);
   font-size: 9px;
   font-feature-settings: "tnum" 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Footer ---------- */
@@ -769,23 +854,33 @@ body.desktop-touch-shell footer {
   display: none;
 }
 
-/* Keep the top-left scene label clear of the touch controls button. */
+/* Keep every scene label on the same phone header row as the controls button.
+   Multi-line labels can continue below the title while their width remains
+   bounded away from the right-side readout. */
 body.desktop-touch-shell .ov-tl {
-  top: max(70px, calc(env(safe-area-inset-top) + 60px));
-  left: max(16px, env(safe-area-inset-left));
+  position: fixed;
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(29px, calc(env(safe-area-inset-top) + 15px)));
+  left: calc(var(--desktop-touch-vv-left, 0px) + max(76px, calc(env(safe-area-inset-left) + 72px)));
+  max-width: max(120px, calc(var(--desktop-touch-vw, 100vw) - 190px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.desktop-touch-shell .ov-tl .ov-touch-detail {
+  display: none;
 }
 
 body.desktop-touch-shell main {
   grid-area: canvas;
-  width: max(var(--desktop-touch-vw, 100vw), 100vw);
-  min-height: max(var(--desktop-touch-vh, 100vh), 100vh);
+  width: 100vw;
+  min-height: 100vh;
   overflow: hidden;
 }
 
 body.desktop-touch-shell .desktop-controls-toggle {
   position: fixed;
-  left: max(14px, env(safe-area-inset-left));
-  top: max(14px, env(safe-area-inset-top));
+  left: calc(var(--desktop-touch-vv-left, 0px) + max(14px, env(safe-area-inset-left)));
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(14px, env(safe-area-inset-top)));
   z-index: 1650;
   display: inline-flex;
   align-items: center;
@@ -805,6 +900,65 @@ body.desktop-touch-shell .desktop-controls-toggle {
   touch-action: manipulation;
 }
 
+body.desktop-touch-shell .global-quality-control {
+  z-index: 1650;
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(58px, calc(env(safe-area-inset-top) + 50px)));
+  right: auto;
+  left: calc(var(--desktop-touch-vv-left, 0px) + var(--desktop-touch-vw, 100vw) - 72px - max(14px, env(safe-area-inset-right)));
+  gap: 0;
+}
+body.desktop-touch-shell .global-quality-label {
+  display: none;
+}
+body.desktop-touch-shell .global-quality-menu {
+  min-width: 72px;
+}
+body.desktop-touch-shell .global-quality-menu > summary {
+  min-width: 72px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 18px;
+  font-size: 10px;
+  touch-action: manipulation;
+}
+body.desktop-touch-shell .global-quality-popover {
+  width: min(270px, calc(100vw - 28px));
+  gap: 6px;
+  padding: 8px;
+}
+body.desktop-touch-shell .global-quality-popover button {
+  min-height: 48px;
+  font-size: 10px;
+  touch-action: manipulation;
+}
+body.desktop-touch-shell .ov-tr {
+  position: fixed;
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(14px, calc(env(safe-area-inset-top) + 8px)));
+  right: auto;
+  left: calc(var(--desktop-touch-vv-left, 0px) + var(--desktop-touch-vw, 100vw) - max(16px, env(safe-area-inset-right)));
+  width: max-content;
+  max-width: max(132px, calc(var(--desktop-touch-vw, 100vw) - 190px));
+  transform: translateX(-100%);
+}
+body.desktop-touch-shell .ov-bl {
+  position: fixed;
+  left: calc(var(--desktop-touch-vv-left, 0px) + max(16px, env(safe-area-inset-left)));
+  top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - max(16px, env(safe-area-inset-bottom)));
+  bottom: auto;
+  transform: translateY(-100%);
+}
+body.desktop-touch-shell .ov-br {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  left: calc(var(--desktop-touch-vv-left, 0px) + var(--desktop-touch-vw, 100vw) - 76px - max(16px, env(safe-area-inset-right)));
+  top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - max(16px, env(safe-area-inset-bottom)));
+  transform: translate(-100%, -100%);
+}
+body.desktop-touch-shell.desktop-controls-open .global-quality-control {
+  display: none;
+}
+
 body.desktop-touch-shell .desktop-controls-toggle::before {
   content: "";
   display: block;
@@ -821,8 +975,8 @@ body.desktop-touch-shell.desktop-controls-open .desktop-controls-toggle {
 
 body.desktop-touch-shell.desktop-controls-open .desktop-controls-close {
   position: fixed;
-  left: max(14px, env(safe-area-inset-left));
-  top: max(14px, env(safe-area-inset-top));
+  left: calc(var(--desktop-touch-vv-left, 0px) + max(14px, env(safe-area-inset-left)));
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(14px, env(safe-area-inset-top)));
   z-index: 1700;
   display: inline-flex;
   align-items: center;
@@ -862,11 +1016,13 @@ body.desktop-touch-shell.desktop-controls-open .desktop-controls-close::after {
 
 body.desktop-touch-shell .desktop-controls-backdrop {
   position: fixed;
-  inset: 0 auto auto 0;
+  inset: auto;
+  left: var(--desktop-touch-vv-left, 0px);
+  top: var(--desktop-touch-vv-top, 0px);
   z-index: 1540;
   display: block;
-  width: max(var(--desktop-touch-vw, 100vw), 100vw);
-  height: max(var(--desktop-touch-vh, 100vh), 100vh);
+  width: var(--desktop-touch-vw, 100vw);
+  height: var(--desktop-touch-vh, 100vh);
   border: 0;
   padding: 0;
   background: rgba(0, 0, 0, 0.46);
@@ -884,7 +1040,9 @@ body.desktop-touch-shell #panel,
 body.desktop-touch-shell[data-layout="presentation"] #panel,
 body.desktop-touch-shell.presentation-mode #panel {
   position: fixed;
-  inset: 0 auto auto 0;
+  inset: auto;
+  left: var(--desktop-touch-vv-left, 0px);
+  top: var(--desktop-touch-vv-top, 0px);
   z-index: 1600;
   display: flex !important;
   width: var(--desktop-touch-vw, min(480px, 100vw));

@@ -370,6 +370,81 @@
   margin: 0 0 8px;
 }
 .essay-body p:last-child { margin-bottom: 0; }
+
+/* On the touch shell the canvas occupies the full viewport, so the desktop
+   rule that reserves 320px for the sidebar would leave the reader only a few
+   pixels wide. Keep the closed info control compact, then promote an open
+   reading to a bounded, independently scrollable sheet below the persistent
+   controls button. */
+body.desktop-touch-shell .essay-host {
+  right: auto;
+  bottom: auto;
+  left: calc(var(--desktop-touch-vv-left, 0px) + var(--desktop-touch-vw, 100vw) - 46px - max(14px, env(safe-area-inset-right)));
+  top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - 46px - max(14px, env(safe-area-inset-bottom)));
+  width: 46px;
+  max-width: none;
+  z-index: 1500;
+}
+
+body.desktop-touch-shell .essay-toggle {
+  width: 46px;
+  height: 46px;
+  font-size: 18px;
+  background: rgba(14, 14, 22, 0.92);
+  box-shadow: var(--shadow-lg);
+  touch-action: manipulation;
+}
+
+body.desktop-touch-shell .essay-host.is-open {
+  top: calc(var(--desktop-touch-vv-top, 0px) + max(70px, calc(env(safe-area-inset-top) + 62px)));
+  right: auto;
+  bottom: auto;
+  left: calc(var(--desktop-touch-vv-left, 0px) + max(12px, env(safe-area-inset-left)));
+  width: calc(var(--desktop-touch-vw, 100vw) - max(24px, calc(env(safe-area-inset-left) + env(safe-area-inset-right) + 24px)));
+  height: calc(var(--desktop-touch-vh, 100vh) - max(82px, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 74px)));
+}
+
+body.desktop-touch-shell .essay-panel {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 0 16px 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+body.desktop-touch-shell .essay-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -16px 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
+}
+
+body.desktop-touch-shell .essay-close,
+body.desktop-touch-shell .essay-nav button {
+  min-height: 44px;
+  font-size: 13px;
+  touch-action: manipulation;
+}
+
+body.desktop-touch-shell .essay-title {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+body.desktop-touch-shell .essay-provenance {
+  font-size: 12px;
+  line-height: 1.5;
+}
 /* Linkified glossary terms inside essay bodies. */
 .essay-term {
   color: var(--accent);

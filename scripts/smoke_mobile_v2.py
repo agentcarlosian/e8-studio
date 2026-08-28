@@ -116,7 +116,7 @@ def main() -> int:
                     metrics: window.__mobileApp.getMetrics()
                 };
             }""")
-            check("top scene chip keeps compact canvas footprint", top_chrome["scene"]["width"] <= 124 and top_chrome["scene"]["height"] <= 38 and top_chrome["scene"]["text"] == "E8 240 / 8 rings", str(top_chrome))
+            check("top scene chip keeps compact canvas footprint", top_chrome["scene"]["width"] <= 220 and top_chrome["scene"]["height"] <= 38 and top_chrome["scene"]["text"] == "E8 240 / 8 rings", str(top_chrome))
             check("top scene chip is a tappable scene control", top_chrome["sceneTag"] == "BUTTON" and "Tap to switch" in top_chrome["sceneLabel"], str(top_chrome))
             check("top quality chip stays compact and accessible", top_chrome["quality"]["width"] <= 88 and top_chrome["quality"]["height"] <= 38 and top_chrome["quality"]["text"] == "Low" and "240 roots" in top_chrome["ariaLabel"], str(top_chrome))
             check("default scene labels describe E8 Coxeter", "8 rings" in top_chrome["canvasLabel"] and "eight concentric rings of 30 roots" in top_chrome["infoCopy"] and top_chrome["metrics"]["lastSceneLabel"] == "E8 Coxeter, 240 roots, 8 rings", str(top_chrome))
@@ -944,6 +944,20 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             icosahedron_metrics = page.evaluate("() => window.__mobileApp.getMetrics()")
             check("Platonic icosahedron renders twenty solid hull faces with occluded rear edges", icosahedron_metrics["lastModelMode"] == "platonic" and icosahedron_metrics["lastShape"] == "icosahedron" and icosahedron_metrics["lastDrawStats"]["modelVertices"] == 12 and icosahedron_metrics["lastDrawStats"]["modelEdges"] == 30 and icosahedron_metrics["lastDrawStats"]["modelFaces"] == 20 and icosahedron_metrics["lastDrawStats"]["modelFaceFills"] == 20 and 0 < icosahedron_metrics["lastDrawStats"]["modelFrontFaces"] < 20 and icosahedron_metrics["lastDrawStats"]["modelVisibleEdges"] < 30 and icosahedron_metrics["lastDrawStats"]["modelHiddenEdges"] > 0 and icosahedron_metrics["lastDrawStats"]["modelFaceAlpha"] >= 0.7 and icosahedron_metrics["lastDrawStats"]["modelVertexFills"] == 0, str(icosahedron_metrics["lastDrawStats"]))
+            icosahedron_chip = page.evaluate("""() => {
+                const chip = document.getElementById('scene-chip');
+                const label = chip.querySelector('small');
+                const chipBox = chip.getBoundingClientRect();
+                const labelBox = label.getBoundingClientRect();
+                return {
+                    text: chip.textContent.trim().replace(/\s+/g, ' '),
+                    chipRight: chipBox.right,
+                    labelRight: labelBox.right,
+                    width: chipBox.width,
+                    overflow: getComputedStyle(label).overflow,
+                };
+            }""")
+            check("long mobile model labels stay inside the scene-chip outline", icosahedron_chip["text"] == "Solid Icosahedron / 12v" and icosahedron_chip["labelRight"] <= icosahedron_chip["chipRight"] - 8 and 124 < icosahedron_chip["width"] <= 220 and icosahedron_chip["overflow"] == "hidden", str(icosahedron_chip))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#shape-select").evaluate("el => { el.value = 'great_icosahedron'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")

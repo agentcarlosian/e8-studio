@@ -73,47 +73,6 @@
 .ps-mode-tabs button:hover { border-color: var(--accent); color: var(--ink-0); }
 .ps-mode-tabs button.on { border-color: var(--accent); background: var(--bg-2); color: var(--accent); }
 
-/* Render quality is a global workspace setting: it controls the available FX,
-   background catalog, drawing resolution, and the SDF raymarch budget. Keep it
-   visible below the workspace tabs instead of hiding it inside the SDF view. */
-.ps-global-quality {
-  padding: 5px 10px 8px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.ps-global-quality-label {
-  display: block;
-  margin: 0 0 5px;
-  text-align: center;
-  color: var(--ink-2);
-  font: 8px 'JetBrains Mono', monospace;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.ps-quality-options {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-}
-.ps-quality-options button {
-  min-width: 0;
-  min-height: 29px;
-  padding: 4px 3px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg-1);
-  color: var(--ink-2);
-  cursor: pointer;
-  font: 9px 'JetBrains Mono', monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.ps-quality-options button:hover { border-color: var(--accent); color: var(--ink-0); }
-.ps-quality-options button.on {
-  border-color: var(--accent);
-  background: var(--bg-2);
-  color: var(--accent);
-}
-
 /* Brief flash when a section is jumped to via the 'm'/'l' shortcuts. */
 @keyframes ps-flash {
   0% { background: var(--bg-3); }
@@ -613,6 +572,33 @@
   color: var(--ink-1);
   cursor: pointer;
   text-align: left;
+}
+
+.interactive-proofs-launch {
+  min-height: 72px;
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg-1));
+}
+.interactive-proofs-launch:hover,
+.interactive-proofs-launch:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-1));
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.interactive-proofs-launch span {
+  font-size: 12px;
+  font-weight: 700;
+}
+.interactive-proofs-launch small {
+  margin-top: 5px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+body.desktop-touch-shell .interactive-proofs-launch {
+  min-height: 96px;
+  padding: 18px 14px;
 }
 .learn-path-card.primary { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--accent) 58%, var(--line)); }
 .learn-path-card:hover { border-color: var(--accent); }

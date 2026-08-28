@@ -564,9 +564,17 @@ function isSmallTouchScreen() {
   if (typeof window === 'undefined') return false;
   if (isCapacitorNative()) return false;
   const hasTouch = (navigator.maxTouchPoints || 0) > 0;
-  const visualWidth = window.visualViewport?.width || window.outerWidth || window.innerWidth || 0;
-  const screenWidth = window.screen?.width || visualWidth;
-  return hasTouch && Math.min(visualWidth || Infinity, screenWidth || Infinity) <= 760;
+  const viewport = window.visualViewport;
+  const dimensions = [
+    viewport?.width,
+    viewport?.height,
+    window.screen?.width,
+    window.screen?.height,
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  // A phone remains a phone in landscape. The earlier width-only test could
+  // drop the compact shell as soon as the device rotated or browser zoom moved
+  // the visual viewport across the breakpoint.
+  return hasTouch && Math.min(...dimensions, Infinity) <= 760;
 }
 
 function setDesktopTouchViewportMeta(enabled) {
@@ -591,24 +599,19 @@ function setDesktopTouchViewportVars(enabled) {
   if (!enabled) {
     body.style.removeProperty('--desktop-touch-vw');
     body.style.removeProperty('--desktop-touch-vh');
+    body.style.removeProperty('--desktop-touch-vv-left');
+    body.style.removeProperty('--desktop-touch-vv-top');
     return;
   }
   const viewport = window.visualViewport;
-  const candidates = [
-    viewport?.width,
-    window.screen?.width,
-    window.outerWidth,
-    window.innerWidth,
-  ].filter((value) => Number.isFinite(value) && value > 0);
-  const heightCandidates = [
-    viewport?.height,
-    window.innerHeight,
-    window.screen?.height,
-  ].filter((value) => Number.isFinite(value) && value > 0);
-  const width = Math.round(Math.max(320, Math.min(...candidates, 760)));
-  const height = Math.round(Math.max(480, Math.min(...heightCandidates, 1200)));
+  const width = Math.max(1, Math.round(viewport?.width || window.innerWidth || window.screen?.width || 320));
+  const height = Math.max(1, Math.round(viewport?.height || window.innerHeight || window.screen?.height || 480));
+  const offsetLeft = Math.max(0, Math.round(viewport?.offsetLeft || 0));
+  const offsetTop = Math.max(0, Math.round(viewport?.offsetTop || 0));
   body.style.setProperty('--desktop-touch-vw', `${width}px`);
   body.style.setProperty('--desktop-touch-vh', `${height}px`);
+  body.style.setProperty('--desktop-touch-vv-left', `${offsetLeft}px`);
+  body.style.setProperty('--desktop-touch-vv-top', `${offsetTop}px`);
 }
 
 function syncDesktopTouchShell() {
@@ -675,7 +678,13 @@ function installDesktopControlsDrawer() {
     if (!enabled) setOpen(false);
   };
 
-  toggle.addEventListener('click', () => setOpen(true));
+  toggle.addEventListener('click', () => {
+    // The controls drawer is the phone's recovery/navigation surface. If a
+    // contextual reading is open, dismiss it before opening controls so the
+    // two full-screen layers can never trap or obscure one another.
+    window.essayPanel?.close?.();
+    setOpen(true);
+  });
   close.addEventListener('click', () => setOpen(false));
   backdrop.addEventListener('click', () => setOpen(false));
   window.addEventListener('keydown', (e) => {
@@ -689,6 +698,52 @@ function installDesktopControlsDrawer() {
   sync();
   requestAnimationFrame(sync);
   setTimeout(sync, 250);
+}
+
+const GLOBAL_QUALITY_OPTIONS = [['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']];
+
+function syncGlobalQualityMenu() {
+  const menu = document.getElementById('global-quality-menu');
+  if (!menu || !params) return;
+  const current = GLOBAL_QUALITY_OPTIONS.find(([level]) => level === params.mobileQuality)
+    || GLOBAL_QUALITY_OPTIONS[2];
+  const summary = menu.querySelector('summary');
+  if (summary) {
+    summary.textContent = current[1];
+    summary.setAttribute('aria-label', `Render quality: ${current[1]}`);
+    summary.title = `Render quality: ${current[1]}`;
+  }
+  menu.querySelectorAll('[data-act="setMobileQuality"]').forEach(button => {
+    const active = button.dataset.arg === current[0];
+    button.classList.toggle('on', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function installGlobalQualityMenu() {
+  if (typeof document === 'undefined' || document.getElementById('global-quality-menu')) return;
+  const control = document.createElement('div');
+  control.className = 'global-quality-control';
+  const menu = document.createElement('details');
+  menu.id = 'global-quality-menu';
+  menu.className = 'global-quality-menu';
+  menu.innerHTML = `
+    <summary aria-label="Render quality" title="Render quality">High</summary>
+    <div class="global-quality-popover" role="group" aria-label="Render quality">
+      ${GLOBAL_QUALITY_OPTIONS.map(([level, label]) => `<button type="button" data-act="setMobileQuality" data-arg="${level}" title="Set global render quality to ${label}">${label}</button>`).join('')}
+    </div>`;
+  menu.querySelectorAll('button').forEach(button => {
+    button.addEventListener('click', () => { menu.open = false; });
+  });
+  document.addEventListener('click', event => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
+  const label = document.createElement('span');
+  label.className = 'global-quality-label';
+  label.textContent = 'Quality';
+  control.append(label, menu);
+  document.body.appendChild(control);
+  syncGlobalQualityMenu();
 }
 
 function initThree() {
@@ -1167,22 +1222,11 @@ function updateOverlays(viewId) {
     bl.innerHTML = `tile angles ${angleSummary}<br>${tiling.name}`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>dual multigrid: <b>${tiling.label}</b>`;
   } else if (viewId === 'quasicrystal') {
-    const patch = generateE8Quasicrystal(DATA.e8, {
-      maxNormSq: params.quasiReach,
-      windowRadius: params.quasiWindow,
-      phason: params.quasiPhason,
-      // The corner readout only needs counts and projection metadata. The
-      // active view builds its own visible links or diffraction peaks, so
-      // repeating both calculations here made every slider step needlessly
-      // expensive on lower-power desktops.
-      includeDiffraction: false,
-      includeEdges: false,
-    });
     const modeLabel = params.quasiMode === 'window' ? 'internal window'
       : params.quasiMode === 'diffraction' ? 'reciprocal peaks' : 'projected pattern';
-    tl.innerHTML = `<b>E8 QUASICRYSTAL</b><br>${patch.pointCount} accepted · ${patch.candidateCount} tested`;
+    tl.innerHTML = `<b>E8 QUASICRYSTAL</b>`;
     tr.innerHTML = `<b>8D → 2D + 6D</b><br>30-fold Coxeter symmetry`;
-    bl.innerHTML = `window r = ${patch.windowRadius.toFixed(2)} · phason ${patch.phason.toFixed(2)}<br>${modeLabel}`;
+    bl.innerHTML = `window r = ${params.quasiWindow.toFixed(2)} · phason ${params.quasiPhason.toFixed(2)}<br>${modeLabel}`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br><b>cut-and-project set</b>`;
   } else if (viewId === 'polytope') {
     const p = DATA.polytopes4d[params.poly4d];
@@ -1197,13 +1241,8 @@ function updateOverlays(viewId) {
     bl.innerHTML = `binary icosahedral group<br>= icosa symmetry doubled`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>binary icosahedral Γ`;
   } else if (viewId === 'e8coxeter') {
-    const shapeName = params.shape;
-    const subsetSize = DATA.mckay_subsets?.[shapeName]?.length || 0;
-    const subsetDesc = subsetSize > 0
-      ? `${subsetSize} highlighted (${shapeName} symmetry)`
-      : `${PLATONIC_VERTEX_COUNTS[shapeName] || 12} highlighted (innermost rings)`;
-    tl.innerHTML = `<b>E8 ROOT SYSTEM</b><br>240 roots · Coxeter plane`;
-    tr.innerHTML = `8 rings · 30 roots each<br><b>${subsetDesc}</b>`;
+    tl.innerHTML = `<b>E8 ROOT SYSTEM</b><span class="ov-touch-detail"><br>240 roots · Coxeter plane</span>`;
+    tr.innerHTML = `8 rings · 30 roots each`;
     bl.innerHTML = `drag = rotate plane<br>scroll = zoom`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>root system: <b>E₈</b>`;
   } else if (viewId === 'bloom') {
@@ -1283,9 +1322,11 @@ function buildPanel() {
 function refreshPanel() {
   if (!panel) {
     buildPanel();
+    syncGlobalQualityMenu();
     return;
   }
   panel.setParams(params);
+  syncGlobalQualityMenu();
 }
 
 // ---------- Params (shared between views + GUI) ----------
@@ -4852,6 +4893,35 @@ function animate() {
 // ---------- Tooltip ----------
 const tooltipEl = typeof document !== 'undefined' ? document.getElementById('tooltip') : null;
 
+function positionTooltipNearPointer(x, y) {
+  if (!tooltipEl) return;
+  const host = tooltipEl.offsetParent || tooltipEl.parentElement;
+  const hostWidth = host?.clientWidth || window.innerWidth;
+  const hostHeight = host?.clientHeight || window.innerHeight;
+  const viewport = document.body.classList.contains('desktop-touch-shell') ? window.visualViewport : null;
+  const visibleLeft = Math.max(0, viewport?.offsetLeft || 0);
+  const visibleTop = Math.max(0, viewport?.offsetTop || 0);
+  const visibleRight = Math.min(hostWidth, visibleLeft + (viewport?.width || hostWidth));
+  const visibleBottom = Math.min(hostHeight, visibleTop + (viewport?.height || hostHeight));
+  const margin = 10;
+  const offset = 16;
+  const width = tooltipEl.offsetWidth;
+  const height = tooltipEl.offsetHeight;
+
+  // Prefer the familiar lower-right position, but flip before clamping when a
+  // point is near an edge. This keeps long E8/root coordinates fully visible.
+  let left = x + offset;
+  if (left + width > visibleRight - margin) left = x - width - offset;
+  left = Math.max(visibleLeft + margin, Math.min(left, visibleRight - width - margin));
+
+  let top = y + offset;
+  if (top + height > visibleBottom - margin) top = y - height - offset;
+  top = Math.max(visibleTop + margin, Math.min(top, visibleBottom - height - margin));
+
+  tooltipEl.style.left = `${Math.round(left)}px`;
+  tooltipEl.style.top = `${Math.round(top)}px`;
+}
+
 function updateTooltip() {
   if (!tooltipEl || !currentView || !camera) {
     if (tooltipEl) tooltipEl.classList.remove('visible');
@@ -4893,10 +4963,9 @@ function updateTooltip() {
   }
   const info = data[idx];
 
-  // Position tooltip near cursor (offset to avoid covering the point)
+  // Size the content first, then position it within the canvas viewport.
   tooltipEl.innerHTML = info.html;
-  tooltipEl.style.left = (mouseX + 16) + 'px';
-  tooltipEl.style.top  = (mouseY + 16) + 'px';
+  positionTooltipNearPointer(mouseX, mouseY);
   tooltipEl.classList.add('visible');
 }
 
@@ -4947,6 +5016,12 @@ function closeTopAppLayer() {
     return true;
   }
   if (closeCommandPalette()) return true;
+  const qualityMenu = document.getElementById('global-quality-menu');
+  if (qualityMenu?.open) {
+    qualityMenu.open = false;
+    qualityMenu.querySelector('summary')?.focus();
+    return true;
+  }
   if (window.essayPanel?.close?.()) return true;
   if (params && (params.layout === 'presentation' || params.presentationMode)) {
     window.__app.setLayout('wide-canvas');
@@ -5021,6 +5096,7 @@ async function main() {
   }
   buildTabs();
   refreshPanel();
+  installGlobalQualityMenu();
   installDesktopControlsDrawer();
   // Initialize essay panel. onChange fires on nav/open AND (with {essayId})
   // whenever an essay is shown — used to track the "Reader" exploration badge.

@@ -1016,10 +1016,9 @@ function renderLearnSection(params) {
 
       ${orientation}
 
-      <div class="ps-subtitle">More learning</div>
       <div class="learn-path-grid" data-learn-paths>
-        <button class="learn-path-card" data-act="openProofs">
-          <span>Interactive proofs</span><small>Build the ideas step by step</small>
+        <button class="learn-path-card interactive-proofs-launch" data-act="openProofs">
+          <span>Interactive proofs</span><small>Work through visual arguments step by step</small>
         </button>
       </div>
 
@@ -1158,12 +1157,6 @@ export class ControlPanel {
         <div class="ps-status" id="ps-status" role="status" aria-live="polite" aria-atomic="true"></div>
         <div class="ps-mode-tabs" role="tablist" aria-label="Control workspace">
           ${PANEL_WORKSPACES.map(mode => `<button id="panel-tab-${mode}" class="${workspace === mode ? 'on' : ''}" data-act="setPanelMode" data-arg="${mode}" role="tab" aria-controls="ps-body" aria-selected="${workspace === mode ? 'true' : 'false'}" tabindex="${workspace === mode ? '0' : '-1'}">${PANEL_WORKSPACE_LABELS[mode]}</button>`).join('')}
-        </div>
-        <div class="ps-global-quality" role="group" aria-label="Render quality">
-          <span class="ps-global-quality-label">Quality</span>
-          <div class="ps-quality-options">
-            ${[['low', 'Low'], ['medium', 'Balanced'], ['high', 'High']].map(([level, label]) => `<button class="${this.params.mobileQuality === level ? 'on' : ''}" ${pressed(this.params.mobileQuality === level)} data-act="setMobileQuality" data-arg="${level}" title="Set global render quality to ${label}">${label}</button>`).join('')}
-          </div>
         </div>
         <div class="ps-scroll" id="ps-body" role="tabpanel" aria-labelledby="panel-tab-${workspace}"></div>
         <div class="panel-footer" role="group" aria-label="Studio actions">

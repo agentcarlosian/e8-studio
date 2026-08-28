@@ -6,15 +6,6 @@
 
 import { ESSAYS, ESSAY_CONTEXTS, getEssay } from '../content/essays.js';
 import { GLOSSARY } from '../content/glossary.js';
-import { FACT_SOURCES } from '../content/sources.js';
-
-const CLAIM_LABELS = {
-  'established-mathematics': 'Established mathematics',
-  'historical-context': 'Historical context',
-  interpretation: 'Interpretation',
-  'app-designed-visualization': 'App-designed visualization',
-  'rendering-technique': 'Rendering technique',
-};
 
 const SELECTION_NOTES = {
   tetrahedron: ['The tetrahedron', 'The simplest Platonic solid has 4 triangular faces, 4 vertices, and 6 edges. It is self-dual.'],
@@ -138,8 +129,9 @@ export class EssayPanel {
 
   render() {
     if (!this.host) return;
+    this.host.classList.toggle('is-open', this.open);
     if (!this.open) {
-      this.host.innerHTML = `<button class="essay-toggle" title="Show essays (I)">ⓘ</button>`;
+      this.host.innerHTML = `<button class="essay-toggle" title="Show essays (I)" aria-label="Open reading" aria-controls="essay-reader" aria-expanded="false">ⓘ</button>`;
       const btn = this.host.querySelector('.essay-toggle');
       if (btn) btn.onclick = () => this.toggle();
       return;
@@ -154,7 +146,7 @@ export class EssayPanel {
       try { this.onChange({ essayId: id }); } catch {}
     }
     this.host.innerHTML = `
-      <div class="essay-panel">
+      <div id="essay-reader" class="essay-panel" role="region" aria-label="Context reading">
         <div class="essay-header">
           <button class="essay-close" title="Close reading" data-act="closeEssay">Close reading</button>
           <div class="essay-nav">
@@ -165,14 +157,6 @@ export class EssayPanel {
         </div>
         ${e ? `
           <div class="essay-title">${e.title}</div>
-          <div class="essay-provenance" data-claim-type="${escapeHtml(e.claimType)}">
-            <strong>${escapeHtml(CLAIM_LABELS[e.claimType] || e.claimType)}</strong>
-            <span>${escapeHtml(e.scopeNote)}</span>
-            <span>${e.sourceIds.map(sourceId => {
-              const source = FACT_SOURCES[sourceId];
-              return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.author)}</a>`;
-            }).join(' · ')}</span>
-          </div>
           ${note ? `<div class="essay-selection"><small>Current selection</small><strong>${escapeHtml(note[0])}</strong><p>${escapeHtml(note[1])}</p></div>` : ''}
           <div class="essay-body">${this._formatBody(e.body)}</div>
         ` : `
