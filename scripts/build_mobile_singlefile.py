@@ -8,97 +8,29 @@ This is separate from scripts/build_mobile.py on purpose:
 """
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
 from build import harden_csp
+from build_mobile import (
+    CSS_LINK_RE,
+    MOBILE_SCRIPT_RE,
+    MOBILE_HTML,
+    MOBILE_CSS,
+    bundled_mobile_js,
+    inline_mobile_data,
+    remove_cdn_csp_allowance,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "dist" / "e8-studio-mobile-v2.html"
-MOBILE_HTML = ROOT / "mobile.html"
-MOBILE_CSS = ROOT / "src" / "mobile" / "style.css"
-MOBILE_JS = ROOT / "src" / "mobile" / "main.js"
-RANK2_JS = ROOT / "src" / "math" / "rank2-roots.js"
-TILING_JS = ROOT / "src" / "math" / "coxeter-tilings.js"
-QUASICRYSTAL_JS = ROOT / "src" / "math" / "e8-quasicrystal.js"
-
-CSS_LINK_RE = re.compile(r'<link\s+rel="stylesheet"\s+href="src/mobile/style\.css"\s*>')
-MOBILE_SCRIPT_RE = re.compile(r'<script\s+type="module"\s+src="src/mobile/main\.js"></script>')
-RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/rank2-roots\.js['\"];?\s*", re.M | re.S)
-TILING_RANK2_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\./rank2-roots\.js['\"];?\s*", re.M | re.S)
-TILING_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/coxeter-tilings\.js['\"];?\s*", re.M | re.S)
-QUASICRYSTAL_IMPORT_RE = re.compile(r"^import\s*\{.*?\}\s*from\s*['\"]\.\./math/e8-quasicrystal\.js['\"];?\s*", re.M | re.S)
-LOAD_DATA_RE = re.compile(
-    r"async function loadData\(\) \{\n"
-    r"  if \(window\.MOBILE_DATA\) return window\.MOBILE_DATA;\n"
-    r".*?\n"
-    r"\}\n\n"
-    r"function cacheElements\(",
-    re.S,
-)
-
-
-def inline_mobile_data() -> str:
-    payload = {
-        "e8": json.loads((ROOT / "data" / "e8.json").read_text(encoding="utf-8")),
-        "e8_math": json.loads((ROOT / "data" / "e8_math.json").read_text(encoding="utf-8")),
-        "mckay_subsets": json.loads((ROOT / "data" / "mckay_subsets.json").read_text(encoding="utf-8")),
-        "platonic": json.loads((ROOT / "data" / "platonic.json").read_text(encoding="utf-8")),
-        "stellations": json.loads((ROOT / "data" / "stellations.json").read_text(encoding="utf-8")),
-        "polytopes4d": json.loads((ROOT / "data" / "polytopes4d.json").read_text(encoding="utf-8")),
-        "dynkin": json.loads((ROOT / "data" / "dynkin.json").read_text(encoding="utf-8")),
-        "mckay": json.loads((ROOT / "data" / "mckay.json").read_text(encoding="utf-8")),
-        "curriculum": json.loads((ROOT / "data" / "curriculum.json").read_text(encoding="utf-8")),
-    }
-    return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n"
-
-
-def bundled_mobile_js() -> str:
-    rank2 = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", RANK2_JS.read_text(encoding="utf-8"))
-    tiling = TILING_JS.read_text(encoding="utf-8")
-    tiling, tiling_rank2_count = TILING_RANK2_IMPORT_RE.subn("", tiling, count=1)
-    if tiling_rank2_count != 1:
-        raise SystemExit("ERROR: Could not inline the tiling module's rank-2 dependency")
-    tiling = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", tiling)
-    quasicrystal = re.sub(r"\bexport\s+(?=(?:const|function|class)\b)", "", QUASICRYSTAL_JS.read_text(encoding="utf-8"))
-    quasicrystal = "const { QUASICRYSTAL_REACHES, generateE8Quasicrystal, quasicrystalReliefHeight } = (() => {\n" + quasicrystal + "\nreturn { QUASICRYSTAL_REACHES, generateE8Quasicrystal, quasicrystalReliefHeight };\n})();"
-    mobile = MOBILE_JS.read_text(encoding="utf-8")
-    mobile, rank2_count = RANK2_IMPORT_RE.subn("", mobile, count=1)
-    mobile, tiling_count = TILING_IMPORT_RE.subn("", mobile, count=1)
-    mobile, quasicrystal_count = QUASICRYSTAL_IMPORT_RE.subn("", mobile, count=1)
-    if rank2_count != 1:
-        raise SystemExit("ERROR: Could not inline the rank-2 root-system module")
-    if tiling_count != 1:
-        raise SystemExit("ERROR: Could not inline the Coxeter tiling module")
-    if quasicrystal_count != 1:
-        raise SystemExit("ERROR: Could not inline the E8 quasicrystal module")
-    return rank2 + "\n\n" + tiling + "\n\n" + quasicrystal + "\n\n" + mobile
-
-
-def remove_data_fetch_fallback(js: str) -> str:
-    replacement = (
-        "async function loadData() {\n"
-        "  if (window.MOBILE_DATA) return window.MOBILE_DATA;\n"
-        "  throw new Error('Mobile standalone data bundle is missing.');\n"
-        "}\n\n"
-        "function cacheElements("
-    )
-    next_js, count = LOAD_DATA_RE.subn(replacement, js, count=1)
-    if count != 1:
-        raise SystemExit("ERROR: Could not remove Mobile V2 standalone data fetch fallback")
-    return next_js
-
-
-def remove_cdn_csp_allowance(html: str) -> str:
-    return html.replace(" https://cdn.jsdelivr.net", "")
 
 
 def main() -> int:
     OUT.parent.mkdir(exist_ok=True)
     html = MOBILE_HTML.read_text(encoding="utf-8")
     css = MOBILE_CSS.read_text(encoding="utf-8")
-    js = remove_data_fetch_fallback(bundled_mobile_js())
+    js = bundled_mobile_js()
 
     html, css_count = CSS_LINK_RE.subn(f"<style>\n/* src/mobile/style.css */\n{css}\n</style>", html)
     script_replacement = (
