@@ -220,6 +220,7 @@ function normalizeMobileState(next, { learnTopicIds = null } = {}) {
   next.configRevision = MOBILE_CONFIG_REVISION;
   if (LEGACY_MODEL_MODE_MAP[next.modelMode]) next.modelMode = LEGACY_MODEL_MODE_MAP[next.modelMode];
   if (next.background === 'space') next.background = 'starfield';
+  if (next.background === 'cloud') next.background = 'aurora';
   if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
   if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
