@@ -936,7 +936,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or scene_workspace["footerActions"] != [
                 "resetConfig", "surprise", "shareSnapshot", "sharePage",
                 "togglePresentationMode", "openVideoExport", "togglePerf",
-                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet", "startQuickStart"
+                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet", "openModelExport", "startQuickStart"
             ]
             or scene_workspace["sdfSurfaceControls"] != 3
             or style_workspace["viewSections"] != 0
@@ -966,7 +966,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or "eight concentric rings" not in learn_workspace["orientationText"]):
         fail(f"View/Visuals/Learn workspace contract failed: {sdf_effect_contract}")
     visual_order = style_workspace["subtitles"]
-    expected_order = ["Background", "Palette", "Color shift", "Effects", "Quick looks", "Interface theme", "Export"]
+    expected_order = ["Background", "Palette", "Color shift", "Effects", "Quick looks", "Interface theme"]
     try:
         positions = [visual_order.index(label) for label in expected_order]
     except ValueError:
