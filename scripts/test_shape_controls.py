@@ -15,6 +15,7 @@ def main():
             page = browser.new_page(viewport={'width':1440, 'height':900}, reduced_motion='reduce', accept_downloads=True)
             errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(base + '/dist/web/index.html'); page.wait_for_function('()=>!!window.__app?.currentView')
+            page.evaluate("()=>{window.__app.setParam('adaptivePixelRatio',false);window.__app.renderer.setPixelRatio(0.5);}")
             for view, names in [('platonic', ['tetrahedron','cube','octahedron','dodecahedron','icosahedron']), ('polytope', ['5cell','tesseract','16cell','24cell','120cell','600cell'])]:
                 page.evaluate("view=>{const a=window.__app;a.switchView(view);a.setPanelMode('scene');a.setParam('autoRotate',false);a.setParam('polyAutoRotate',false);a.setParam('polyRotXY',0.4);a.setParam('polyRotZW',0.3);a.setBgMode('void');}", view)
                 for name in names:
@@ -36,7 +37,7 @@ def main():
                 for enabled in [True, False]:
                     if page.evaluate('window.__app.params.showFaces') != enabled:
                         page.locator('[data-act="toggleFaces"]').click()
-                    page.wait_for_timeout(120)
+                    page.wait_for_function("enabled=>{const meshes=window.__app.currentView.group.children.filter(o=>o.name.endsWith('-faces'));return meshes.length>0 && meshes.every(o=>o.visible===enabled);}", arg=enabled)
                     visibility = page.evaluate("window.__app.currentView.group.children.filter(o=>o.name.endsWith('-faces')).map(o=>o.visible)")
                     assert visibility and all(v == enabled for v in visibility), (view, visibility)
                     page.screenshot(path=str(out / f'{view}-faces-{enabled}.png'))
