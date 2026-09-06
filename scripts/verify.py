@@ -1055,7 +1055,9 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       for (const view of ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
-        formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
+        window.__app.setPanelMode(['platonic', 'polytope'].includes(view) ? 'scene' : 'style');
+        formats[view] = [...document.querySelectorAll('#panel [data-act^="export"]')]
+          .filter(button => button.getClientRects().length)
           .map(button => button.textContent.trim());
       }
       window.__app.switchView('dynkin');
@@ -1073,15 +1075,15 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       };
     }""")
     expected_export_formats = {
-        "bloom": ["PNG", "Data"],
-        "platonic": ["PNG", "OBJ", "Data"],
-        "e8coxeter": ["PNG", "SVG", "Data"],
-        "quasicrystal": ["PNG", "Data"],
-        "polytope": ["PNG", "Data"],
-        "raymarched": ["PNG", "Data"],
-        "rootlab": ["PNG", "Data"],
-        "tiling": ["PNG", "Data"],
-        "dynkin": ["PNG", "SVG", "OBJ", "Data"],
+        "bloom": ["PNG", "JSON"],
+        "platonic": ["PNG", "OBJ", "JSON"],
+        "e8coxeter": ["PNG", "SVG", "JSON"],
+        "quasicrystal": ["PNG", "JSON"],
+        "polytope": ["PNG", "OBJ · 3D projection", "JSON"],
+        "raymarched": ["PNG", "JSON"],
+        "rootlab": ["PNG", "JSON"],
+        "tiling": ["PNG", "JSON"],
+        "dynkin": ["PNG", "SVG", "OBJ", "JSON"],
     }
     if export_contract["formats"] != expected_export_formats:
         fail(f"View-aware export buttons drifted: {export_contract['formats']}")
