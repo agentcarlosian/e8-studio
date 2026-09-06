@@ -20,6 +20,7 @@ const legacy = { modelMode: 'e8_3d', background: 'space', showEdges: false, zoom
 const restored = restoreMobileState(legacy);
 assert.equal(restored.modelMode, 'bloom');
 assert.equal(restored.background, 'starfield');
+assert.equal(restoreMobileState({ background: 'cloud' }).background, 'aurora');
 assert.equal(restored.showEdges, true, 'pre-revision scenes adopt full chord topology once');
 assert.equal(restored.zoom, 3.2, 'legacy 3D camera uses the model zoom limit');
 assert.equal(restored.configRevision, MOBILE_CONFIG_REVISION);

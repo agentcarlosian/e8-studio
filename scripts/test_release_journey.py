@@ -26,7 +26,8 @@ def main():
             page.locator('[data-quiz-back]').click();page.screenshot(path=str(out/'journey-lesson.png'))
             page.keyboard.press('Escape');page.reload();page.wait_for_function('()=>!!window.__app?.currentView')
             assert page.evaluate("!!window.__app.progress.lessons?.['why-five-solids'] && !!window.__app.progress.quiz?.['platonic-foundations']")
-            page.evaluate("window.__app.setMobileQuality('high');window.__app.switchView('platonic');window.__app.setParam('shape','icosahedron');window.__app.setBgMode('plasma');window.__app.setBgIntensity(0.7);")
+            # High selects the full shader catalog; a smaller buffer bounds software-GPU readback.
+            page.evaluate("window.__app.setParam('adaptivePixelRatio',false);window.__app.renderer.setPixelRatio(0.5);window.__app.setMobileQuality('high');window.__app.switchView('platonic');window.__app.setParam('shape','icosahedron');window.__app.setBgMode('plasma');window.__app.setBgIntensity(0.7);")
             page.wait_for_timeout(300)
             for mode in ['mandala','plasma','quantum','tide']:
                 page.evaluate('mode=>window.__app.setBgMode(mode)',mode);page.wait_for_timeout(150)
