@@ -31,7 +31,7 @@ import {
   effectsForView,
 } from './fx/fx-catalog.js';
 import { BGRuntime, BG_MODES } from './fx/bg-runtime.js';
-import { backgroundModesForQuality, coerceBackgroundForQuality } from './ui/backgrounds.js';
+import { backgroundModesForQuality, coerceBackgroundForQuality, normalizeBackgroundMode } from './ui/backgrounds.js';
 import { PRESETS, applyPreset } from './state/presets.js';
 import { GALLERY_PRESETS, galleryPresetById, adjacentGalleryPreset, createGalleryBaseline } from './state/gallery.js';
 import { planViewTransition } from './state/view-transition.js';
@@ -1610,7 +1610,7 @@ function normalizeParams(target) {
   if (!E.blend.has(target.blendMode)) target.blendMode = 'spectrum';
   if (!E.colorBy.has(target.colorBy)) target.colorBy = 'shell';
   if (!E.fx.has(target.fxMode)) target.fxMode = 'none';
-  if (!E.bg.has(target.bgMode)) target.bgMode = 'void';
+  target.bgMode = coerceBackgroundForQuality(target.bgMode, 'high');
   if (!E.theme.has(target.theme)) target.theme = 'dark-gold';
   if (!E.layout.has(target.layout)) target.layout = 'default';
   if (typeof target.bloomMandelbox !== 'boolean') target.bloomMandelbox = false;
@@ -3440,7 +3440,7 @@ window.__app = {
     updateParam('bgMode', newMode);
   },
   setBgMode(mode) {
-    if (!BG_MODES.includes(mode)) return;
+    mode = normalizeBackgroundMode(mode);
     mode = coerceBackgroundForQuality(mode, params.reducedMode ? 'low' : params.mobileQuality);
     // Bug fix 2026-06-25: updateParam('bgMode', ...) already calls
     // bgRuntime.setMode internally (see the k === 'bgMode' branch in
@@ -4265,7 +4265,7 @@ function animate() {
   // Push FX uniforms to all scene materials every frame
   if (fxRuntime) fxRuntime.update(t);
   // Background mood uniforms (also pushes the bg-quad's renderOrder so it draws first)
-  if (bgRuntime) bgRuntime.update(t, renderer);
+  if (bgRuntime) bgRuntime.update(t, renderer, { paused: params.paused });
   // Starfield uTime + visibility (defined at module scope so they work
   // from animate()).
   updateStarfield(t);

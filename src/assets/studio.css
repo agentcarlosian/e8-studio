@@ -90,10 +90,19 @@ body:not(.desktop-touch-shell) .global-quality-control { top: 10px; right: 20px;
 #panel .panel-tools-popover button { min-height: 36px; font-size: 12px; }
 #panel button:focus-visible, .studio-header-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .ps-scroll { scrollbar-gutter: stable; scroll-behavior: auto; }
-body > main > .ov { font-size: 11px; color: var(--ink-1); }
+body > main > .ov {
+  font-size: 11px; color: var(--ink-0);
+  padding: 6px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-0) 92%, transparent);
+  border: 1px solid var(--line); text-shadow: none;
+}
 body > main > .ov h2 { font-size: 12px; }
 body[data-theme="dark-gold"] { --studio-muted: #a5a094; }
 /* The phone keeps its dedicated full-height drawer and unobstructed canvas. */
+body.desktop-touch-shell > main > .ov {
+  padding: 0; border: 0;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bg-0) 92%, transparent);
+}
 body.desktop-touch-shell #panel .view-card { min-height: 80px; font-size: 12px; }
 body.desktop-touch-shell #panel .ps-mode-tabs button { min-height: 44px; }
 body.desktop-touch-shell #panel .seg button, body.desktop-touch-shell #panel .shape-pill { min-height: 44px; font-size: 12px; }
@@ -111,4 +120,17 @@ body.desktop-touch-shell #panel .ps-section { padding-top: 16px; }
 /* On narrow phones, metadata and gesture hints occupy separate baselines. */
 body.desktop-touch-shell .ov-br {
   top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - max(74px, env(safe-area-inset-bottom)));
+}
+/* A narrow canvas needs a second row for the scene readout. */
+@media (max-width: 360px) {
+  body.desktop-touch-shell .ov-tl {
+    max-width: calc(var(--desktop-touch-vw, 100vw) - 170px);
+  }
+  body.desktop-touch-shell .global-quality-control {
+    top: calc(var(--desktop-touch-vv-top, 0px) + max(14px, env(safe-area-inset-top)));
+  }
+  body.desktop-touch-shell .ov-tr {
+    top: calc(var(--desktop-touch-vv-top, 0px) + max(116px, calc(env(safe-area-inset-top) + 110px)));
+    max-width: calc(var(--desktop-touch-vw, 100vw) - 32px);
+  }
 }

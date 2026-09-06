@@ -1,3 +1,4 @@
+import { createMobileEnvironments } from './backgrounds.js';
 import {
   DEFAULT_STATE,
   QUALITY,
@@ -1609,6 +1610,7 @@ function bindEvents() {
   });
   window.addEventListener('pagehide', () => {
     stopMobileTour({ interactionType: 'pagehide-stop-tour', status: false });
+    drawMobileEnvironment.dispose();
     flushSave();
   });
   document.addEventListener('visibilitychange', () => {
@@ -10236,258 +10238,15 @@ function drawStarfieldBackground(width, height, density = 1) {
   return count + Math.ceil(count / 11);
 }
 
-function drawGridBackground(width, height) {
-  const horizon = height * 0.54;
-  ctx.save();
-  ctx.strokeStyle = `rgba(88, 221, 255, ${backgroundAlpha(0.22)})`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let index = -8; index <= 8; index++) {
-    ctx.moveTo(width * 0.5, horizon);
-    ctx.lineTo(width * 0.5 + index * width * 0.12, height);
-  }
-  for (let index = 1; index <= 14; index++) {
-    const t = index / 14;
-    const y = horizon + (height - horizon) * t * t;
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-  }
-  ctx.stroke();
-  ctx.strokeStyle = `rgba(221, 178, 255, ${backgroundAlpha(0.34)})`;
-  ctx.beginPath();
-  ctx.moveTo(0, horizon);
-  ctx.lineTo(width, horizon);
-  ctx.stroke();
-  ctx.restore();
-  return 32;
+const drawMobileEnvironment = createMobileEnvironments();
+const mobileBackgroundMotionPreference = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+const movingMobileBackgrounds = new Set(['tide', 'quantum', 'vortex', 'plasma', 'mandala', 'eclipse']);
+let backgroundTime = 0;
+function hasBackgroundAnimation() {
+  return movingMobileBackgrounds.has(state.background) && state.backgroundBrightness > 0
+    && !mobileBackgroundMotionPreference?.matches;
 }
-
-function drawAuroraBackground(width, height) {
-  const colors = ['85, 255, 171', '111, 210, 255', '190, 99, 255'];
-  ctx.save();
-  ctx.lineCap = 'round';
-  for (let index = 0; index < colors.length; index++) {
-    const y = height * (0.2 + index * 0.075);
-    const gradient = ctx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, `rgba(${colors[index]}, 0)`);
-    gradient.addColorStop(0.22, `rgba(${colors[index]}, ${backgroundAlpha(0.12)})`);
-    gradient.addColorStop(0.62, `rgba(${colors[index]}, ${backgroundAlpha(0.24)})`);
-    gradient.addColorStop(1, `rgba(${colors[index]}, 0)`);
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 16 + index * 7;
-    ctx.beginPath();
-    ctx.moveTo(-30, y + 30);
-    ctx.bezierCurveTo(width * 0.2, y - 55, width * 0.58, y + 70, width + 30, y - 25);
-    ctx.stroke();
-  }
-  ctx.restore();
-  return colors.length;
-}
-
-function drawCosmosBackground(width, height) {
-  const pockets = [
-    [0.22, 0.28, 0.32, '255, 120, 54'],
-    [0.76, 0.62, 0.4, '71, 132, 255'],
-    [0.42, 0.82, 0.24, '168, 79, 255'],
-  ];
-  ctx.save();
-  for (const [x, y, radius, color] of pockets) {
-    const gradient = ctx.createRadialGradient(width * x, height * y, 0, width * x, height * y, Math.max(width, height) * radius);
-    gradient.addColorStop(0, `rgba(${color}, ${backgroundAlpha(0.11)})`);
-    gradient.addColorStop(0.52, `rgba(${color}, ${backgroundAlpha(0.045)})`);
-    gradient.addColorStop(1, `rgba(${color}, 0)`);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-  }
-  ctx.restore();
-  return pockets.length + drawStarfieldBackground(width, height, 0.74);
-}
-
-function drawMandalaBackground(width, height) {
-  const cx = width * 0.5;
-  const cy = height * 0.48;
-  const radius = Math.min(width, height) * 0.43;
-  ctx.save();
-  ctx.strokeStyle = `rgba(164, 115, 255, ${backgroundAlpha(0.2)})`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let ring = 1; ring <= 8; ring++) {
-    const ringRadius = radius * ring / 8;
-    ctx.moveTo(cx + ringRadius, cy);
-    ctx.arc(cx, cy, ringRadius, 0, TAU);
-  }
-  for (let spoke = 0; spoke < 24; spoke++) {
-    const angle = spoke / 24 * TAU + stylePhase * 0.1;
-    ctx.moveTo(cx + Math.cos(angle) * radius * 0.12, cy + Math.sin(angle) * radius * 0.12);
-    ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
-  }
-  ctx.stroke();
-  ctx.strokeStyle = `rgba(77, 221, 255, ${backgroundAlpha(0.14)})`;
-  ctx.beginPath();
-  for (let spoke = 0; spoke < 12; spoke++) {
-    const angle = spoke / 12 * TAU;
-    for (let ring = 1; ring < 8; ring++) {
-      const r = radius * ring / 8;
-      const nextR = radius * (ring + 1) / 8;
-      ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
-      ctx.lineTo(cx + Math.cos(angle + Math.PI / 6) * nextR, cy + Math.sin(angle + Math.PI / 6) * nextR);
-    }
-  }
-  ctx.stroke();
-  ctx.restore();
-  return 8 + 24 + 84;
-}
-
-function drawPlasmaBackground(width, height) {
-  const colors = ['255, 72, 154', '101, 123, 255', '80, 234, 218'];
-  ctx.save();
-  ctx.lineWidth = 1.25;
-  for (let band = 0; band < 18; band++) {
-    ctx.strokeStyle = `rgba(${colors[band % colors.length]}, ${backgroundAlpha(0.1 + (band % 3) * 0.025)})`;
-    ctx.beginPath();
-    for (let x = 0; x <= width; x += 8) {
-      const y = height * (band + 1) / 19
-        + Math.sin(x * 0.025 + band * 0.71 + stylePhase * TAU) * (10 + band % 4 * 4)
-        + Math.sin(x * 0.009 - band) * 13;
-      if (x === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-  return 18;
-}
-
-function drawVortexBackground(width, height) {
-  const cx = width * 0.5;
-  const cy = height * 0.49;
-  const maxRadius = Math.min(width, height) * 0.48;
-  ctx.save();
-  ctx.lineCap = 'round';
-  for (let arm = 0; arm < 4; arm++) {
-    ctx.strokeStyle = arm % 2
-      ? `rgba(117, 92, 255, ${backgroundAlpha(0.16)})`
-      : `rgba(255, 199, 121, ${backgroundAlpha(0.12)})`;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    for (let step = 0; step <= 110; step++) {
-      const t = step / 110;
-      const angle = arm / 4 * TAU + t * TAU * 2.15 + stylePhase * 0.12;
-      const radius = 5 + t * maxRadius;
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius * 0.72;
-      if (step === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-  return 4;
-}
-
-function drawQuantumBackground(width, height) {
-  const nodes = Array.from({ length: 26 }, (_, index) => ({
-    x: backgroundHash(index, 6.2) * width,
-    y: backgroundHash(index, 3.4) * height,
-  }));
-  let lines = 0;
-  const maxDistance = Math.min(width, height) * 0.26;
-  ctx.save();
-  ctx.strokeStyle = `rgba(68, 155, 224, ${backgroundAlpha(0.16)})`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let a = 0; a < nodes.length; a++) {
-    for (let b = a + 1; b < nodes.length; b++) {
-      if (Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y) > maxDistance) continue;
-      ctx.moveTo(nodes[a].x, nodes[a].y);
-      ctx.lineTo(nodes[b].x, nodes[b].y);
-      lines++;
-    }
-  }
-  ctx.stroke();
-  ctx.fillStyle = `rgba(91, 255, 211, ${backgroundAlpha(0.48)})`;
-  ctx.beginPath();
-  for (const node of nodes) {
-    ctx.moveTo(node.x + 1.6, node.y);
-    ctx.arc(node.x, node.y, 1.6, 0, TAU);
-  }
-  ctx.fill();
-  ctx.restore();
-  return lines + nodes.length;
-}
-
-function drawEclipseBackground(width, height) {
-  const cx = width * 0.5;
-  const cy = height * 0.43;
-  const radius = Math.min(width, height) * 0.24;
-  ctx.save();
-  const corona = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.55);
-  corona.addColorStop(0, `rgba(255, 174, 70, ${backgroundAlpha(0.52)})`);
-  corona.addColorStop(0.4, `rgba(255, 83, 24, ${backgroundAlpha(0.15)})`);
-  corona.addColorStop(1, 'rgba(255, 50, 10, 0)');
-  ctx.fillStyle = corona;
-  ctx.fillRect(cx - radius * 1.7, cy - radius * 1.7, radius * 3.4, radius * 3.4);
-  ctx.fillStyle = '#010103';
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, TAU);
-  ctx.fill();
-  ctx.strokeStyle = `rgba(255, 196, 103, ${backgroundAlpha(0.62)})`;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
-  ctx.restore();
-  return 3;
-}
-
-function drawSynthwaveBackground(width, height) {
-  const horizon = height * 0.56;
-  const sunRadius = Math.min(width, height) * 0.18;
-  ctx.save();
-  const sun = ctx.createLinearGradient(0, horizon - sunRadius, 0, horizon + sunRadius);
-  sun.addColorStop(0, `rgba(255, 199, 87, ${backgroundAlpha(0.7)})`);
-  sun.addColorStop(1, `rgba(255, 52, 118, ${backgroundAlpha(0.48)})`);
-  ctx.fillStyle = sun;
-  ctx.beginPath();
-  ctx.arc(width * 0.5, horizon, sunRadius, Math.PI, TAU);
-  ctx.fill();
-  for (let stripe = 1; stripe <= 5; stripe++) {
-    const y = horizon - sunRadius + stripe * sunRadius * 0.3;
-    ctx.fillStyle = scaleHexColor('#0d0412', 0.9);
-    ctx.fillRect(width * 0.5 - sunRadius, y, sunRadius * 2, 3 + stripe);
-  }
-  ctx.restore();
-  return 7 + drawGridBackground(width, height);
-}
-
-function drawPrismBackground(width, height) {
-  const cx = width * 0.5;
-  const cy = height * 0.5;
-  const size = Math.min(width, height) * 0.27;
-  ctx.save();
-  ctx.lineWidth = 1.2;
-  ctx.strokeStyle = `rgba(213, 222, 255, ${backgroundAlpha(0.5)})`;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - size);
-  ctx.lineTo(cx - size * 0.9, cy + size * 0.75);
-  ctx.lineTo(cx + size * 0.9, cy + size * 0.75);
-  ctx.closePath();
-  ctx.stroke();
-  const rays = ['255, 80, 92', '255, 193, 75', '88, 255, 175', '79, 196, 255', '177, 93, 255'];
-  for (let index = 0; index < rays.length; index++) {
-    const y = cy - size * 0.12 + index * size * 0.09;
-    ctx.strokeStyle = `rgba(${rays[index]}, ${backgroundAlpha(0.36)})`;
-    ctx.beginPath();
-    ctx.moveTo(cx + size * 0.15, y);
-    ctx.lineTo(width, y + (index - 2) * size * 0.34);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = `rgba(226, 236, 255, ${backgroundAlpha(0.42)})`;
-  ctx.beginPath();
-  ctx.moveTo(0, cy - size * 0.16);
-  ctx.lineTo(cx - size * 0.12, cy - size * 0.06);
-  ctx.stroke();
-  ctx.restore();
-  return rays.length + 2;
-}
+mobileBackgroundMotionPreference?.addEventListener('change', () => { syncMotionLoop(); requestRender(); });
 
 function drawMobileBackground(width, height) {
   const preset = BACKGROUNDS[state.background] || BACKGROUNDS[DEFAULT_STATE.background];
@@ -10497,16 +10256,12 @@ function drawMobileBackground(width, height) {
   fillBackgroundBase(width, height, baseColor);
   let primitives = 1;
   if (preset.renderer === 'stars') primitives += drawStarfieldBackground(width, height);
-  else if (preset.renderer === 'grid') primitives += drawGridBackground(width, height);
-  else if (preset.renderer === 'aurora') primitives += drawAuroraBackground(width, height);
-  else if (preset.renderer === 'cosmos') primitives += drawCosmosBackground(width, height);
-  else if (preset.renderer === 'mandala') primitives += drawMandalaBackground(width, height);
-  else if (preset.renderer === 'plasma') primitives += drawPlasmaBackground(width, height);
-  else if (preset.renderer === 'vortex') primitives += drawVortexBackground(width, height);
-  else if (preset.renderer === 'quantum') primitives += drawQuantumBackground(width, height);
-  else if (preset.renderer === 'eclipse') primitives += drawEclipseBackground(width, height);
-  else if (preset.renderer === 'synthwave') primitives += drawSynthwaveBackground(width, height);
-  else if (preset.renderer === 'prism') primitives += drawPrismBackground(width, height);
+  else primitives += drawMobileEnvironment(preset.renderer, ctx, width, height, {
+    brightness: state.backgroundBrightness,
+    quality: state.quality,
+    time: mobileBackgroundMotionPreference?.matches ? 0
+      : movingMobileBackgrounds.has(state.background) ? backgroundTime : stylePhase * 2.4,
+  });
   return { mode: state.background, renderer: preset.renderer, primitives, baseColor };
 }
 
@@ -10699,7 +10454,7 @@ function hasRuntimeAnimation() {
   return !!(state.autoRotate || state.autoZoom || state.autoExtrude || hasQuasicrystalAutoMotion() || state.autoModel || state.autoColor
     || (!cleanQuasicrystal && (state.autoFx || state.softFx || nativeFxAnimation))
     || (state.modelMode === 'bloom' && state.bloomAuto)
-    || (state.modelMode === 'tiling' && state.tilingAnimate));
+    || (state.modelMode === 'tiling' && state.tilingAnimate) || hasBackgroundAnimation());
 }
 
 function settingsPauseRuntimeAnimation() {
@@ -10726,6 +10481,7 @@ function startMotion() {
     const elapsedSeconds = Math.min(0.5, elapsed / 1000);
     const dt = Math.min(0.05, elapsedSeconds);
     last = now;
+    if (hasBackgroundAnimation()) backgroundTime += Math.min(0.1, elapsedSeconds);
     const quasiAutoMotion = hasQuasicrystalAutoMotion();
     if (state.autoRotate || state.autoZoom || state.autoExtrude || hasContinuousQuasicrystalAutoMotion()) {
       motionPhase = (motionPhase + dt * state.rotationSpeed) % 4096;

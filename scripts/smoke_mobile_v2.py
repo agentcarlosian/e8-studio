@@ -588,6 +588,10 @@ def main() -> int:
                 activityCount: document.querySelectorAll('.mobile-learn-activity').length,
                 explanationCount: document.querySelectorAll('.mobile-learn-activity .mobile-learn-takeaway').length,
                 hiddenLessonDetails: document.querySelectorAll('.mobile-learn-activity details').length,
+                vocabulary: document.querySelectorAll('.mobile-learn-vocabulary dt').length,
+                workedExample: !!document.querySelector('.mobile-learn-example p')?.textContent,
+                recall: !!document.querySelector('.mobile-learn-recall details'),
+                sourceLinks: document.querySelectorAll('.mobile-learn-sources a[href]').length,
                 sourceNoteVisible: document.querySelector('#mobile-learn-source-title')?.getBoundingClientRect().height > 0,
                 hiddenExplanationControls: document.querySelectorAll('[data-info-action="reveal-experiment-answer"], [data-info-action="next-experiment-step"]').length,
                 studioButton: (() => {
@@ -598,6 +602,7 @@ def main() -> int:
                 readerOverflow: getComputedStyle(document.getElementById('learn-reader-scroll')).overflowY
             })""")
             check("Why-five opens in a dedicated reader", why_five["state"]["learnTopic"] == "why-five-solids" and why_five["sheetReader"] and why_five["libraryHidden"] and why_five["readerVisible"], str(why_five))
+            check("Lessons include shared vocabulary, examples, self-checks, and sources", why_five["vocabulary"] == 2 and why_five["workedExample"] and why_five["recall"] and why_five["sourceLinks"] >= 2, str(why_five))
             check("Why-five directly teaches the five cases", "less than 360°" in why_five["text"] and "3 triangles" in why_five["text"] and "Dodecahedron" in why_five["text"] and "3 hexagons" in why_five["text"] and "Flat tiling" in why_five["text"], why_five["text"])
             check("Lesson reader is readable and has persistent navigation", why_five["bodySize"] >= 16 and why_five["bodyLineHeight"] >= 24 and all(box["height"] >= 48 for box in why_five["nav"]), str(why_five))
             check("Lesson activities expose every explanation without toggles", why_five["activityCount"] == 3 and why_five["explanationCount"] == 3 and why_five["hiddenLessonDetails"] == 0 and why_five["sourceNoteVisible"] and why_five["hiddenExplanationControls"] == 0 and "60° angular deficit" in why_five["text"] and "36° of angular deficit" in why_five["text"] and "exactly 360°" in why_five["text"], str(why_five))
@@ -1297,7 +1302,7 @@ def main() -> int:
             expected_backgrounds = [
                 {"value": "void", "label": "Void"},
                 {"value": "starfield", "label": "Space"},
-                {"value": "grid", "label": "Grid"},
+                {"value": "tide", "label": "Tide"},
                 {"value": "aurora", "label": "Cloud"},
                 {"value": "cosmos", "label": "Cosmos"},
                 {"value": "mandala", "label": "Mandala"},
@@ -1305,7 +1310,7 @@ def main() -> int:
                 {"value": "vortex", "label": "Vortex"},
                 {"value": "quantum", "label": "Quantum"},
                 {"value": "eclipse", "label": "Eclipse"},
-                {"value": "synthwave", "label": "Barset"},
+                {"value": "ember", "label": "Ember"},
                 {"value": "prism", "label": "Prism"},
             ]
             check("Visuals section exposes the full desktop background catalog", background_options == expected_backgrounds, str(background_options))
@@ -1317,8 +1322,8 @@ def main() -> int:
             check("legacy mobile backgrounds migrate to desktop identifiers", legacy_backgrounds == {"space": "starfield", "cloud": "aurora"}, str(legacy_backgrounds))
             background_rendering = page.evaluate("""() => {
                 const app = window.__mobileApp;
-                const modes = ['void', 'starfield', 'grid', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'synthwave', 'prism'];
-                const expectedRenderers = ['flat', 'stars', 'grid', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'synthwave', 'prism'];
+                const modes = ['void', 'starfield', 'tide', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'ember', 'prism'];
+                const expectedRenderers = ['flat', 'stars', 'tide', 'aurora', 'cosmos', 'mandala', 'plasma', 'vortex', 'quantum', 'eclipse', 'ember', 'prism'];
                 app.closeSettings();
                 const results = modes.map((mode, index) => {
                     app.setState({ background: mode, backgroundBrightness: 0.7, autoRotate: false, autoColor: false, softFx: false });

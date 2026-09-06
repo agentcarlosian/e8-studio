@@ -82,6 +82,14 @@ def main():
                         metadata = page.locator('#ov-br').bounding_box()
                         assert metadata['y'] + metadata['height'] <= hints['y'], 'phone metadata must not overlap gesture hints'
                         page.screenshot(path=str(output/f'canvas-{width}.png'))
+                        if width <= 360:
+                            for view in ['quasicrystal', 'rootlab']:
+                                page.evaluate('view => window.__app.switchView(view)', view)
+                                boxes = [page.locator(selector).bounding_box() for selector in ['#ov-tl', '#ov-tr', '#global-quality-menu']]
+                                for i, a in enumerate(boxes):
+                                    assert a and a['x'] >= 0 and a['x'] + a['width'] <= width, boxes
+                                    for b in boxes[i+1:]:
+                                        assert a['x'] + a['width'] <= b['x'] or b['x'] + b['width'] <= a['x'] or a['y'] + a['height'] <= b['y'] or b['y'] + b['height'] <= a['y'], f'narrow phone header overlaps: {view} {boxes}'
                     assert not errors, errors
                     context.close()
                 print('Studio UI journeys passed: 4 sizes, 9 views, guide navigation, persistence, focus, motion, and no runtime errors.')

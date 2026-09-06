@@ -1,3 +1,4 @@
+import { BACKGROUND_PRESETS, normalizeBackgroundMode } from '../ui/backgrounds.js';
 /**
  * Mobile scene configuration contract. Keep defaults, supported values, legacy
  * migrations and numeric limits together, independent of DOM or storage effects.
@@ -178,20 +179,14 @@ const PALETTES = {
   vintage: ['#b09090', '#a09090', '#c0a0a0', '#a0a0a0'],
 };
 
-const BACKGROUNDS = {
-  void: { label: 'Void', color: '#07070c', renderer: 'flat' },
-  starfield: { label: 'Space', color: '#020817', renderer: 'stars' },
-  grid: { label: 'Grid', color: '#030b12', renderer: 'grid' },
-  aurora: { label: 'Cloud', color: '#030912', renderer: 'aurora' },
-  cosmos: { label: 'Cosmos', color: '#050510', renderer: 'cosmos' },
-  mandala: { label: 'Mandala', color: '#070510', renderer: 'mandala' },
-  plasma: { label: 'Plasma', color: '#08050e', renderer: 'plasma' },
-  vortex: { label: 'Vortex', color: '#05030d', renderer: 'vortex' },
-  quantum: { label: 'Quantum', color: '#020b10', renderer: 'quantum' },
-  eclipse: { label: 'Eclipse', color: '#090506', renderer: 'eclipse' },
-  synthwave: { label: 'Barset', color: '#0d0412', renderer: 'synthwave' },
-  prism: { label: 'Prism', color: '#050712', renderer: 'prism' },
+const BACKGROUND_BASE_COLORS = {
+  void: '#07070c', starfield: '#020817', tide: '#020b14', aurora: '#090b0e',
+  cosmos: '#010103', mandala: '#020405', plasma: '#08050e', vortex: '#05030d',
+  quantum: '#020b10', eclipse: '#090506', ember: '#0b0304', prism: '#050712',
 };
+const BACKGROUNDS = Object.fromEntries(Object.entries(BACKGROUND_PRESETS).map(([id, preset]) => [id, {
+  label: preset.label, color: BACKGROUND_BASE_COLORS[id], renderer: id === 'void' ? 'flat' : id === 'starfield' ? 'stars' : id,
+}]));
 
 
 const SUPPORTED_SUBSETS = new Set(['icosahedron', 'dodecahedron', 'simple_roots']);
@@ -219,9 +214,7 @@ const SUPPORTED_DYNKIN_DIAGRAMS = new Set(['E6', 'E7', 'E8']);
 function normalizeMobileState(next, { learnTopicIds = null } = {}) {
   next.configRevision = MOBILE_CONFIG_REVISION;
   if (LEGACY_MODEL_MODE_MAP[next.modelMode]) next.modelMode = LEGACY_MODEL_MODE_MAP[next.modelMode];
-  if (next.background === 'space') next.background = 'starfield';
-  if (next.background === 'cloud') next.background = 'aurora';
-  if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
+  next.background = normalizeBackgroundMode(next.background);
   if (!PALETTES[next.palette]) next.palette = DEFAULT_STATE.palette;
   if (!BACKGROUNDS[next.background]) next.background = DEFAULT_STATE.background;
   if (!QUALITY[next.quality]) next.quality = DEFAULT_STATE.quality;

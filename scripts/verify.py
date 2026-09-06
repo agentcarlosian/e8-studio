@@ -112,6 +112,7 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_image_export_recovery.mjs"])
     run(["node", "scripts/test_geometry_exports.mjs"])
     run(["node", "scripts/test_mobile_state.mjs"])
+    run(["node", "scripts/test_quantum_orbitals.mjs"])
     run(["node", "scripts/test_curriculum.mjs"])
     run(["node", "scripts/test_progress.mjs"])
     run(["node", "scripts/test_content_integrity.mjs"])
@@ -757,7 +758,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       await frame(); await frame();
       const voidCorners = sampleCorners();
       const result = {};
-      for (const mode of ['starfield', 'aurora', 'eclipse', 'synthwave', 'prism', 'vortex']) {
+      for (const mode of ['starfield', 'aurora', 'cosmos', 'mandala', 'plasma', 'quantum', 'tide', 'ember', 'eclipse', 'prism', 'vortex']) {
         window.__app.setBgMode(mode);
         await frame(); await frame();
         result[mode] = {
@@ -1719,6 +1720,11 @@ def check_studio_ui() -> None:
     run([sys.executable, "scripts/test_learning_center.py"])
 
 
+def check_backgrounds() -> None:
+    run([sys.executable, "scripts/smoke_bg.py"])
+    run([sys.executable, "scripts/test_release_journey.py"])
+
+
 def main() -> int:
     checks = [
         ("build", check_build),
@@ -1733,6 +1739,7 @@ def main() -> int:
         ("browser helper self-test", check_browser_failure_helper),
         ("browser smoke", smoke_browser),
         ("studio UI journeys", check_studio_ui),
+        ("background rendering", check_backgrounds),
     ]
     results: list[dict[str, object]] = []
     for name, fn in checks:
