@@ -65,7 +65,9 @@ def main(mobile_path="/dist/index.html", desktop_path="/dist/web/index.html"):
             assert mobile.locator('.model-export').evaluate('e=>e.scrollWidth<=e.clientWidth+1')
             mobile.screenshot(path=str(OUT/'mobile.png'))
             download(mobile,'3mf','mobile-cube.3mf')
-            mobile.keyboard.press('Escape');assert mobile.locator('dialog').count()==0
+            mobile.keyboard.press('Escape')
+            # Native dialog close events are queued; await cleanup rather than racing it.
+            mobile.locator('dialog').wait_for(state='detached')
             mobile.evaluate("()=>{window.__mobileApp.setState({modelMode:'rootlab',rootSystem:'G2'});document.querySelector('[data-export-action=\"open-export\"]').click();}")
             download(mobile,'obj','mobile-roots.obj')
             assert (OUT/'mobile-roots.obj').read_text().count('\nv ')==13
