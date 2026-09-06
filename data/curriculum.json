@@ -57,6 +57,28 @@
         "Triangles permit three, four, or five faces at a vertex; squares and pentagons permit three.",
         "Three regular hexagons already total 360°, so they lie flat instead of forming a convex corner."
       ],
+      "guide": {
+        "level": "Start here",
+        "terms": [
+          [
+            "Regular",
+            "Every face is the same regular polygon, with the same arrangement at every vertex."
+          ],
+          [
+            "Angular deficit",
+            "The gap between 360° and the sum of the face angles at a convex corner."
+          ]
+        ],
+        "example": {
+          "title": "Build one corner",
+          "body": "A square contributes 90°. Three squares use 270°, leaving 90° to fold into a cube corner. Four use all 360° and lie flat. The rule is about the corner, before we count the whole solid."
+        },
+        "misconception": "The word convex matters. Allowing faces to intersect leads to regular star polyhedra, which are outside this five-solid classification.",
+        "check": {
+          "question": "Six equilateral triangles meet at a point. Can they form a convex corner?",
+          "answer": "No. Six times 60° is 360°: the arrangement is flat, with no angular deficit."
+        }
+      },
       "visualEvidence": {
         "columns": [
           "Faces at one vertex",
@@ -214,6 +236,14 @@
       },
       "sources": [
         {
+          "id": "euclid-five-solids",
+          "title": "Elements, Book XIII, Proposition 18",
+          "author": "Euclid; edition by David Joyce, Clark University",
+          "url": "https://mathcs.clarku.edu/~djoyce/java/elements/bookXIII/propXIII18.html",
+          "scope": "angle-sum argument restricting convex regular solids to five cases",
+          "tier": "primary-text"
+        },
+        {
           "id": "mathworld-platonic-solids",
           "title": "Platonic Solid",
           "author": "Wolfram MathWorld",
@@ -238,13 +268,35 @@
         "A 4D rotation acts in one of six coordinate planes.",
         "Projection changes appearance while preserving the polytope’s intrinsic vertices and edges."
       ],
+      "guide": {
+        "level": "Build intuition",
+        "terms": [
+          [
+            "Cell",
+            "A three-dimensional boundary piece of a four-dimensional polytope, like a face on a 3D solid."
+          ],
+          [
+            "Projection",
+            "A rule for displaying coordinates in fewer dimensions; lengths and overlaps can change."
+          ]
+        ],
+        "example": {
+          "title": "Start one dimension lower",
+          "body": "A cube has square faces. A tesseract has eight cubical cells. Just as a cube drawing can show slanted squares, a tesseract projection can show distorted cubes while the original cells stay regular."
+        },
+        "misconception": "The fourth coordinate here is another spatial coordinate. The animation time is a separate control.",
+        "check": {
+          "question": "Two edges cross on screen. Must they touch in the original polytope?",
+          "answer": "No. Projection can place points at the same screen position even when their other coordinates differ."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
         "Read a basic Schläfli symbol.",
         "Distinguish projection from intrinsic 4D geometry."
       ],
-      "activity": "Rotate a tesseract in two independent planes and identify projection changes.",
+      "activity": "Rotate a tesseract in two coordinate planes and identify projection changes.",
       "claimType": "established-mathematics",
       "claimNote": "Polytope counts and Schläfli notation are mathematical facts; the animated projection is an explanatory display choice.",
       "experiment": {
@@ -288,10 +340,10 @@
           },
           {
             "id": "double-plane",
-            "title": "Add an independent plane",
+            "title": "Add a second plane",
             "instruction": "Combine the XW rotation with a ZW rotation.",
             "question": "Why can a 4D object have more rotational freedom than a 3D one?",
-            "takeaway": "Four coordinates provide six coordinate planes, so several independent plane rotations can contribute to one pose.",
+            "takeaway": "Four coordinates provide six coordinate planes. These two share the W direction, so their rotation order matters.",
             "action": {
               "view": "polytope",
               "params": {
@@ -354,6 +406,28 @@
         "Each dot is backed by an eight-dimensional vector; its screen position is only a projection.",
         "A 30-step Coxeter symmetry divides the 240 roots into eight visible cycles: 8 × 30 = 240."
       ],
+      "guide": {
+        "level": "Start here",
+        "terms": [
+          [
+            "Root vector",
+            "One of the vectors encoding the reflections of a root system; a dot marks its endpoint."
+          ],
+          [
+            "Orbit",
+            "The positions reached by repeatedly applying one symmetry operation."
+          ]
+        ],
+        "example": {
+          "title": "Read a ring without counting every dot",
+          "body": "One Coxeter step turns the plane by 360° ÷ 30 = 12°. Thirty steps close a cycle. Eight such cycles account for all 240 roots."
+        },
+        "misconception": "A dot on an inner ring is not a shorter E8 root. All E8 roots have equal length in eight dimensions; their projected lengths differ.",
+        "check": {
+          "question": "Does an intersection of two drawn lines add another E8 root?",
+          "answer": "No. Only the 240 marked root endpoints represent roots. Line crossings can be artifacts of the projection."
+        }
+      },
       "visualEvidence": {
         "columns": [
           "What you see",
@@ -515,6 +589,28 @@
         "Its 120 vertices and 720 edges are intrinsic even when a projection overlaps them.",
         "It is dual to the 120-cell and carries strong icosahedral symmetry."
       ],
+      "guide": {
+        "level": "Build intuition",
+        "terms": [
+          [
+            "Tetrahedral cell",
+            "One solid tetrahedron in the boundary of this four-dimensional polytope."
+          ],
+          [
+            "Duality",
+            "A correspondence that exchanges vertices and cells, and edges and faces, in four dimensions."
+          ]
+        ],
+        "example": {
+          "title": "Read the name carefully",
+          "body": "The 600 in 600-cell counts tetrahedra, not points. The object has 120 vertices. Its dual, the 120-cell, exchanges those counts: 120 cells and 600 vertices."
+        },
+        "misconception": "The tetrahedra form a boundary in four dimensions. A crowded 3D projection is not a collection of 600 disjoint tetrahedra in ordinary space.",
+        "check": {
+          "question": "When a rotation makes two vertices overlap on screen, has the vertex count decreased?",
+          "answer": "No. The 600-cell still has 120 vertices. Only their projected positions overlap."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -635,6 +731,28 @@
         "Two reflections compose into a rotation.",
         "The angle and root-length ratio determine which finite rank-2 system closes."
       ],
+      "guide": {
+        "level": "Build intuition",
+        "terms": [
+          [
+            "Reflection mirror",
+            "The line perpendicular to a root that defines its reflection."
+          ],
+          [
+            "Rank",
+            "The number of independent simple-root directions needed to span the root system."
+          ]
+        ],
+        "example": {
+          "title": "Use the smallest laboratory",
+          "body": "A₂ has rank two but contains six roots. Rank counts independent generating directions; it does not count every vector generated by reflection."
+        },
+        "misconception": "A root arrow is perpendicular to its mirror. Reflecting across the arrow itself would use a different line.",
+        "check": {
+          "question": "If a rank-two system has twelve roots, do you need twelve simple roots?",
+          "answer": "No. Two simple roots generate G₂ by reflection. The full set includes both long and short roots."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -752,6 +870,28 @@
         "A multigrid crossing is dual to one rhombus.",
         "Rotational order does not imply translational periodicity."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Multigrid",
+            "Several families of parallel lines used to construct a tiling."
+          ],
+          [
+            "Periodic",
+            "Unchanged by some nonzero translation of the entire infinite pattern."
+          ]
+        ],
+        "example": {
+          "title": "Compare two kinds of repetition",
+          "body": "A repeating unit cell lets you shift an entire periodic tiling onto itself. In a quasiperiodic tiling, a familiar local patch can return without any single shift reproducing the whole pattern."
+        },
+        "misconception": "A finite patch can illustrate a construction, but its appearance alone does not prove that the infinite tiling is aperiodic.",
+        "check": {
+          "question": "You find the same small cluster twice. Does that prove the tiling is periodic?",
+          "answer": "No. Local recurrence is weaker than a translation that preserves the whole infinite tiling."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -886,6 +1026,28 @@
         "The six hidden coordinates decide which projected lattice points enter the pattern.",
         "Moving the window changes local arrangements without turning the construction into random motion."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Acceptance window",
+            "A region in hidden space that decides which lattice points are retained."
+          ],
+          [
+            "Phason shift",
+            "A displacement of that window relative to the lattice, changing which points pass the test."
+          ]
+        ],
+        "example": {
+          "title": "Give each point two addresses",
+          "body": "Each candidate has a visible address and a hidden address. The hidden address decides admission; the visible address decides where to draw it. Moving the window changes admission without moving the underlying lattice."
+        },
+        "misconception": "The Window view is a two-dimensional reading of a six-dimensional test. It cannot display every hidden coordinate at once.",
+        "check": {
+          "question": "Does moving the acceptance window randomly move every lattice point?",
+          "answer": "No. Lattice coordinates stay fixed. Points enter or leave the accepted set as their hidden coordinates pass the window boundary."
+        }
+      },
       "visualEvidence": {
         "columns": [
           "Reading",
@@ -1064,6 +1226,28 @@
         "The plane is invariant under the chosen Coxeter element.",
         "E8’s 240 roots appear as eight orbits of 30 projected roots."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Coxeter element",
+            "A product using each simple reflection once, in a chosen order."
+          ],
+          [
+            "Invariant plane",
+            "A plane that a transformation maps back onto itself."
+          ]
+        ],
+        "example": {
+          "title": "Turn an operation into a rotation",
+          "body": "On the E8 Coxeter plane, the chosen Coxeter element acts as a 12° rotation. Applying it 30 times returns to the start. This explains why the ring structure reflects algebra rather than a decorative layout."
+        },
+        "misconception": "The Coxeter plane is selected by symmetry. An arbitrary two-dimensional projection need not display the same circular organization.",
+        "check": {
+          "question": "Would choosing a different screen palette change the Coxeter number?",
+          "answer": "No. The order 30 belongs to the symmetry operation, independently of the display colors."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -1189,6 +1373,28 @@
         "A root is defined by coordinates, length, and inner products—not by its screen position.",
         "Eight simple roots form a basis whose reflections organize all 240 roots."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Simple roots",
+            "A specially chosen basis that generates the root system through reflections."
+          ],
+          [
+            "Inner product",
+            "A measure combining lengths and relative angle, computed in the original vector space."
+          ]
+        ],
+        "example": {
+          "title": "Use coordinates as evidence",
+          "body": "The vector (1, −1, 0, 0, 0, 0, 0, 0) has squared length 1² + (−1)² = 2. Its negative is the opposite root. These statements do not depend on where either endpoint appears on screen."
+        },
+        "misconception": "Being close on screen does not imply that two roots are neighbors in eight dimensions. Use the inspector’s structural relationships.",
+        "check": {
+          "question": "How many coordinates specify an E8 root, and how many roots are in the full system?",
+          "answer": "Eight coordinates specify one vector; the full E8 root system contains 240 vectors."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -1311,6 +1517,28 @@
         "Dynkin nodes represent basis roots, not every root.",
         "For simply-laced E8, a bond records inner product −1 under the standard normalization."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Node",
+            "One simple root in the diagram."
+          ],
+          [
+            "Simply laced",
+            "A root system whose Dynkin bonds are all single bonds; its roots have equal length."
+          ]
+        ],
+        "example": {
+          "title": "Read a bond as data",
+          "body": "For normalized E8 simple roots, each squared length is 2. A bond records inner product −1; no bond records 0. The diagram stores these relationships in a compact form."
+        },
+        "misconception": "The layout and drawn bond lengths are presentation choices. A Dynkin diagram encodes relationships, not a picture of the root endpoints.",
+        "check": {
+          "question": "Why does the finite E8 diagram have eight nodes instead of 240?",
+          "answer": "It records the eight simple roots. Reflections generated from them organize the full 240-root system."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -1424,6 +1652,28 @@
         "Binary polyhedral groups organize into the affine ADE pattern.",
         "The mathematical correspondence and the Studio’s visual highlighting are not the same claim."
       ],
+      "guide": {
+        "level": "Go deeper",
+        "terms": [
+          [
+            "Representation",
+            "A way to realize abstract group operations as linear transformations."
+          ],
+          [
+            "Affine diagram",
+            "An extended Dynkin diagram with one additional node beyond its finite counterpart."
+          ]
+        ],
+        "example": {
+          "title": "Track what the nodes mean",
+          "body": "In the McKay graph, nodes stand for irreducible representations of a finite subgroup of SU(2). For the binary icosahedral group, the resulting graph is affine E8. This is a different role from the dots in the root projection."
+        },
+        "misconception": "A glowing selection of E8 roots does not establish a canonical one-to-one map from a Platonic solid to the root system.",
+        "check": {
+          "question": "Is the eight-node finite E8 diagram already the complete McKay graph?",
+          "answer": "No. The corresponding McKay graph is affine E8, with an additional extending node."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -1545,6 +1795,28 @@
         "The source point sets are mathematical; the morph path, glow, and timing are design choices.",
         "A compelling visual analogy can be useful without being an identity or proof."
       ],
+      "guide": {
+        "level": "Build intuition",
+        "terms": [
+          [
+            "Interpolation",
+            "A chosen rule for generating intermediate values between endpoints."
+          ],
+          [
+            "Visualization",
+            "A display designed to reveal an idea; its visual transitions need separate mathematical justification."
+          ]
+        ],
+        "example": {
+          "title": "Ask what survives the transition",
+          "body": "Pause Bloom halfway. The intermediate shape comes from the Studio’s interpolation rule. To inspect canonical data, return to the dedicated solid, 4D polytope, or E8 view."
+        },
+        "misconception": "A smooth transition between pictures is not a proof that their underlying mathematical objects are equivalent.",
+        "check": {
+          "question": "Does a visually continuous morph automatically preserve edges, lengths, and symmetry?",
+          "answer": "No. Each preserved property would need its own argument. Bloom is an illustrative transition."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [
@@ -1663,6 +1935,28 @@
         "The root coordinates remain fixed while radius and blending change the rendered surface.",
         "The resulting surface is a visualization generated from E8 data, not the E8 root system itself."
       ],
+      "guide": {
+        "level": "Build intuition",
+        "terms": [
+          [
+            "Signed distance",
+            "Distance to the closest surface, with opposite signs inside and outside and zero on the surface."
+          ],
+          [
+            "Sphere tracing",
+            "Following a viewing ray using safe distance bounds to approach an implicit surface."
+          ]
+        ],
+        "example": {
+          "title": "Read the zero set",
+          "body": "For a sphere of radius r centered at the origin, d(x) = ‖x‖ − r. A point on the sphere gives zero; the center gives −r. Increasing r grows the surface while keeping its center fixed."
+        },
+        "misconception": "Smoothly combining primitives can produce a useful distance estimate without remaining the exact signed distance everywhere.",
+        "check": {
+          "question": "If you increase the sphere radius around every source, have the E8 root coordinates changed?",
+          "answer": "No. The rendering changes around the fixed projected source positions."
+        }
+      },
       "visualEvidence": null,
       "proof": null,
       "objectives": [

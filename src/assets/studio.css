@@ -1,0 +1,114 @@
+/* Studio shell: readable instruments around an uninterrupted geometry canvas. */
+:root {
+  --studio-panel-width: 320px;
+  --text-body: 14px;
+}
+body[data-layout="wide-canvas"] {
+  --studio-panel-width: clamp(300px, 25vw, 340px);
+  grid-template-rows: 56px minmax(0, 1fr);
+}
+body:not([data-layout="wide-canvas"]):not([data-layout="presentation"]):not(.desktop-touch-shell) {
+  grid-template-rows: 56px minmax(0, 1fr) 28px;
+}
+body > header { padding: 0 20px; }
+.brand { align-items: center; gap: 10px; flex-shrink: 0; }
+.studio-brand-symbol { width: 29px; height: 29px; color: var(--accent); }
+.brand-title { font-size: 18px; font-weight: 650; letter-spacing: -.035em; }
+.studio-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 155px; }
+.studio-header-actions button {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 36px; padding: 7px 12px; border: 1px solid var(--line);
+  border-radius: 7px; background: transparent; color: var(--ink-1);
+  font: 500 12px/1.2 'Inter', sans-serif; cursor: pointer;
+}
+.studio-header-actions button:first-child { color: var(--accent); border-color: transparent; }
+.studio-header-actions button:hover { background: var(--bg-2); border-color: var(--accent); }
+.studio-header-actions kbd { font: 10px 'JetBrains Mono', monospace; color: var(--ink-2); }
+body:not(.desktop-touch-shell) .global-quality-control { top: 10px; right: 20px; }
+.global-quality-label { font-size: 10px; }
+.global-quality-menu > summary { min-height: 36px; font-size: 11px; }
+#panel { background: var(--bg-1); }
+#panel .ps-status { padding: 15px 18px 13px; margin: 0; background: transparent; font-size: 11px; }
+#panel .ps-status-row { gap: 6px; }
+#panel .ps-status-key { color: var(--ink-1); letter-spacing: .015em; }
+#panel .ps-motion { font-size: 10px; margin-left: auto; }
+#panel .ps-motion.is-idle { color: var(--ink-2); }
+#panel .ps-mode-tabs { gap: 2px; margin: 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-0); }
+#panel .ps-mode-tabs button { min-height: 36px; border: none; border-radius: 5px; font: 600 13px 'Inter', sans-serif; text-transform: none; letter-spacing: 0; color: var(--ink-1); background: transparent; }
+#panel .ps-mode-tabs button.on { color: var(--accent); background: var(--bg-3); box-shadow: 0 1px 4px #0002; }
+#panel .ps-section { padding: 20px 18px 16px; }
+#panel .ps-title { font-size: 11px; letter-spacing: .13em; margin-bottom: 13px; padding: 0; }
+#panel .ps-subtitle { font-size: 11px; margin: 20px 0 9px; color: var(--ink-1); letter-spacing: .09em; }
+#panel .view-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; border: 0; background: transparent; }
+#panel .view-card {
+  grid-column: auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 7px; min-width: 0; min-height: 77px; padding: 9px 3px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg-0); color: var(--ink-1); cursor: pointer;
+  font: 500 11px/1.2 'Inter', sans-serif; text-transform: none; letter-spacing: -.015em;
+  transition: border-color 120ms, background 120ms, color 120ms;
+}
+#panel .view-card svg { width: 26px; height: 28px; opacity: .66; pointer-events: none; }
+#panel .view-card:hover { border-color: var(--accent); color: var(--ink-0); background: var(--bg-2); }
+#panel .view-card.on { background: color-mix(in srgb, var(--accent) 12%, var(--bg-1)); border-color: var(--accent); color: var(--accent); }
+#panel .view-card.on svg { opacity: 1; }
+.exploration-invite { margin-top: 14px; padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 7%, var(--bg-1)), var(--bg-1)); }
+.exploration-invite strong { font-size: 13px; font-weight: 600; color: var(--ink-0); }
+.exploration-invite p { font-size: 12px; line-height: 1.5; color: var(--ink-1); margin: 4px 0 10px; }
+.exploration-invite button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 35px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg-0); color: var(--accent); font: 600 12px 'Inter', sans-serif; cursor: pointer; }
+.exploration-invite button:hover { border-color: var(--accent); }
+#panel .gallery-nav { grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 6px; }
+#panel .gallery-nav button { min-height: 38px; }
+#panel .gallery-nav-current span { font-size: 12px; }
+#panel .gallery-nav-current small { font-size: 10px; }
+#panel .gallery-browse { min-height: 36px; margin-top: 7px; font-size: 12px; border-radius: 6px; }
+#panel .seg:not(.ps-view-switch) button, #panel .shape-pill { min-height: 33px; font-size: 11px; }
+#panel .control-label, #panel .control-value { font-size: 12px; }
+#panel .control-row { margin-top: 12px; }
+#panel .ps-help, #panel .info-box { font-size: 12px; line-height: 1.65; color: var(--ink-1); }
+#panel .info-title { font-size: 12px; color: var(--ink-0); }
+#panel .control-disclosure > summary { padding: 12px 28px 12px 11px; }
+#panel .control-disclosure > summary span { font-size: 12px; }
+#panel .control-disclosure > summary small { font-size: 11px; margin-top: 3px; }
+#panel .overlay-copy strong { font-size: 12px; }
+#panel .overlay-copy small { font-size: 10px; }
+#panel .overlay-option { min-height: 49px; }
+#panel .palette-card span, #panel .look-card strong, #panel .fx-card span { font-size: 11px; }
+#panel .palette-card { min-height: 48px; }
+#panel .learning-center-launch { padding: 15px; border-radius: 8px; }
+#panel .learning-center-launch > span { font-size: 15px; }
+#panel .learning-center-launch small { font-size: 12px; line-height: 1.6; margin-top: 6px; }
+#panel .learn-path-card span, #panel .learn-reference-grid button span { font-size: 12px; }
+#panel .learn-path-card small, #panel .learn-reference-grid button small { font-size: 11px; line-height: 1.5; }
+#panel .learn-disclosure summary { min-height: 48px; }
+#panel .learn-disclosure summary span { font-size: 12px; }
+#panel .learn-disclosure summary small { font-size: 11px; }
+#panel .panel-footer { padding: 12px; gap: 6px; background: var(--bg-1); box-shadow: 0 -8px 20px color-mix(in srgb, var(--bg-1) 80%, transparent); }
+#panel .panel-footer > button, #panel .panel-tools-menu > summary { min-height: 36px; font-size: 11px; border-radius: 6px; }
+#panel .panel-footer > button[data-act="shareSnapshot"] { background: var(--accent); color: var(--bg-0); border-color: var(--accent); }
+#panel .panel-tools-popover { min-width: 190px; padding: 6px; }
+#panel .panel-tools-popover button { min-height: 36px; font-size: 12px; }
+#panel button:focus-visible, .studio-header-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.ps-scroll { scrollbar-gutter: stable; scroll-behavior: auto; }
+body > main > .ov { font-size: 11px; color: var(--ink-1); }
+body > main > .ov h2 { font-size: 12px; }
+body[data-theme="dark-gold"] { --studio-muted: #a5a094; }
+/* The phone keeps its dedicated full-height drawer and unobstructed canvas. */
+body.desktop-touch-shell #panel .view-card { min-height: 80px; font-size: 12px; }
+body.desktop-touch-shell #panel .ps-mode-tabs button { min-height: 44px; }
+body.desktop-touch-shell #panel .seg button, body.desktop-touch-shell #panel .shape-pill { min-height: 44px; font-size: 12px; }
+body.desktop-touch-shell #panel .exploration-invite button { min-height: 44px; }
+body.desktop-touch-shell #panel .panel-footer > button, body.desktop-touch-shell #panel .panel-tools-menu > summary { min-height: 44px; font-size: 12px; }
+body.desktop-touch-shell #panel .ps-section { padding-top: 16px; }
+@media (max-width: 1050px) {
+  .studio-header-actions kbd { display: none; }
+  .studio-header-actions { margin-right: 155px; }
+  body[data-layout="wide-canvas"] { --studio-panel-width: 300px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #panel .view-card { transition: none; }
+}
+/* On narrow phones, metadata and gesture hints occupy separate baselines. */
+body.desktop-touch-shell .ov-br {
+  top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - max(74px, env(safe-area-inset-bottom)));
+}

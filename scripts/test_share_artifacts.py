@@ -29,7 +29,7 @@ def main() -> int:
         entry.wait_for_url((ROOT / "dist" / "e8-studio.html").resolve().as_uri(), timeout=30_000)
         entry.wait_for_function("() => !!window.__app?.params", timeout=30_000)
         entry_state = entry.evaluate("() => ({ title: document.title, brand: document.querySelector('.brand')?.textContent.trim(), ready: !!window.__app?.params, topViewButtons: document.querySelectorAll('header .tab').length, headerHeight: document.querySelector('header')?.getBoundingClientRect().height })")
-        if entry_state != {"title": "E8 Studio", "brand": "E8 Studio", "ready": True, "topViewButtons": 0, "headerHeight": 36}:
+        if entry_state != {"title": "E8 Studio", "brand": "E8 Studio", "ready": True, "topViewButtons": 0, "headerHeight": 56}:
             raise AssertionError(f"Root file entry failed: {entry_state}")
         print(f"Root file entry passed: {entry_state}")
         entry.close()

@@ -932,7 +932,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or scene_workspace["footerActions"] != [
                 "resetConfig", "surprise", "shareSnapshot", "sharePage",
                 "togglePresentationMode", "openVideoExport", "togglePerf",
-                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet"
+                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet", "startQuickStart"
             ]
             or scene_workspace["sdfSurfaceControls"] != 3
             or style_workspace["viewSections"] != 0
@@ -1411,7 +1411,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       navigationMinHeight: Math.min(...[...document.querySelectorAll('.learning-lesson-nav button')].map(button => button.getBoundingClientRect().height)),
       navigationBeforeSources: !!(document.querySelector('.learning-lesson-nav')?.compareDocumentPosition(document.querySelector('.learning-more')) & Node.DOCUMENT_POSITION_FOLLOWING),
     })""")
-    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] != 0 or why_five["experimentExplanations"] != why_five["experimentSteps"] or not why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
+    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] != 4 or why_five["experimentExplanations"] != why_five["experimentSteps"] or not why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
         fail(f"Why-only-five answer and proof failed: {why_five}")
     page.evaluate("window.__app.resetView()")
     if page.locator("#learning-modal:not(.hidden)").count() or page.locator("#learning-experiment-coach").count():
@@ -1444,7 +1444,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
           pressed: document.querySelector('[data-learning-complete="mckay-bridge"]')?.getAttribute('aria-pressed'),
         })"""
     )
-    if completed_lesson != {"stored": True, "label": "complete", "pressed": "true"}:
+    if completed_lesson != {"stored": True, "label": "✓ Done", "pressed": "true"}:
         fail(f"Learning Center completion persistence failed: {completed_lesson}")
     page.click('[data-learning-essay="e8_mckay"]')
     page.wait_for_selector('.essay-panel', timeout=5000)
@@ -1713,6 +1713,12 @@ td,th{{border:1px solid #2a2a3a;padding:8px;text-align:left}}
     print(f"Report:  {html_path}")
 
 
+def check_studio_ui() -> None:
+    run([sys.executable, "scripts/test_quick_start.py"])
+    run([sys.executable, "scripts/test_studio_ui.py"])
+    run([sys.executable, "scripts/test_learning_center.py"])
+
+
 def main() -> int:
     checks = [
         ("build", check_build),
@@ -1726,6 +1732,7 @@ def main() -> int:
         ("palette registry", check_palette_registry),
         ("browser helper self-test", check_browser_failure_helper),
         ("browser smoke", smoke_browser),
+        ("studio UI journeys", check_studio_ui),
     ]
     results: list[dict[str, object]] = []
     for name, fn in checks:

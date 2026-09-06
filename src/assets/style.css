@@ -18,8 +18,8 @@
   --line-soft: #1d1d2c;
   --ink-0: #f4f1ea;
   --ink-1: #c9c5b9;
-  --ink-2: #7a7669;
-  --ink-3: #4a4740;
+  --ink-2: #aaa598;
+  --ink-3: #827d72;
   --accent: #f4d27a;
   --accent-2: #e8a96a;
   --accent-3: #c98aff;
@@ -86,7 +86,7 @@ body[data-layout="compact"] {
   grid-template-columns: var(--studio-panel-width) 1fr;
   font-size: 12px;
 }
-body[data-layout="compact"] header { padding: 0 14px; gap: 12px; }
+body[data-layout="compact"] > header { padding: 0 14px; gap: 12px; }
 body[data-layout="compact"] .brand-sub { display: none; }
 body[data-layout="compact"] .kbd-hints { display: none; }
 body[data-layout="compact"] aside#panel { padding: 8px 10px; }
@@ -104,7 +104,7 @@ body[data-layout="wide-canvas"] footer { display: none; }
 
 /* Presentation: full-screen canvas, no chrome (backwards compat with existing
    body.presentation-mode rules below) */
-body[data-layout="presentation"] header,
+body[data-layout="presentation"] > header,
 body[data-layout="presentation"] #panel,
 body[data-layout="presentation"] footer {
   display: none;
@@ -161,7 +161,7 @@ body[data-layout="presentation"] .fs-exit-hint:hover { opacity: 0.9; animation: 
 
 /* ---------- Header ---------- */
 
-header {
+body > header {
   grid-area: header;
   background:
     linear-gradient(180deg, var(--bg-1), var(--bg-0));
@@ -174,7 +174,7 @@ header {
   position: relative;
 }
 /* Facelift: a thin accent underline that glows under the active tab region */
-header::after {
+body > header::after {
   content: "";
   position: absolute;
   left: 0; right: 0; bottom: -1px;
@@ -819,7 +819,7 @@ a:focus-visible {
   margin-right: 5px;
 }
 
-body.presentation-mode header,
+body.presentation-mode > header,
 body.presentation-mode #panel,
 body.presentation-mode footer {
   display: none;
@@ -849,7 +849,7 @@ body.desktop-touch-shell[data-layout="wide-canvas"] {
   overflow: hidden;
 }
 
-body.desktop-touch-shell header,
+body.desktop-touch-shell > header,
 body.desktop-touch-shell footer {
   display: none;
 }

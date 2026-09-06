@@ -84,12 +84,14 @@ The educational system is integrated with the visual controls instead of being a
 - Quizzes provide explanations rather than only marking an answer right or wrong.
 - A searchable glossary defines the mathematical language used throughout the Studio.
 - Root picking reveals 8D coordinates, opposite roots, and Cartan-neighbor structure.
-- The Learning Center gathers view overviews, readings, guided experiments, and quizzes into self-paced lessons.
+- The Learning Center offers a searchable, responsive reader for 13 lessons, with vocabulary, concrete examples, evidence tables, self-checks, and guided experiments. Test the angle rule with the interactive regular-solid corner calculator.
+- Jump between understanding, experiments, quizzes, and resources; return from a quiz to its lesson and continue the next unfinished experiment step.
 - Daily facts, biographies, a historical timeline, badges, and locally saved lesson and experiment progress reward deeper exploration.
 - Source links and claim labels distinguish established mathematics, historical context, interpretation, and app-designed visualization.
 
 ### Getting around
 
+- **First visit:** choose **Start exploring** for an optional three-step introduction to E8 rings, a Platonic solid, and visual styling. Reopen it from the header or Tools menu.
 - **Mouse:** drag to orbit, scroll to zoom, and click supported roots or structures for details.
 - **Touch:** drag to orbit and pinch to zoom; the responsive control drawer keeps the render visible on smaller screens.
 - **Keyboard:** use `1–9` for views, `Space` to pause, `S` for PNG, `L` for the Learning Center, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.

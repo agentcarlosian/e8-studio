@@ -3,6 +3,7 @@
 // Experiments only configure models already present in E8 Studio. Proposed
 // models remain outside this graph until they arrive as focused, tested
 // features in both shells.
+import { LESSON_GUIDES } from './lesson-guides.js';
 
 const step = (id, title, instruction, question, takeaway, action) => ({
   id, title, instruction, question, takeaway, action,
@@ -44,7 +45,7 @@ export const LEARNING_PATHS = [
         objectives: ['Recognize the five convex regular solids.', 'Explain face–vertex duality.'],
         activity: 'Open each regular solid and match its face type and vertex count to the five angle-sum cases.',
         claimType: 'established-mathematics', claimNote: 'The five-solid classification and dual pairs are standard results for convex regular polyhedra.',
-        essayIds: ['platonic_why_five', 'platonic_duals', 'platonic_phi', 'kepler_poinsot'], quizId: 'platonic-foundations', sourceIds: ['mathworld-platonic-solids'],
+        essayIds: ['platonic_why_five', 'platonic_duals', 'platonic_phi', 'kepler_poinsot'], quizId: 'platonic-foundations', sourceIds: ['euclid-five-solids', 'mathworld-platonic-solids'],
         experiment: {
           title: 'Test the angle rule', intro: 'Compare valid convex corners with the 360° boundary where regular faces lie flat.',
           steps: [
@@ -61,7 +62,7 @@ export const LEARNING_PATHS = [
         shortAnswer: 'A four-dimensional object needs four coordinates instead of three. We cannot see all four directions directly, so E8 Studio projects a 4D polytope into 3D and then onto the screen; the apparent stretching belongs to the projection, not the original regular figure.',
         keyIdeas: ['A 4D rotation acts in one of six coordinate planes.', 'Projection changes appearance while preserving the polytope’s intrinsic vertices and edges.'],
         objectives: ['Read a basic Schläfli symbol.', 'Distinguish projection from intrinsic 4D geometry.'],
-        activity: 'Rotate a tesseract in two independent planes and identify projection changes.',
+        activity: 'Rotate a tesseract in two coordinate planes and identify projection changes.',
         claimType: 'established-mathematics', claimNote: 'Polytope counts and Schläfli notation are mathematical facts; the animated projection is an explanatory display choice.',
         essayIds: ['rotation_planes_4d', 'schlafli_symbols', 'the_120cell'], quizId: '4d-polytopes', sourceIds: ['mathworld-600-cell'],
         experiment: {
@@ -69,7 +70,7 @@ export const LEARNING_PATHS = [
           steps: [
             step('baseline', 'Establish the projection', 'Open a stationary tesseract in its cube-within-a-cube projection.', 'Are the inner and outer cubes separate objects?', 'They are parts of one tesseract seen through a 3D projection.', { view: 'polytope', params: { poly4d: 'tesseract', morph4d: 0.65, polyAutoRotate: false, polyRotXY: 0, polyRotZW: 0, polyRotXW: 0 } }),
             step('xw-plane', 'Rotate in the XW plane', 'Apply an XW rotation and follow vertices whose depth changes.', 'Which apparent distortions come from projection rather than the polytope?', 'Edge lengths appear to change on screen even though the intrinsic tesseract remains regular.', { view: 'polytope', params: { poly4d: 'tesseract', morph4d: 0.65, polyAutoRotate: false, polyRotXW: 0.9, polyRotZW: 0 } }),
-            step('double-plane', 'Add an independent plane', 'Combine the XW rotation with a ZW rotation.', 'Why can a 4D object have more rotational freedom than a 3D one?', 'Four coordinates provide six coordinate planes, so several independent plane rotations can contribute to one pose.', { view: 'polytope', params: { poly4d: 'tesseract', morph4d: 0.65, polyAutoRotate: false, polyRotXW: 0.9, polyRotZW: 0.7 } }),
+            step('double-plane', 'Add a second plane', 'Combine the XW rotation with a ZW rotation.', 'Why can a 4D object have more rotational freedom than a 3D one?', 'Four coordinates provide six coordinate planes. These two share the W direction, so their rotation order matters.', { view: 'polytope', params: { poly4d: 'tesseract', morph4d: 0.65, polyAutoRotate: false, polyRotXW: 0.9, polyRotZW: 0.7 } }),
           ],
           reflection: 'A changing projection is evidence about viewpoint and rotation, not a deformation of the underlying polytope.',
         },
@@ -319,7 +320,7 @@ export const LEARNING_PATHS = [
       },
     ],
   },
-];
+].map(path => ({ ...path, lessons: path.lessons.map(lesson => ({ ...lesson, guide: LESSON_GUIDES[lesson.id] })) }));
 
 export const LEARNING_LESSONS = LEARNING_PATHS.flatMap((path, pathIndex) =>
   path.lessons.map((lesson, lessonIndex) => Object.freeze({ ...lesson, pathId: path.id, pathIndex, lessonIndex })),

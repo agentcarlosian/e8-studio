@@ -57,13 +57,21 @@
 <link rel="stylesheet" href="src/assets/style.css">
 <link rel="stylesheet" href="src/assets/panel-extra.css">
 <link rel="stylesheet" href="src/assets/panel-v2.css">
+<link rel="stylesheet" href="src/assets/studio.css">
+<link rel="stylesheet" href="src/assets/quick-start.css">
+<link rel="stylesheet" href="src/assets/learning-center.css">
 </head>
 
 <body>
   <header>
     <div class="brand">
+      <svg class="studio-brand-symbol" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="16" cy="16" r="9"/><circle cx="16" cy="16" r="4"/><path d="M16 2v28M2 16h28M6 6l20 20M6 26L26 6"/></svg>
       <span class="brand-title">E8 Studio</span>
     </div>
+    <nav class="studio-header-actions" aria-label="Studio shortcuts">
+      <button data-act="startQuickStart">Start exploring <span aria-hidden="true">↗</span></button>
+      <button data-act="toggleCommandPalette" aria-label="Search studio commands"><span aria-hidden="true">⌕</span> Commands <kbd>Ctrl K</kbd></button>
+    </nav>
   </header>
 
   <aside id="panel" aria-label="Studio controls"></aside>

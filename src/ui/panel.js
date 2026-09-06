@@ -9,6 +9,7 @@
 // Each view shows ONLY its relevant controls. No E8 controls on Platonic.
 // No lighting sliders that only affect mesh views when you're on Bloom.
 
+import { renderViewCards, renderExplorationInvite } from './view-cards.js';
 import { PALETTE_PRESETS, SHIFT_PRESETS, COLORINGS, colorAt, palettePreviewCSS } from './palettes.js';
 import { BACKGROUND_PRESETS, backgroundModesForQuality } from './backgrounds.js';
 import { renderCartanMatrix } from '../math/cartan.js';
@@ -122,17 +123,12 @@ function renderViewSection(params, data, uiState = {}) {
   const caps = viewCapabilities(params.view);
   let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
 
-  // View switcher (always visible)
-  html += `<div class="seg seg-wrap ps-view-switch">`;
-  for (const v of ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
-    const label = v === 'e8coxeter' ? 'E₈' : v === 'quasicrystal' ? 'Quasi' : v === 'polytope' ? '4D' : v === 'raymarched' ? 'SDF' : v === 'rootlab' ? 'Roots' : v === 'tiling' ? 'Tilings' : v === 'dynkin' ? 'Dynkin' : v;
-    html += `<button class="${params.view === v ? 'on' : ''}" ${pressed(params.view === v)} data-act="switchView" data-arg="${v}" aria-label="Select ${label} view">${label}</button>`;
-  }
-  html += '</div>';
+  html += renderViewCards(params.view);
 
   // Gallery changes the whole scene, so keep it directly beneath the primary
   // view selector instead of burying it below camera and per-view controls.
   html += renderGalleryControls(params);
+  html += renderExplorationInvite();
 
   if (params.view === 'quasicrystal') {
     const patch = generateE8Quasicrystal(data.e8, {
@@ -1163,7 +1159,7 @@ export class ControlPanel {
           <button data-act="resetConfig" title="Reset this model's visuals and motion"><span style="font-size:13px">↺</span> Reset</button>
           <button data-act="surprise" title="Surprise: randomize view, palette, FX, shape, and shift settings for discovery"><span style="font-size:13px">✦</span> Surprise</button>
           <button data-act="shareSnapshot" title="Save a snapshot of the current render"><span style="font-size:13px">▣</span> Snapshot</button>
-          <button data-act="sharePage" title="Copy the hosted E8 Studio link"><span style="font-size:13px">⎘</span> Share</button>
+          <button data-act="sharePage" title="Copy a link to this scene"><span style="font-size:13px">⎘</span> Share</button>
           <button data-act="togglePresentationMode" title="Full screen: hide all chrome (press Esc to exit)"><span style="font-size:13px">⛶</span> Full</button>
           <details class="panel-tools-menu" data-panel-disclosure="footer-tools" ${this.openDisclosures.has('footer-tools') ? 'open' : ''}>
             <summary id="panel-disclosure-footer-tools" title="Open more studio tools">Tools</summary>
@@ -1173,6 +1169,7 @@ export class ControlPanel {
               <button data-act="toggleCommandPalette" title="Open the command palette">Commands</button>
               <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diagnostics</button>
               <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keyboard help</button>
+              <button data-act="startQuickStart">Guided introduction</button>
             </div>
           </details>
         </div>
@@ -1274,7 +1271,6 @@ const MOTION_STATES = {
   bloom:    { label: '▶ bloom',   cls: 'is-active' },
   idle:     { label: '● idle',    cls: 'is-idle' },
 };
-let _lastMotionKey = null;
 export function updateMotionStatus(params) {
   if (!params) return;
   let key;
@@ -1292,10 +1288,9 @@ export function updateMotionStatus(params) {
   else key = 'idle';
   // Only touch the DOM when the state actually changes (cheap guard so this
   // can sit in the 60fps animate loop without causing layout work).
-  if (key === _lastMotionKey) return;
-  _lastMotionKey = key;
   const el = document.getElementById('ps-motion');
-  if (!el) return;
+  if (!el || el.dataset.motionKey === key) return;
+  el.dataset.motionKey = key;
   const s = MOTION_STATES[key];
   el.textContent = s.label;
   el.className = 'ps-motion ' + s.cls;

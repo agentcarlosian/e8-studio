@@ -60,7 +60,10 @@
     "android:aab": "npm run mobile:build && cd android && gradlew.bat bundleRelease",
     "pwa": "npm run build:offline && echo 'PWA dist ready in dist/ - serve with: python -m http.server 8771'",
     "test:geometry-exports": "node scripts/test_geometry_exports.mjs",
-    "test:mobile-state": "node scripts/test_mobile_state.mjs"
+    "test:mobile-state": "node scripts/test_mobile_state.mjs",
+    "test:quick-start": "python scripts/test_quick_start.py",
+    "test:studio-ui": "python scripts/test_studio_ui.py",
+    "test:learning-center": "python scripts/test_learning_center.py"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.0",
