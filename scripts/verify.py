@@ -503,12 +503,12 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
             const result = {
               cube: { kind: cube.kind, dimension: cube.dimension, vertices: cube.verts.length,
                 edges: cube.edges.length, objVertices: lines(cubeObj, 'v '), objFaces: lines(cubeObj, 'f '),
-                namedObjMatches: app.getOBJ('cube') === cubeObj, svg: app.getCurrentSVG() },
+                namedObjMatches: app.getOBJ('cube') === cubeObj, svg: svgInfo(app.getCurrentSVG()) },
             };
             for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
               const geometry = select(view);
               result[view] = { kind: geometry.kind, dimension: geometry.dimension,
-                count: geometry.roots8d.length, obj: app.getCurrentOBJ() };
+                count: geometry.roots8d.length, objVertices: lines(app.getCurrentOBJ(), 'v ') };
             }
             select('e8coxeter', { showPetrie: true });
             result.e8Svg = svgInfo(app.getCurrentSVG());
@@ -535,7 +535,8 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
     )
     expected = {
         "cube": {"kind": "polyhedron", "dimension": 3, "vertices": 8, "edges": 12,
-                 "objVertices": 8, "objFaces": 12, "namedObjMatches": True, "svg": None},
+                 "objVertices": 8, "objFaces": 12, "namedObjMatches": True,
+                 "svg": {"valid": True, "roots": 0, "circles": 8, "petrie": 0}},
         "e8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
         "legacyE8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
         "dynkin": {"kind": "dynkin-diagram", "rank": 8, "nodes": 8, "edges": 7,
@@ -548,7 +549,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                    "tiles": 702, "edges": 1459},
     }
     for view in ["bloom", "e8coxeter", "raymarched"]:
-        expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "obj": None}
+        expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "objVertices": 240}
     if exports != expected:
         fail(f"{label} geometry export integration diverged: {exports}")
     assert_clean_browser_errors(page_errors, console_errors, label)
