@@ -10,6 +10,8 @@
 import * as THREE from 'three';
 import * as simplexNoise from 'simplex-noise';
 import { createGeometryExporters } from './services/geometry-export.js';
+import { createQuickStart } from './ui/quick-start.js';
+import { renderLearningCenter, bindLearningCenterNavigation } from './ui/learning-center.js';
 
 import { PALETTE_NAMES, SHIFT_PRESETS, BLEND_MODES, COLORING_NAMES, PALETTE_PRESETS, buildPalette, colorAt, palettePreviewCSS } from './ui/palettes.js';
 if (typeof window !== 'undefined') {
@@ -177,6 +179,7 @@ const PLATONIC_VERTEX_COUNTS = {
 };
 
 const COMMAND_ITEMS = [
+  { id: 'quickStart', label: 'Start exploring · guided introduction', keywords: 'beginner help tutorial guide' },
   { id: 'resetView', label: 'Reset current view', keywords: 'reset view camera angles pose' },
   { id: 'resetCamera', label: 'Reset camera', keywords: 'camera view orbit' },
   { id: 'bookmark1', label: 'Save camera 1', keywords: 'bookmark camera save' },
@@ -687,7 +690,9 @@ function installDesktopControlsDrawer() {
   backdrop.addEventListener('click', () => setOpen(false));
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && body.classList.contains('desktop-controls-open')) {
+      e.preventDefault();
       setOpen(false);
+      toggle.focus({ preventScroll: true });
     }
   });
   window.addEventListener('resize', sync);
@@ -1302,6 +1307,58 @@ function buildTabs() {
   }
 }
 
+// The introductory UI owns its lifecycle; this adapter applies deliberate steps.
+let quickStart = null;
+function startQuickStart() {
+  if (!quickStart) quickStart = createQuickStart({
+    shouldYieldEscape: () => document.body.classList.contains('desktop-controls-open')
+      || !!document.getElementById('global-quality-menu')?.open,
+    applyStep(step) {
+      if (step.id === 'visual-style') {
+        window.__app.setPanelMode('style');
+        return;
+      }
+      const view = step.id === 'e8-rings' ? 'e8coxeter' : 'platonic';
+      Object.assign(params, createGalleryBaseline(), {
+        view, shape: 'icosahedron', palette: 'gold', panelMode: 'scene',
+        showRings: true, showEdges: view === 'platonic', showPetrie: false,
+        autoRotate: false, cameraOrbit: false, autoZoom: false, autoModel: false,
+        showAmbient: false, cameraPath: 'manual', autoSliders: [],
+        intro: false, paused: false, galleryPreset: '',
+        cameraDistance: isSmallTouchScreen() ? CAMERA_TOUCH_DEFAULT_DISTANCE : CAMERA_DEFAULT_DISTANCE,
+      });
+      normalizeParams(params);
+      cameraController.restore({ theta: params.cameraRotation, phi: params.cameraPhi, dist: params.cameraDistance }, camera, camTarget, params);
+      syncCameraTargets();
+      if (fxRuntime) {
+        fxRuntime.setMode(params.fxMode);
+        fxRuntime.setIntensity(params.fxIntensity);
+      }
+      if (bgRuntime) {
+        bgRuntime.setMode(params.bgMode);
+        bgRuntime.setIntensity(params.bgIntensity);
+      }
+      switchView(view, { resetSelection: false });
+      saveConfig(params);
+      refreshPanel();
+    },
+    onDismiss() {
+      try { localStorage.setItem('e8_quick_start_seen_v1', 'true'); } catch {}
+      refreshPanel();
+    },
+    restoreFocus(invoker) {
+      const target = isSmallTouchScreen()
+        ? document.getElementById('desktop-controls-toggle')
+        : (invoker?.isConnected ? invoker : document.querySelector('[data-act="startQuickStart"]'));
+      target?.focus({ preventScroll: true });
+    },
+  });
+  dismissLearningSurfaces();
+  closeCommandPalette({ restoreFocus: false });
+  document.getElementById('desktop-controls-close')?.click();
+  quickStart.start();
+}
+
 // ---------- Side panel ----------
 // ---------- Panel (delegated to ControlPanel in ui/panel.js) ----------
 let panel; // ControlPanel instance, set in main()
@@ -1457,7 +1514,7 @@ function defaultParams() {
     rootSubset: 'icosahedron',
     cartanHighlight: false, // when on, click a simple root to highlight its 56 neighbors
     showStarfield: false,   // legacy — now driven by bgMode === 'starfield'
-    bgMode: 'void',         // background mood: void|starfield|milkyway|cosmos|aurora|mandala|grid|plasma
+    bgMode: 'void',         // normalized through the shared background registry
     bgIntensity: 0.7,       // 0..1.5 multiplier for background shader brightness
     theme: 'dark-gold',      // CSS-variable palette: dark-gold|paper-ink|neon-cyber|pure-dark|solarized
     layout: 'wide-canvas',   // layout mode: wide-canvas (default)|compact|presentation. 'default' is remapped to wide-canvas by applyLayout().
@@ -1770,6 +1827,7 @@ function runCommand(id) {
     return;
   }
   const commands = {
+    quickStart: () => app.startQuickStart(),
     resetView: () => app.resetView(),
     resetCamera: () => app.resetCamera(),
     bookmark1: () => app.saveCameraBookmark(1),
@@ -1833,7 +1891,7 @@ function setActiveCommand(host, nextIdx) {
 let commandPaletteReturnFocus = null;
 
 function setStudioChromeInert(inert) {
-  document.querySelectorAll('header, #panel, main, footer').forEach(node => {
+  document.querySelectorAll('body > header, #panel, body > main, body > footer').forEach(node => {
     node.inert = inert;
   });
 }
@@ -2101,10 +2159,13 @@ function learningState() {
 }
 
 let learningModalReturnFocus = null;
+let learningCenterCleanup = null;
 
 function closeLearningModal() {
   const host = document.getElementById('learning-modal');
   if (!host || host.classList.contains('hidden')) return false;
+  learningCenterCleanup?.();
+  learningCenterCleanup = null;
   host.classList.add('hidden');
   setStudioChromeInert(false);
   const target = learningModalReturnFocus;
@@ -2132,7 +2193,7 @@ function ensureLearningModal() {
       return;
     }
     if (e.key !== 'Tab') return;
-    const focusable = [...host.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+    const focusable = [...host.querySelectorAll('button:not(:disabled), a[href], summary, input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')].filter(element => element.getClientRects().length && element.checkVisibility());
     if (!focusable.length) { e.preventDefault(); host.querySelector('.learning-dialog')?.focus(); return; }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -2144,6 +2205,8 @@ function ensureLearningModal() {
 }
 
 function showLearningModal(html) {
+  learningCenterCleanup?.();
+  learningCenterCleanup = null;
   const host = ensureLearningModal();
   if (host.classList.contains('hidden')) learningModalReturnFocus = document.activeElement;
   host.innerHTML = `<div class="learning-dialog" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
@@ -2206,7 +2269,7 @@ function showExperimentCoach(lessonId, stepId) {
     <div class="experiment-coach-actions">
       <button data-experiment-coach-apply>Apply setup</button>
       <button class="${observed ? 'complete' : ''}" data-experiment-coach-observed>${observed ? '✓ Observed' : 'Mark observed'}</button>
-      ${next ? `<button data-experiment-coach-next>Next step →</button>` : `<button data-experiment-coach-review>Review lesson</button>`}
+      ${next ? `<button data-experiment-coach-next>Next step →</button>` : ''}<button data-experiment-coach-review>Back to lesson</button>
     </div>`;
   coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', closeExperimentCoach);
   coach.querySelector('[data-experiment-coach-apply]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, entry.id));
@@ -2242,190 +2305,19 @@ function applyLearningExperimentStep(lessonId, stepId) {
   return true;
 }
 
-function openLearningCenter(lessonId = null) {
+function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = null } = {}) {
   const lesson = learningLessonById(lessonId)
     || learningProgress.recommendedLesson(params?.view || 'e8coxeter')
     || LEARNING_LESSONS[0];
   if (!lesson) return;
-  const path = LEARNING_PATHS.find(item => item.id === lesson.pathId);
-  const quizState = learningProgress.progress.quiz?.[lesson.quizId] || null;
   const lessonComplete = learningProgress.lessonComplete(lesson.id);
   const experimentState = learningProgress.experimentState(lesson.id);
-  const completedLessonIds = new Set(Object.keys(learningProgress.progress.lessons || {}));
-  const learningSummary = learningProgress.summary();
-  const overallProgress = learningSummary.lessonsTotal
-    ? Math.round((learningSummary.lessonsComplete / learningSummary.lessonsTotal) * 100)
-    : 0;
-  const pathLessonIndex = Math.max(0, path?.lessons.findIndex(entry => entry.id === lesson.id) ?? 0);
-  const lessonViewLabel = ({
-    bloom: 'Bloom',
-    platonic: 'Platonic solids',
-    e8coxeter: 'E₈ Coxeter',
-    sixhundred: '600-cell',
-    polytope: '4D polytopes',
-    raymarched: 'E₈ SDF',
-    rootlab: 'Root Lab',
-    tiling: 'Tiling Lab',
-    quasicrystal: 'Quasicrystal Lab',
-    dynkin: 'Dynkin diagrams',
-  })[lesson.view] || lesson.view;
-  const claimLabels = {
-    'established-mathematics': 'Established mathematics',
-    interpretation: 'Interpretation',
-    'app-designed-visualization': 'App-designed visualization',
-    'rendering-technique': 'Rendering technique',
-  };
-  const pathNavigation = LEARNING_PATHS.map(item => {
-    const pathComplete = item.lessons.filter(entry => learningProgress.lessonComplete(entry.id)).length;
-    return `
-    <section class="learning-path ${item.id === lesson.pathId ? 'active' : ''}">
-      <div class="learning-path-title"><span>${svgEsc(item.title)}</span><small>${pathComplete}/${item.lessons.length}</small></div>
-      ${item.lessons.map((entry, entryIndex) => `
-        <button class="learning-lesson-link ${entry.id === lesson.id ? 'active' : ''}"
-          data-learning-lesson="${svgEsc(entry.id)}" aria-current="${entry.id === lesson.id ? 'step' : 'false'}">
-          <span class="learning-lesson-copy"><span class="learning-lesson-index">${String(entryIndex + 1).padStart(2, '0')}</span><span>${svgEsc(entry.title)}</span></span>
-          <small>${learningProgress.lessonComplete(entry.id) ? 'complete' : entry.prerequisites.every(id => completedLessonIds.has(id)) ? 'ready' : 'suggested order'}</small>
-        </button>
-      `).join('')}
-    </section>
-  `; }).join('');
-  const essayCards = lesson.essayIds.map(id => {
-    const essay = ESSAYS[id];
-    return `<button class="learning-resource-card" data-learning-essay="${svgEsc(id)}">
-      <span>${svgEsc(essay?.title || id)}</span><small>Open reading</small>
-    </button>`;
-  }).join('');
-  const sourceCards = lesson.sourceIds.map(id => {
-    const source = FACT_SOURCES[id];
-    return `<a class="learning-source-card" href="${svgEsc(source.url)}" target="_blank" rel="noreferrer">
-      <span>${svgEsc(source.title)}</span>
-      <small>${svgEsc(source.author)} · ${svgEsc(source.tier)}</small>
-      <em>${svgEsc(source.scope)}</em>
-    </a>`;
-  }).join('');
-  const previous = adjacentLearningLesson(lesson.id, -1);
-  const next = adjacentLearningLesson(lesson.id, 1);
-  const prerequisiteCards = lesson.prerequisites.length
-    ? lesson.prerequisites.map(id => {
-      const prerequisite = learningLessonById(id);
-      const complete = learningProgress.lessonComplete(id);
-      return `<button class="learning-prerequisite ${complete ? 'complete' : ''}" data-learning-lesson="${svgEsc(id)}"><span>${complete ? '✓' : '○'} ${svgEsc(prerequisite?.title || id)}</span><small>${complete ? 'complete' : 'recommended first'}</small></button>`;
-    }).join('')
-    : '<div class="learning-prerequisite complete"><span>Start here</span><small>no prerequisites</small></div>';
-  const experimentSteps = (lesson.experiment?.steps || []).map((entry, index) => {
-    const observed = experimentState.completedSteps.has(entry.id);
-    return `<article class="learning-experiment-step ${observed ? 'complete' : ''}">
-      <div class="learning-experiment-step-head"><span>${index + 1}</span><strong>${svgEsc(entry.title)}</strong><small>${observed ? 'observed' : 'ready'}</small></div>
-      <p>${svgEsc(entry.instruction)}</p>
-      <div class="learning-experiment-question"><span>Notice</span>${svgEsc(entry.question)}</div>
-      <div class="learning-experiment-takeaway"><span>Explanation</span>${svgEsc(entry.takeaway)}</div>
-      <div class="learning-experiment-step-actions">
-        <button data-learning-run-step="${svgEsc(entry.id)}">Run in Studio</button>
-        <button data-learning-observe-step="${svgEsc(entry.id)}" aria-pressed="${observed}">${observed ? '✓ Observed' : 'Mark observed'}</button>
-      </div>
-    </article>`;
-  }).join('');
-  const connectionCards = (lesson.connections || []).map(connection => {
-    const target = learningLessonById(connection.lessonId);
-    return `<button class="learning-connection-card" data-learning-lesson="${svgEsc(connection.lessonId)}"><span>${svgEsc(connection.label)}</span><small>${svgEsc(target?.title || connection.lessonId)} →</small></button>`;
-  }).join('');
-  const proofHtml = lesson.proof ? `
-    <section class="learning-proof" aria-labelledby="learning-proof-title">
-      <header class="learning-proof-header"><span id="learning-proof-title">Why this works</span><code>${svgEsc(lesson.proof.formula)}</code></header>
-      <p>${svgEsc(lesson.proof.explanation)}</p>
-      <div class="learning-proof-table" role="table" aria-label="Valid regular solid cases">
-        <div role="row" class="learning-proof-row learning-proof-head"><span role="columnheader">Face</span><span role="columnheader">At each vertex</span><span role="columnheader">Solid</span></div>
-        ${(lesson.proof.cases || []).map(([face, count, solid]) => `<div role="row" class="learning-proof-row"><span role="cell">${svgEsc(face)}</span><span role="cell">${svgEsc(count)}</span><span role="cell">${svgEsc(solid)}</span></div>`).join('')}
-      </div>
-      <p class="learning-proof-boundary">${svgEsc(lesson.proof.boundary)}</p>
-    </section>` : '';
-  const host = showLearningModal(`
-    <button class="modal-close" data-modal-close aria-label="Close">×</button>
-    <div class="learning-center-shell">
-      <aside class="learning-center-nav" aria-label="Learning paths">
-        <div class="learning-nav-header">
-          <div class="modal-kicker">Learning Center</div>
-          <div class="learning-progress-summary"><strong>${learningSummary.lessonsComplete}</strong><span>of ${learningSummary.lessonsTotal} lessons</span><em>${overallProgress}%</em></div>
-          <div class="learning-overall-progress" role="progressbar" aria-label="Curriculum progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${overallProgress}"><span style="width:${overallProgress}%"></span></div>
-        </div>
-        ${pathNavigation}
-      </aside>
-      <article class="learning-center-content">
-        <header class="learning-lesson-hero">
-          <div class="learning-lesson-eyebrow">
-            <div class="modal-kicker">${svgEsc(path?.title || 'Learning path')}</div>
-            <span>Lesson ${pathLessonIndex + 1} of ${path?.lessons.length || 1}</span>
-          </div>
-          <h2>${svgEsc(lesson.title)}</h2>
-          <div class="learning-lesson-status" aria-label="Lesson details">
-            <span>${svgEsc(lessonViewLabel)}</span>
-            <span>${lesson.estimatedMinutes || 5} min</span>
-            <span>${quizState?.passedAt ? `Quiz ${quizState.bestScore}/${quizState.total}` : 'Quiz included'}</span>
-            <span class="${lessonComplete ? 'is-complete' : ''}">${lessonComplete ? '✓ Completed' : 'Ready to begin'}</span>
-          </div>
-        </header>
-        <section class="learning-answer" aria-labelledby="learning-answer-title">
-          <span id="learning-answer-title">The short answer</span>
-          <p>${svgEsc(lesson.shortAnswer || lesson.claimNote)}</p>
-          <ul>${(lesson.keyIdeas || lesson.objectives || []).map(idea => `<li>${svgEsc(idea)}</li>`).join('')}</ul>
-        </section>
-        ${proofHtml}
-        <div class="learning-activity">
-          <strong>See it for yourself</strong>
-          <span>${svgEsc(lesson.activity || 'Open the visualization and compare what changes with what stays mathematically fixed.')}</span>
-        </div>
-        <div class="modal-actions learning-primary-actions">
-          <button class="learning-action-primary" data-learning-open-view="${svgEsc(lesson.view)}">Try it in Studio →</button>
-        </div>
-        <section class="learning-experiment" aria-labelledby="learning-experiment-title">
-          <header class="learning-experiment-header">
-            <div><span>Guided Studio experiment</span><h3 id="learning-experiment-title">${svgEsc(lesson.experiment?.title || 'Try it yourself')}</h3></div>
-            <strong>${experimentState.completedCount}/${experimentState.total} <small>explored</small></strong>
-          </header>
-          <div class="learning-experiment-body">
-            <p>${svgEsc(lesson.experiment?.intro || lesson.activity)}</p>
-            <div class="learning-experiment-progress" role="progressbar" aria-label="Experiment progress" aria-valuemin="0" aria-valuemax="${experimentState.total}" aria-valuenow="${experimentState.completedCount}"><span style="width:${experimentState.total ? (experimentState.completedCount / experimentState.total) * 100 : 0}%"></span></div>
-            <div class="learning-experiment-steps">${experimentSteps}</div>
-            <div class="learning-experiment-reflection"><span>Reflect</span>${svgEsc(lesson.experiment?.reflection || '')}</div>
-          </div>
-        </section>
-        <section class="learning-check">
-          <div><span>Check your understanding</span><strong>Ready when you are</strong></div>
-          <div class="modal-actions learning-check-actions">
-            <button data-learning-quiz="${svgEsc(lesson.quizId)}">${quizState?.passedAt ? 'Review quiz' : 'Take quiz'}</button>
-          </div>
-        </section>
-        <nav class="learning-lesson-nav" aria-label="Lesson navigation">
-          <button type="button" class="learning-lesson-nav-button" ${previous ? `data-learning-lesson="${svgEsc(previous.id)}"` : 'disabled'} aria-label="${previous ? `Previous lesson: ${svgEsc(previous.title)}` : 'Start of curriculum'}">← Previous</button>
-          <button type="button" class="learning-lesson-nav-button learning-lesson-nav-finish ${lessonComplete ? 'is-complete' : ''}" data-learning-complete="${svgEsc(lesson.id)}" aria-pressed="${lessonComplete}">${lessonComplete ? '✓ Complete' : 'Finish lesson'}</button>
-          <button type="button" class="learning-lesson-nav-button learning-lesson-nav-next" ${next ? `data-learning-lesson="${svgEsc(next.id)}"` : 'disabled'} aria-label="${next ? `Next lesson: ${svgEsc(next.title)}` : 'Curriculum complete'}">Next →</button>
-        </nav>
-        <section class="learning-more" aria-labelledby="learning-more-title">
-          <header id="learning-more-title" class="learning-more-header">Sources, readings, and lesson details</header>
-          <div class="learning-more-body">
-            <p class="modal-copy">${svgEsc(path?.description || '')}</p>
-            <div class="learning-claim-note" data-claim-type="${svgEsc(lesson.claimType)}">
-              <strong>${svgEsc(claimLabels[lesson.claimType] || lesson.claimType)}</strong>
-              <span>${svgEsc(lesson.claimNote)}</span>
-            </div>
-            <h3>Recommended foundation</h3>
-            <div class="learning-prerequisite-grid">${prerequisiteCards}</div>
-            <h3>Lesson objectives</h3>
-            <ul class="learning-objectives">${(lesson.objectives || []).map(objective => `<li>${svgEsc(objective)}</li>`).join('')}</ul>
-            <h3>Readings</h3>
-            <div class="learning-resource-grid">${essayCards}</div>
-            <h3>Sources and scope</h3>
-            <div class="learning-source-list">${sourceCards}</div>
-            <h3>Connect the ideas</h3>
-            <div class="learning-connection-grid">${connectionCards}</div>
-          </div>
-        </section>
-      </article>
-    </div>
-  `);
+  const host = showLearningModal(renderLearningCenter(lesson, learningProgress));
   host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog');
+  learningCenterCleanup = bindLearningCenterNavigation(host);
   requestAnimationFrame(() => {
-    host.querySelector('.learning-lesson-link[aria-current="step"]')?.scrollIntoView({ block: 'nearest' });
+    host.querySelector('.learning-center-content').scrollTop = scrollTop;
+    if (focusSelector) host.querySelector(focusSelector)?.focus({ preventScroll: true });
   });
   host.querySelectorAll('[data-learning-lesson]').forEach(button => {
     button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
@@ -2437,7 +2329,7 @@ function openLearningCenter(lessonId = null) {
   host.querySelectorAll('[data-learning-complete]').forEach(button => {
     button.addEventListener('click', event => {
       learningProgress.setLessonComplete(event.currentTarget.dataset.learningComplete, !lessonComplete);
-      openLearningCenter(lesson.id);
+      openLearningCenter(lesson.id, { scrollTop: host.querySelector('.learning-center-content').scrollTop, focusSelector: '[data-learning-complete]' });
       refreshPanel();
     });
   });
@@ -2448,11 +2340,11 @@ function openLearningCenter(lessonId = null) {
     button.addEventListener('click', () => {
       const stepId = button.dataset.learningObserveStep;
       learningProgress.setExperimentStepComplete(lesson.id, stepId, !experimentState.completedSteps.has(stepId));
-      openLearningCenter(lesson.id);
+      openLearningCenter(lesson.id, { scrollTop: host.querySelector('.learning-center-content').scrollTop, focusSelector: `[data-learning-observe-step="${stepId}"]` });
       refreshPanel();
     });
   });
-  host.querySelector('[data-learning-quiz]')?.addEventListener('click', event => startQuizModule(event.currentTarget.dataset.learningQuiz));
+  host.querySelector('[data-learning-quiz]')?.addEventListener('click', event => startQuizModule(event.currentTarget.dataset.learningQuiz, lesson.id));
   host.querySelectorAll('[data-learning-essay]').forEach(button => {
     button.addEventListener('click', () => {
       closeLearningModal();
@@ -2462,7 +2354,7 @@ function openLearningCenter(lessonId = null) {
   });
 }
 
-function startQuizModule(moduleId) {
+function startQuizModule(moduleId, returnLessonId = null) {
   const module = quizById(moduleId);
   if (!module) return;
   const previous = learningProgress.progress.quiz?.[module.id];
@@ -2480,9 +2372,10 @@ function startQuizModule(moduleId) {
   const reward = rewardById(module.rewardId);
   const host = showLearningModal(`
     <button class="modal-close" data-modal-close aria-label="Close">x</button>
+    ${returnLessonId ? '<button class="learning-quiz-back" data-quiz-back>← Back to lesson</button>' : ''}
     <div class="modal-kicker">Low-stakes quiz</div>
     <h2>${svgEsc(module.title)}</h2>
-    <p class="modal-copy">Three quick checks. Passing unlocks ${svgEsc(reward?.name || 'a postcard background')}; the whole studio stays unlocked either way.</p>
+    <p class="modal-copy">${module.questions.length} questions to connect the ideas. Every answer comes with an explanation. Passing unlocks ${svgEsc(reward?.name || 'a postcard background')}.</p>
     ${renderContentProvenance(module)}
     ${previous ? `<p class="modal-small">Best score: ${previous.bestScore || 0} / ${previous.total || module.questions.length}</p>` : ''}
     <form class="quiz-form">${questions}</form>
@@ -2492,23 +2385,31 @@ function startQuizModule(moduleId) {
     </div>
     <div class="quiz-result" aria-live="polite"></div>
   `);
+  host.querySelector('[data-quiz-back]')?.addEventListener('click', () => openLearningCenter(returnLessonId));
   const submit = host.querySelector('[data-quiz-submit]');
   if (submit) {
     submit.addEventListener('click', () => {
+      const unanswered = [...host.querySelectorAll('.quiz-question')].filter(question => !question.querySelector('input:checked'));
+      host.querySelectorAll('.quiz-question').forEach(question => question.toggleAttribute('data-unanswered', unanswered.includes(question)));
+      if (unanswered.length) {
+        host.querySelector('.quiz-result').textContent = `Choose an answer for ${unanswered.length === 1 ? 'the remaining question' : `the ${unanswered.length} remaining questions`} before checking.`;
+        unanswered[0].querySelector('input')?.focus();
+        return;
+      }
       let score = 0;
       const explanations = [];
       module.questions.forEach((q, qi) => {
         const picked = host.querySelector(`input[name="quiz-${module.id}-${qi}"]:checked`);
         const val = picked ? Number(picked.value) : -1;
         if (val === q.answer) score++;
-        explanations.push(`<li class="${val === q.answer ? 'right' : 'miss'}">${svgEsc(q.explanation)}</li>`);
+        explanations.push(`<li class="${val === q.answer ? 'right' : 'miss'}"><strong>Question ${qi + 1}: ${val === q.answer ? 'Correct' : 'Review'}</strong> — ${svgEsc(q.explanation)}</li>`);
       });
       const result = completeQuizProgress(module.id, score, module.questions.length);
       const resultEl = host.querySelector('.quiz-result');
       if (resultEl) {
         resultEl.innerHTML = `
           <strong>${result.passed ? 'Passed' : 'Nice try'}: ${score} / ${module.questions.length}</strong>
-          <p>${result.passed ? 'Reward unlocked. That little click of competence is the point.' : 'No penalty. Read the notes and try again whenever you want.'}</p>
+          <p>${result.passed ? 'Well done. Review the explanations, then bring the ideas back to the Studio.' : 'Use these explanations to revisit the ideas. You can change your answers and try again.'}</p>
           <ul>${explanations.join('')}</ul>
         `;
       }
@@ -3203,6 +3104,7 @@ function advanceAutoModel(nowSeconds) {
 
 // ---------- App object exposed for inline handlers ----------
 window.__app = {
+  startQuickStart() { startQuickStart(); },
   get params() { return params; },
   get camera() { return camera; },
   get scene() { return scene; },
@@ -4752,6 +4654,7 @@ function closeTopAppLayer() {
     qualityMenu.querySelector('summary')?.focus();
     return true;
   }
+  if (quickStart?.active) return quickStart.close();
   if (window.essayPanel?.close?.()) return true;
   if (params && (params.layout === 'presentation' || params.presentationMode)) {
     window.__app.setLayout('wide-canvas');
@@ -4867,6 +4770,7 @@ async function main() {
 
   // Keyboard
   window.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return;
     // Escape always closes the top-most application layer and restores focus
     // to its trigger. This matches the keyboard help and works from fields too.
     if (e.key === 'Escape' && closeTopAppLayer()) {

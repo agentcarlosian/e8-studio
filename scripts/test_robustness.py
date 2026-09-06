@@ -410,7 +410,9 @@ def main() -> int:
                   and shell["footerChildren"] == 6
                   and shell["directActions"] == 5
                   and shell["hasTools"] is True
-                  and shell["footerHeight"] <= 90
+                  # Two 36px action rows plus spacing keep larger controls
+                  # accessible without letting the footer crowd the workspace.
+                  and shell["footerHeight"] <= 120
                   and bool(shell["canvasName"])
                   and shell["liveStatus"] == "polite",
                   str(shell))

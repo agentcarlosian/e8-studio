@@ -22,6 +22,7 @@ const lessons = LEARNING_LESSONS.map(lesson => ({
   prerequisites: lesson.prerequisites,
   shortAnswer: lesson.shortAnswer,
   keyIdeas: lesson.keyIdeas,
+  guide: lesson.guide,
   visualEvidence: lesson.visualEvidence || null,
   proof: lesson.proof || null,
   objectives: lesson.objectives,

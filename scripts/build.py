@@ -38,10 +38,12 @@ JS_FILES    = [
     ROOT / 'src' / 'fx' / 'fx-branches.js',
     ROOT / 'src' / 'fx' / 'fx-line-shader.js',
     ROOT / 'src' / 'fx' / 'fx-surface-material.js',
+    ROOT / 'src' / 'ui' / 'backgrounds.js',
     ROOT / 'src' / 'fx' / 'bg-runtime.js',
     ROOT / 'src' / 'fx' / 'mandelbox.js',
     ROOT / 'src' / 'ui' / 'palettes.js',
-    ROOT / 'src' / 'ui' / 'backgrounds.js',
+    ROOT / 'src' / 'ui' / 'view-cards.js',
+    ROOT / 'src' / 'ui' / 'quick-start.js',
     ROOT / 'src' / 'ui' / 'panel.js',
     ROOT / 'src' / 'ui' / 'theme.js',
     ROOT / 'src' / 'content' / 'glossary.js',
@@ -49,7 +51,9 @@ JS_FILES    = [
     ROOT / 'src' / 'ui' / 'essays.js',
     ROOT / 'src' / 'content' / 'essays.js',
     ROOT / 'src' / 'content' / 'learning.js',
+    ROOT / 'src' / 'content' / 'lesson-guides.js',
     ROOT / 'src' / 'content' / 'curriculum.js',
+    ROOT / 'src' / 'ui' / 'learning-center.js',
     ROOT / 'src' / 'state' / 'learning-service.js',
     ROOT / 'src' / 'services' / 'export-recording.js',
     ROOT / 'src' / 'math' / 'rotations.js',
@@ -146,7 +150,7 @@ def main():
     html = HTML_FILE.read_text(encoding='utf-8')
 
     # Inline ALL CSS files so the dist build is fully standalone
-    for css_name in ['style.css', 'panel-extra.css', 'panel-v2.css']:
+    for css_name in ['style.css', 'panel-extra.css', 'panel-v2.css', 'studio.css', 'quick-start.css', 'learning-center.css']:
         css_file = ROOT / 'src' / 'assets' / css_name
         if css_file.exists():
             css_text = css_file.read_text(encoding='utf-8')

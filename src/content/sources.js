@@ -6,6 +6,13 @@
 // a blanket endorsement of every sentence in an essay.
 
 export const FACT_SOURCES = {
+  'euclid-five-solids': {
+    title: 'Elements, Book XIII, Proposition 18',
+    author: 'Euclid; edition by David Joyce, Clark University',
+    url: 'https://mathcs.clarku.edu/~djoyce/java/elements/bookXIII/propXIII18.html',
+    scope: 'angle-sum argument restricting convex regular solids to five cases',
+    tier: 'primary-text',
+  },
   'mit-e8-plane': {
     title: 'The E8 root system',
     author: 'David Vogan, MIT Mathematics',

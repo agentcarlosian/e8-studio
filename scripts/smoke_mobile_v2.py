@@ -587,7 +587,7 @@ def main() -> int:
                 lessonNav: [...document.querySelectorAll('.mobile-learn-lesson-nav button')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
                 activityCount: document.querySelectorAll('.mobile-learn-activity').length,
                 explanationCount: document.querySelectorAll('.mobile-learn-activity .mobile-learn-takeaway').length,
-                hiddenLessonDetails: document.querySelectorAll('#learn-topic-card details').length,
+                hiddenLessonDetails: document.querySelectorAll('.mobile-learn-activity details').length,
                 sourceNoteVisible: document.querySelector('#mobile-learn-source-title')?.getBoundingClientRect().height > 0,
                 hiddenExplanationControls: document.querySelectorAll('[data-info-action="reveal-experiment-answer"], [data-info-action="next-experiment-step"]').length,
                 studioButton: (() => {

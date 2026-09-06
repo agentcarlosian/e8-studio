@@ -5165,6 +5165,9 @@ function syncLearnPanel() {
     ${lessonNavigationHtml}
   </section>` : '';
   const ideasHtml = (record.keyIdeas || []).slice(0, 3).map((idea, index) => `<article><span>${index + 1}</span><div><h4>${index === 0 ? 'Start with the rule' : index === 1 ? 'Connect it to the picture' : 'Keep this distinction'}</h4><p>${escapeHtml(idea)}</p></div></article>`).join('');
+  const guide = record.lesson?.guide;
+  const guideHtml = guide ? `<section class="mobile-learn-section mobile-learn-vocabulary"><h4>A little vocabulary</h4><dl>${guide.terms.map(([term, definition]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(definition)}</dd></div>`).join('')}</dl></section><section class="mobile-learn-section mobile-learn-example"><span class="mobile-learn-kicker">Make it concrete</span><h4>${escapeHtml(guide.example.title)}</h4><p>${escapeHtml(guide.example.body)}</p></section><aside class="mobile-learn-distinction"><strong>Keep this distinction</strong><p>${escapeHtml(guide.misconception)}</p></aside>` : '';
+  const recallHtml = guide ? `<section class="mobile-learn-section mobile-learn-recall"><h4>Check your understanding</h4><p>${escapeHtml(guide.check.question)}</p><details><summary>Reveal answer</summary><p>${escapeHtml(guide.check.answer)}</p></details></section>` : '';
   if (els.learnReaderProgress) els.learnReaderProgress.textContent = `Lesson ${index + 1} of ${curriculumLessons.length}`;
   els.learnTopicCard.innerHTML = `
     <header class="mobile-learn-lesson-head">
@@ -5173,10 +5176,13 @@ function syncLearnPanel() {
     </header>
     <section class="mobile-learn-answer"><span>The direct answer</span><p>${escapeHtml(record.shortAnswer)}</p></section>
     ${ideasHtml ? `<section class="mobile-learn-section"><h4>Build the idea</h4><div class="mobile-learn-ideas">${ideasHtml}</div></section>` : ''}
+    ${guideHtml}
     ${learnEvidenceHtml(record)}
     ${learnProofHtml(record)}
     ${experimentHtml}
+    ${recallHtml}
     <section class="mobile-learn-math-note" aria-labelledby="mobile-learn-source-title"><h4 id="mobile-learn-source-title">Math and source note</h4><div><p>${escapeHtml(record.claimNote || 'This lesson distinguishes mathematical structure from the choices used to display it.')}</p></div></section>
+    <details class="mobile-learn-sources"><summary>Sources and further reading</summary>${(record.lesson?.sources || []).map(source => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(source.title)}</strong><span>${escapeHtml(source.author)}</span></a>`).join('')}</details>
     <footer class="learn-topic-foot learn-topic-studio">
       <button class="mobile-learn-primary" type="button" data-info-action="open-experiment-coach">Open in Studio</button>
     </footer>`;

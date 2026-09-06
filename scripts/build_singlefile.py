@@ -101,7 +101,8 @@ def assert_shareable(html: str) -> None:
         "width=device-width",
         "mobile-rail",
         "pointer: coarse",
-        "(max-width: 760px)",
+        # Responsive lesson layouts also use width queries. A media-query
+        # breakpoint alone is not a dependency or a mobile-shell marker.
         "Phone quality",
     ]
     hits = [snippet for snippet in blocked if snippet in html]

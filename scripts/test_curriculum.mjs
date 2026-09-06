@@ -19,6 +19,10 @@ for (const lesson of LEARNING_LESSONS) {
   assert.ok(lesson.shortAnswer?.length >= 100, `${lesson.id} direct short answer`);
   assert.ok(Array.isArray(lesson.keyIdeas) && lesson.keyIdeas.length >= 2, `${lesson.id} key ideas`);
   assert.ok(Array.isArray(lesson.objectives) && lesson.objectives.length >= 2, `${lesson.id} objectives`);
+  assert.ok(['Start here', 'Build intuition', 'Go deeper'].includes(lesson.guide?.level), `${lesson.id} reading level`);
+  assert.ok(lesson.guide.terms.length >= 2 && lesson.guide.terms.every(([term, meaning]) => term && meaning), `${lesson.id} inline vocabulary`);
+  assert.ok(lesson.guide.example?.title && lesson.guide.example.body && lesson.guide.misconception, `${lesson.id} worked example and distinction`);
+  assert.ok(lesson.guide.check?.question?.endsWith('?') && lesson.guide.check.answer, `${lesson.id} retrieval question and explanation`);
   assert.ok(Array.isArray(lesson.prerequisites), `${lesson.id} prerequisites`);
   assert.ok(lesson.activity?.length >= 30, `${lesson.id} activity`);
   assert.ok(lesson.essayIds.length, `${lesson.id} essays`);
@@ -71,6 +75,7 @@ assert.deepEqual(
   'artifact lesson order',
 );
 assert.deepEqual(artifact.lessons.map(lesson => lesson.id), lessonIds, 'artifact lesson records');
+assert.deepEqual(artifact.lessons.map(lesson => lesson.guide), LEARNING_LESSONS.map(lesson => lesson.guide), 'both readers receive the same teaching notes');
 assert.ok(artifact.lessons.every(lesson => claimTypes.has(lesson.claimType) && lesson.claimNote?.length >= 40), 'artifact claim metadata');
 assert.ok(artifact.lessons.every(lesson => lesson.sources?.length), 'artifact source coverage');
 assert.ok(artifact.lessons.every(lesson => lesson.objectives?.length >= 2 && lesson.activity && lesson.estimatedMinutes > 0), 'artifact learning design fields');

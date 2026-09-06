@@ -1,14 +1,15 @@
 :root {
   --bg: #07070c;
-  --panel: #101019;
-  --panel-2: #171723;
-  --line: #2b2b3c;
+  --panel: #11121b;
+  --panel-2: #1a1b26;
+  --line: #323341;
   --ink: #f4f1ea;
-  --muted: #9d9789;
-  --dim: #666153;
+  --muted: #b8b1a3;
+  --dim: #928c80;
   --accent: #f4d27a;
   --accent-2: #6affe8;
   --danger: #ff8a75;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   --shadow: 0 18px 50px rgba(0,0,0,0.45);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -44,10 +45,18 @@ input {
 button {
   min-height: 44px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel-2);
   color: var(--ink);
   touch-action: manipulation;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 button:disabled {
@@ -325,7 +334,7 @@ button:disabled {
 .scene-chip small {
   min-width: 0;
   overflow: hidden;
-  color: rgba(244, 241, 234, 0.68);
+  color: rgba(244, 241, 234, 0.82);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -553,7 +562,7 @@ button:disabled {
 
 .drawer-actions button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 8px;
   font-size: 12px;
   font-weight: 800;
@@ -585,8 +594,10 @@ button:disabled {
 
 .sheet-chrome h1 {
   margin: 2px 0 0;
-  font-size: 24px;
-  line-height: 1.1;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .icon-button {
@@ -596,15 +607,21 @@ button:disabled {
 .sheet-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel);
 }
 
 .sheet-tabs button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -619,6 +636,8 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   padding-bottom: 28px;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--line) transparent;
 }
 
 .wide-action.done-button,
@@ -651,12 +670,14 @@ button:disabled {
 
 .settings-section h2 {
   margin: 0 0 14px;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 
 .control-stack {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .wide-action,
@@ -678,7 +699,7 @@ button:disabled {
 .sheet-action,
 .info-copy {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--panel);
 }
 
@@ -763,12 +784,14 @@ button:disabled {
 .field span,
 .toggle-row strong {
   color: var(--ink);
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .browse-head output {
   color: var(--accent);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: right;
 }
 
 .panel-expand-button {
@@ -793,10 +816,10 @@ button:disabled {
 }
 
 .field-heading .motion-auto-toggle {
-  min-height: 30px;
+  min-height: 44px;
   padding: 0 10px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -818,7 +841,7 @@ button:disabled {
 
 .browse-actions button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 8px;
   font-size: 12px;
   font-weight: 800;
@@ -844,7 +867,7 @@ button:disabled {
 
 .root-jump-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 4px;
   color: var(--muted);
   font-size: 11px;
@@ -854,18 +877,19 @@ button:disabled {
 
 .model-shortcut-groups {
   display: grid;
-  gap: 10px;
+  gap: 16px;
 }
 
 .model-shortcut-group {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .model-shortcut-group > strong {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.055em;
   text-transform: uppercase;
 }
 
@@ -944,12 +968,12 @@ button:disabled {
 
 .model-shortcut-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 4px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.05;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .model-shortcut-grid button.active {
@@ -1058,7 +1082,7 @@ button:disabled {
 .panel-note {
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .fx-cost-note {
@@ -1069,7 +1093,7 @@ button:disabled {
 .fx-preset-grid button,
 .motion-preset-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 5px;
   color: var(--muted);
   font-size: 11px;
@@ -1092,7 +1116,7 @@ button:disabled {
 
 .subset-chip-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 5px;
   color: var(--muted);
   font-size: 11px;
@@ -1114,7 +1138,7 @@ button:disabled {
 
 .motion-speed-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 5px;
   color: var(--muted);
   font-size: 11px;
@@ -1142,7 +1166,7 @@ button:disabled {
 
 .camera-path-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 4px;
   color: var(--muted);
   font-size: 10px;
@@ -1209,6 +1233,11 @@ input[type="checkbox"] {
   color: var(--muted);
 }
 
+.toggle-row small {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .segmented {
   display: grid;
   grid-template-columns: 1fr;
@@ -1256,7 +1285,7 @@ input[type="checkbox"] {
 .info-actions button,
 .sheet-action button {
   min-width: 104px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 12px;
   font-weight: 800;
 }
@@ -1299,7 +1328,7 @@ input[type="checkbox"] {
 
 .curiosity-card button {
   min-width: 76px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   font-weight: 800;
 }
@@ -1352,7 +1381,7 @@ input[type="checkbox"] {
 
 .learn-topic-grid button {
   min-width: 0;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 5px;
   color: var(--muted);
   font-size: 11px;
@@ -1451,7 +1480,7 @@ input[type="checkbox"] {
   gap: 7px;
 }
 
-.mobile-learn-actions button { min-height: 42px; }
+.mobile-learn-actions button { min-height: 44px; }
 
 .learn-topic-foot {
   display: flex;
@@ -1470,7 +1499,7 @@ input[type="checkbox"] {
 
 .learn-topic-foot button {
   min-width: 76px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 12px;
   font-weight: 800;
 }
@@ -1860,7 +1889,17 @@ input[type="checkbox"] {
 }
 
 .cartan-zero {
-  color: rgba(157, 151, 137, 0.42);
+  color: var(--dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .settings-button,
+  .root-drawer,
+  .settings-done-action,
+  .view-actions .wide-action {
+    transition: none;
+  }
 }
 
 @media (orientation: landscape) {
@@ -1882,3 +1921,17 @@ input[type="checkbox"] {
     border-left: 0;
   }
 }
+/* Shared curriculum notes keep the mobile reader self-contained. */
+.mobile-learn-vocabulary dl { display: grid; gap: 12px; margin: 0; }
+.mobile-learn-vocabulary dl > div { padding: 15px; border: 1px solid var(--line, #39372f); border-radius: 10px; background: rgba(255, 255, 255, .025); }
+.mobile-learn-vocabulary dt { color: var(--accent, #f4d27a); font-weight: 600; margin-bottom: 6px; }
+.mobile-learn-vocabulary dd { margin: 0; font-size: 14px; line-height: 1.75; }
+.mobile-learn-example { padding: 18px; border: 1px solid rgba(244, 210, 122, .24); border-radius: 12px; background: rgba(244, 210, 122, .04); }
+.mobile-learn-distinction { margin: 24px 0; padding-left: 16px; border-left: 3px solid var(--accent, #f4d27a); }
+.mobile-learn-distinction strong { color: var(--accent, #f4d27a); font-size: 13px; }
+.mobile-learn-distinction p, .mobile-learn-example p, .mobile-learn-recall p { font-size: 15px; line-height: 1.8; }
+.mobile-learn-recall summary, .mobile-learn-sources summary { cursor: pointer; min-height: 44px; padding: 12px 0; box-sizing: border-box; color: var(--accent, #f4d27a); font-size: 14px; }
+.mobile-learn-recall summary:focus-visible, .mobile-learn-sources summary:focus-visible { outline: 2px solid var(--accent, #f4d27a); outline-offset: 3px; }
+.mobile-learn-sources { padding-top: 12px; }
+.mobile-learn-sources a { display: grid; gap: 5px; padding: 14px 0; color: inherit; text-decoration-color: rgba(244, 210, 122, .4); font-size: 13px; line-height: 1.65; }
+.mobile-learn-sources a span { font-size: 12px; }
