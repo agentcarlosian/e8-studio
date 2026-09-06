@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { colorAt } from '../ui/palettes.js';
+import { polytopeFaces, triangulatePolytopeFaces } from '../math/polytope-faces.js';
 import { LineFXMaterial } from '../fx/fx-line-shader.js';
 import { FX_MODE_MAP } from '../fx/fx-shader.js';
 import { VERTEX_FX_BRANCHES, FRAGMENT_FX_BRANCHES } from '../fx/fx-branches.js';
@@ -101,6 +102,20 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     group.userData.edgeLines = edgeLines;
     group.userData.R = R;
     group.userData.nVerts = verts4.length;
+    const triangles = triangulatePolytopeFaces(polytopeFaces(polyName, p));
+    const faceGeo = new THREE.BufferGeometry();
+    faceGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(triangles.length * 9), 3));
+    const faceMesh = new THREE.Mesh(faceGeo, new THREE.MeshStandardMaterial({
+      color: colorAt(palette, 0.6), emissive: colorAt(palette, 0.3), emissiveIntensity: 0.15,
+      transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false,
+      roughness: 0.6, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+    }));
+    faceMesh.name = 'polytope-faces';
+    faceMesh.frustumCulled = false; // Projection bounds change with all six rotation planes.
+    faceMesh.visible = runtimeParams().showFaces !== false;
+    group.add(faceMesh);
+    group.userData.faceMesh = faceMesh;
+    group.userData.faceTriangles = triangles;
 
     // Vertex points (initially at z=0; positions updated each frame)
     const vPositions = new Float32Array(verts4.length * 3);
@@ -282,6 +297,20 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
         vPositions[i*3 + 2] = p3[2] * R;
       }
       group.userData.vPoints.geometry.attributes.position.needsUpdate = true;
+      const faceMesh = group.userData.faceMesh;
+      faceMesh.visible = params.showFaces !== false;
+      if (faceMesh.visible) {
+        const positions = faceMesh.geometry.attributes.position;
+        let offset = 0;
+        for (const triangle of group.userData.faceTriangles) {
+          for (const index of triangle) {
+            positions.array.set(vPositions.subarray(index * 3, index * 3 + 3), offset);
+            offset += 3;
+          }
+        }
+        positions.needsUpdate = true;
+        faceMesh.geometry.computeVertexNormals();
+      }
       group.userData.vPoints.visible = !!params.showVertices;
       group.userData.vPoints.material.uniforms.uBaseSize.value = 0.06 * baseScale * (params.pointScale || 1);
 
@@ -302,6 +331,11 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
         for (let i = 0; i < c.length; i++) c[i] *= 0.97;
         group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
+    },
+
+    getProjectedVertices() {
+      const positions = group.userData.vPoints.geometry.attributes.position;
+      return Array.from({ length: positions.count }, (_, i) => [positions.getX(i), positions.getY(i), positions.getZ(i)]);
     },
 
     dispose() {

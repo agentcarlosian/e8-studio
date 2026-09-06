@@ -1428,6 +1428,7 @@ function defaultParams() {
     bloomSpeed: 0.05,
     pointScale: 1,
     showVertices: false,
+    showFaces: true,
     showEdges: false,
     showRings: true,
     showPetrie: false,       // toggle real Hamiltonian 30-cycle (Petrie polygon)
@@ -1656,6 +1657,7 @@ function normalizeParams(target) {
   if (typeof target.autoModel !== 'boolean') target.autoModel = false;
   if (typeof target.autoFx !== 'boolean') target.autoFx = false;
   if (typeof target.showVertices !== 'boolean') target.showVertices = false;
+  if (typeof target.showFaces !== 'boolean') target.showFaces = true;
   for (const key of ['rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit']) {
     if (typeof target[key] !== 'boolean') target[key] = true;
   }
@@ -2006,7 +2008,7 @@ function svgEsc(value) {
 
 // Scene serialization is independent of the renderer and delivery platform.
 function objForShape(name) { return createGeometryExporters(DATA, params).objForShape(name); }
-function objForCurrentView() { return createGeometryExporters(DATA, params).objForCurrentView(); }
+function objForCurrentView() { return createGeometryExporters(DATA, params).objForCurrentView(currentView?.getProjectedVertices?.()); }
 function geometryForView() { return createGeometryExporters(DATA, params).geometryForView(); }
 function svgForCurrentView() { return createGeometryExporters(DATA, params).svgForCurrentView(); }
 function svgForCurrentE8() { return createGeometryExporters(DATA, params).svgForCurrentE8(); }
@@ -3756,7 +3758,7 @@ window.__app = {
       showSavedToast('OBJ is not available for this view');
       return null;
     }
-    const subject = params.view === 'dynkin' ? `dynkin_${params.dynkin}` : params.shape;
+    const subject = params.view === 'dynkin' ? `dynkin_${params.dynkin}` : params.view === 'polytope' ? `${params.poly4d}_projection` : params.shape;
     downloadText(obj, `${subject}.obj`, 'text/plain');
     showSavedToast(`Saved ${subject}.obj`);
     return obj;
@@ -3910,6 +3912,7 @@ window.__app = {
     refreshPanel();
     showSavedToast(params.autoModel ? 'Auto model on' : 'Auto model off');
   },
+  toggleFaces() { updateParam('showFaces', !params.showFaces); },
   toggleVertices() {
     updateParam('showVertices', !params.showVertices);
   },

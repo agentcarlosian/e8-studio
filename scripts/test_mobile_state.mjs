@@ -16,6 +16,8 @@ for (const [legacy, current] of Object.entries({ grid: 'tide', synthwave: 'ember
 }
 
 const defaultsBefore = { ...DEFAULT_STATE };
+assert.equal(restoreMobileState({ showFaces: false }).showFaces, false, 'wireframe preference survives reload');
+assert.equal(restoreMobileState({}).showFaces, true, 'older scenes retain filled Platonic solids');
 const legacy = { modelMode: 'e8_3d', background: 'space', showEdges: false, zoom: 5 };
 const restored = restoreMobileState(legacy);
 assert.equal(restored.modelMode, 'bloom');

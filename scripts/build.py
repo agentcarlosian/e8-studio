@@ -60,6 +60,8 @@ JS_FILES    = [
     ROOT / 'src' / 'services' / 'export-recording.js',
     ROOT / 'src' / 'math' / 'rotations.js',
     ROOT / 'src' / 'math' / 'morph.js',
+    ROOT / 'src' / 'math' / 'polytope-faces.js',
+    ROOT / 'src' / 'math' / 'convex-hull.js',
     ROOT / 'src' / 'math' / 'stellations.js',
     ROOT / 'src' / 'math' / 'cartan.js',
     ROOT / 'src' / 'math' / 'weyl.js',

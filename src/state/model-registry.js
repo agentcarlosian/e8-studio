@@ -43,7 +43,7 @@ export const MODEL_REGISTRY = Object.freeze({
   polytope: Object.freeze({
     label: '4D Polytope',
     shortLabel: '4D',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'obj', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: true, bloom: false, e8: false, poly: true, sdf: false, extrude: true, math: false }),
   }),
   raymarched: Object.freeze({

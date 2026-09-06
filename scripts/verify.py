@@ -1715,6 +1715,7 @@ td,th{{border:1px solid #2a2a3a;padding:8px;text-align:left}}
 
 
 def check_studio_ui() -> None:
+    run([sys.executable, "scripts/test_shape_controls.py"])
     run([sys.executable, "scripts/test_quick_start.py"])
     run([sys.executable, "scripts/test_studio_ui.py"])
     run([sys.executable, "scripts/test_learning_center.py"])

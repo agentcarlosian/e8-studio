@@ -267,6 +267,8 @@ function renderViewSection(params, data, uiState = {}) {
       // point-sphere toggle discoverable even though the optional morph tools
       // move into a disclosure below.
       html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
+      html += toggle('Colored faces', params.showFaces !== false, 'toggleFaces');
+      html += renderGeometryExports(params);
 
       // Camera and motion are the primary way users explore a solid. Present
       // them in full where the old Morph block used to dominate the panel.
@@ -476,6 +478,17 @@ function renderSDFControls(params, data) {
   return html;
 }
 
+function renderGeometryExports(params) {
+  const exportFormats = exportFormatsForView(params.view);
+  let html = '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
+  if (exportFormats.includes('png')) html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution image of this view">PNG</button>';
+  if (exportFormats.includes('svg')) html += '<button data-act="exportSVG" title="Scalable vector diagram of this view">SVG</button>';
+  if (exportFormats.includes('obj')) html += `<button data-act="exportOBJ" title="Wavefront geometry for this view">${params.view === 'polytope' ? 'OBJ · 3D projection' : 'OBJ'}</button>`;
+  if (exportFormats.includes('data')) html += '<button data-act="exportGeometryJSON" title="Canonical model data as JSON">JSON</button>';
+  html += '</div>';
+  return html;
+}
+
 function renderPolytopeControls(params, data) {
   const polys = data.polytopes4d || {};
   const preferredOrder = ['5cell', 'tesseract', '16cell', '24cell', '120cell', '600cell'];
@@ -490,6 +503,8 @@ function renderPolytopeControls(params, data) {
   }
   html += '</div>';
   html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
+      html += toggle('Colored faces', params.showFaces !== false, 'toggleFaces');
+      html += renderGeometryExports(params);
   html += '<div class="ps-subtitle">4D projection</div>';
   html += '<div class="ps-help">Change how strongly the fourth coordinate affects the 3D projection.</div>';
   html += slider('4D depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
@@ -636,13 +651,7 @@ function renderStyleSection(params, data, uiState = {}) {
   }
   html += '</div>';
 
-  const exportFormats = exportFormatsForView(params.view);
-  html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
-  if (exportFormats.includes('png')) html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution image of this view">PNG</button>';
-  if (exportFormats.includes('svg')) html += '<button data-act="exportSVG" title="Scalable vector diagram of this view">SVG</button>';
-  if (exportFormats.includes('obj')) html += '<button data-act="exportOBJ" title="Wavefront geometry for this view">OBJ</button>';
-  if (exportFormats.includes('data')) html += '<button data-act="exportGeometryJSON" title="Canonical model data as JSON">Data</button>';
-  html += '</div>';
+  if (!['platonic', 'polytope'].includes(params.view)) html += renderGeometryExports(params);
 
   html += '</div>';
   return html;

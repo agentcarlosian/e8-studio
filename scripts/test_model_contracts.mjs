@@ -19,7 +19,7 @@ const expectedExports = {
   platonic: ['png', 'obj', 'data'],
   e8coxeter: ['png', 'svg', 'data'],
   quasicrystal: ['png', 'data'],
-  polytope: ['png', 'data'],
+  polytope: ['png', 'obj', 'data'],
   raymarched: ['png', 'data'],
   rootlab: ['png', 'data'],
   tiling: ['png', 'data'],
