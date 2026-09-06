@@ -61,6 +61,7 @@ JS_FILES    = [
     ROOT / 'src' / 'math' / 'rank2-roots.js',
     ROOT / 'src' / 'math' / 'coxeter-tilings.js',
     ROOT / 'src' / 'math' / 'e8-quasicrystal.js',
+    ROOT / 'src' / 'services' / 'geometry-export.js',
     ROOT / 'src' / 'views' / 'platonic.view.js',
     ROOT / 'src' / 'views' / 'dynkin.view.js',
     ROOT / 'src' / 'views' / 'polytope4d.view.js',

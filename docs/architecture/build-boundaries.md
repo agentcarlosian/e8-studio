@@ -11,8 +11,8 @@ Electron, and Android artifacts through separate verified build paths.
 | Legacy inline | `npm run build:legacy` | Python module rewriter | Compatibility baseline |
 | Offline/PWA | `npm run build:offline` | Legacy inline + vendored dependencies | Existing Electron/PWA input |
 | Desktop share | `npm run build:single` | Fully inlined HTML | File-sharing artifact |
-| Mobile native | `npm run build:mobile` | Hybrid Canvas/WebGL HTML inliner | Capacitor input |
-| Mobile share | `npm run build:mobile:single` | Hybrid Canvas/WebGL standalone HTML | Phone-sharing artifact |
+| Mobile native | `npm run build:mobile` | Vite ESM bundle + hybrid Canvas/WebGL HTML | Capacitor input |
+| Mobile share | `npm run build:mobile:single` | Same Vite bundle + standalone HTML | Phone-sharing artifact |
 
 The Vite build is emitted to `dist/web/`, uses relative asset URLs, bundles the
 runtime JavaScript dependencies from `package-lock.json`, and copies canonical
@@ -88,3 +88,35 @@ Side effects cross the shared-core boundary through explicit adapters:
   optimization opportunity, but no longer blocks clear package ownership.
 - Dependency security is checked before release; Electron and electron-builder
   upgrades require packaging regression tests in addition to the web suite.
+
+## Extracted module contracts
+
+- `src/services/geometry-export.js` serializes SVG, OBJ and canonical geometry
+  using only supplied data and scene parameters. Desktop delivery remains in
+  `ExportRecordingService`; serializers do not own renderer or storage state.
+- `src/mobile/state.js` owns mobile defaults, configuration migrations,
+  normalization and camera limits. The mobile shell supplies current curriculum
+  identifiers and retains persistence and event handling.
+- `scripts/bundle_mobile.mjs` compiles the mobile ESM graph for both Python HTML
+  builders. Node and installed Vite dependencies are required. The bundler
+  rejects external imports or extra chunks so standalone output remains local.
+- `src/ui/quick-start.js` owns the opt-in guide's DOM, focus and dismissal
+  lifecycle. Scene changes cross its injected `applyStep` adapter; it never
+  changes a scene merely because the application starts.
+- Ambient camera noise uses the same npm module in web and standalone outputs.
+  Browser verification checks drift and geometry exports on each output.
+- `src/ui/learning-center.js` renders the desktop lesson reader and owns local
+  search, section navigation, responsive library behavior, and the angle-rule
+  calculator. Its cleanup releases the media-query listener on replacement or
+  dismissal. The shell retains progress writes, quizzes, and Studio actions.
+- `src/content/lesson-guides.js` adds vocabulary, examples, misconceptions, and
+  retrieval questions to every curriculum lesson. The curriculum generator
+  includes these additive fields in the mobile artifact, keeping teaching notes
+  identical across readers. Existing lesson identifiers and progress are stable.
+- `scripts/test_learning_center.py` exercises the reader at four viewport sizes,
+  including filtering, the corner calculator, quiz recovery, experiment resume,
+  keyboard focus, and persistence. It runs in the studio UI verification stage.
+
+The desktop legacy rewriter remains a compatibility path. New extractions must
+use normal ESM imports and preserve the parity tests before moving that path.
+See [verified deployment](verified-deployment.md) for the CI-to-Pages contract.

@@ -5,9 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# Replace obsolete PR checks, but let a main run finish its deployment before
+# the next main run starts so an older build cannot publish after a newer one.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -15,6 +22,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -27,24 +36,27 @@ jobs:
       - run: npm ci
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
+      # Includes the web build, browser checks, module contracts, visual-system
+      # checks, robustness checks, and standalone release artifact checks.
       - run: npm run release:check
       - run: python scripts/test_math.py
-      - run: node scripts/test_state_modules.mjs
-      - run: npm run test:lifecycle
-      - run: npm run test:animation
-      - run: npm run test:recording
-      - run: npm run test:exports
-      - run: npm run test:image-exports
-      - run: npm run test:visual-system
-      - run: npm run test:curriculum
-      - run: npm run test:e8-quasicrystal
       - run: npm run smoke:mobile-v2
+      # Publish the exact dist/web checked by release:check. No later step
+      # rebuilds it, and PR runs never create a deployment artifact.
+      - name: Upload verified Pages artifact
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-pages-artifact@v5
+        with:
+          name: github-pages
+          path: dist/web
 
   windows-build:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -67,3 +79,12 @@ jobs:
       - run: npm run test:visual-system
       - run: npm run test:curriculum
       - run: npm run test:e8-quasicrystal
+
+  deploy:
+    needs: [verify, windows-build]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

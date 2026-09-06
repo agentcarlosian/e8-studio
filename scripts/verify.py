@@ -110,6 +110,8 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_recording_recovery.mjs"])
     run(["node", "scripts/test_export_delivery.mjs"])
     run(["node", "scripts/test_image_export_recovery.mjs"])
+    run(["node", "scripts/test_geometry_exports.mjs"])
+    run(["node", "scripts/test_mobile_state.mjs"])
     run(["node", "scripts/test_curriculum.mjs"])
     run(["node", "scripts/test_progress.mjs"])
     run(["node", "scripts/test_content_integrity.mjs"])
@@ -409,10 +411,151 @@ def capture_visual_evidence(page, name: str) -> None:
     page.screenshot(path=str(SUMMARY_DIR / f"{name}.png"), full_page=False)
 
 
+def exercise_build_parity(page, page_errors: list[str], console_errors: list[str], label: str) -> None:
+    """Catch dependency and serializer integration regressions in every output."""
+    drift = page.evaluate(
+        """async () => {
+          const app = window.__app;
+          const set = (key, value) => app.setParam(key, value, { save: false });
+          const overrides = {
+            cameraPath: 'manual', cameraOrbit: false, autoZoom: false, autoModel: false,
+            autoRotate: false, e8AutoRotate: false, polyAutoRotate: false,
+            e8ProjectionAuto: false, autoSliders: [], bloomAuto: false,
+            autoFx: false, shiftMode: 'static', intro: false, paused: false, showAmbient: false,
+          };
+          const saved = Object.fromEntries(Object.keys(overrides).map(key => [key, app.params[key]]));
+          const savedDistance = app.params.cameraDistance;
+          const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+          const sample = async () => {
+            const points = [];
+            const started = performance.now();
+            do {
+              await frame();
+              points.push(app.camera.position.toArray());
+            } while (performance.now() - started < 300 || points.length < 4);
+            const distance = (a, b) => Math.hypot(...a.map((value, i) => value - b[i]));
+            return {
+              first: points[0], last: points.at(-1), frames: points.length,
+              finite: points.every(point => point.every(Number.isFinite)),
+              span: Math.max(...points.map(point => distance(point, points[0]))),
+            };
+          };
+          try {
+            for (const [key, value] of Object.entries(overrides)) set(key, value);
+            // Reapply the current distance to synchronize pointer targets and
+            // clear inertia before attributing any camera motion to noise.
+            set('cameraDistance', savedDistance);
+            await frame(); await frame();
+            const disabled = await sample();
+            set('showAmbient', true);
+            await frame(); await frame();
+            const enabled = await sample();
+            set('showAmbient', false);
+            await frame(); await frame();
+            const stopped = await sample();
+            return { disabled, enabled, stopped };
+          } finally {
+            set('cameraDistance', savedDistance);
+            for (const [key, value] of Object.entries(saved)) set(key, value);
+          }
+        }"""
+    )
+    if any(not sample["finite"] or sample["frames"] < 4 for sample in drift.values()):
+        fail(f"{label} camera drift produced invalid frame samples: {drift}")
+    if drift["disabled"]["span"] > 1e-10 or drift["stopped"]["span"] > 1e-10:
+        fail(f"{label} camera kept moving with ambient drift disabled: {drift}")
+    if not 1e-7 < drift["enabled"]["span"] < 0.15:
+        fail(f"{label} ambient noise did not produce a small changing camera offset: {drift}")
+    if math.dist(drift["disabled"]["last"], drift["stopped"]["last"]) > 1e-10:
+        fail(f"{label} disabling ambient drift did not restore the base camera pose: {drift}")
+
+    exports = page.evaluate(
+        r"""() => {
+          const app = window.__app;
+          const keys = ['view', 'shape', 'shapeTwist', 'shapeSpike', 'shapeJitter',
+            'poly4d', 'polyProjectionVersion', 'dynkin', 'rootSystem', 'tilingSystem',
+            'tilingDensity', 'showPetrie', 'fxMode', 'fxByView'];
+          const saved = Object.fromEntries(keys.map(key => [key, structuredClone(app.params[key])]));
+          const set = (key, value) => app.setParam(key, value, { save: false });
+          const select = (view, settings = {}) => {
+            set('view', view);
+            for (const [key, value] of Object.entries(settings)) set(key, value);
+            return app.getGeometryJSON();
+          };
+          const lines = (text, prefix) => text?.split('\n').filter(line => line.startsWith(prefix)).length;
+          const svgInfo = text => {
+            const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+            return {
+              valid: doc.documentElement.localName === 'svg' && !doc.querySelector('parsererror'),
+              roots: [...doc.querySelectorAll('title')].filter(node => node.textContent.startsWith('E8 root ')).length,
+              circles: doc.querySelectorAll('circle').length,
+              petrie: doc.querySelectorAll('polyline').length,
+            };
+          };
+          try {
+            // These synchronous selections exercise the exported facade against
+            // live scene params and restore them before the next render frame.
+            const cube = select('platonic', { shape: 'cube', shapeTwist: 0, shapeSpike: 0, shapeJitter: 0 });
+            const cubeObj = app.getCurrentOBJ();
+            const result = {
+              cube: { kind: cube.kind, dimension: cube.dimension, vertices: cube.verts.length,
+                edges: cube.edges.length, objVertices: lines(cubeObj, 'v '), objFaces: lines(cubeObj, 'f '),
+                namedObjMatches: app.getOBJ('cube') === cubeObj, svg: app.getCurrentSVG() },
+            };
+            for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
+              const geometry = select(view);
+              result[view] = { kind: geometry.kind, dimension: geometry.dimension,
+                count: geometry.roots8d.length, obj: app.getCurrentOBJ() };
+            }
+            select('e8coxeter', { showPetrie: true });
+            result.e8Svg = svgInfo(app.getCurrentSVG());
+            result.legacyE8Svg = svgInfo(app.getE8Svg());
+            const dynkin = select('dynkin', { dynkin: 'E8' });
+            result.dynkin = { kind: dynkin.kind, rank: dynkin.rank, nodes: dynkin.nodes.length,
+              edges: dynkin.edges.length, objVertices: lines(app.getCurrentOBJ(), 'v '),
+              objEdges: lines(app.getCurrentOBJ(), 'l '), svg: svgInfo(app.getCurrentSVG()) };
+            const polytope = select('polytope', { poly4d: '600cell', polyProjectionVersion: 2 });
+            result.polytope = { kind: polytope.kind, dimension: polytope.dimension,
+              vertices: polytope.verts.length, edges: polytope.edges.length,
+              obj: app.getCurrentOBJ(), svg: app.getCurrentSVG() };
+            const roots = select('rootlab', { rootSystem: 'G2' });
+            result.rootlab = { kind: roots.kind, rank: roots.rank,
+              count: roots.roots.length, coxeterNumber: roots.coxeterNumber };
+            const tiling = select('tiling', { tilingSystem: 'H2', tilingDensity: 5 });
+            result.tiling = { kind: tiling.kind, name: tiling.name, families: tiling.familyCount,
+              tiles: tiling.tiles.length, edges: tiling.edges.length };
+            return result;
+          } finally {
+            for (const [key, value] of Object.entries(saved)) set(key, value);
+          }
+        }"""
+    )
+    expected = {
+        "cube": {"kind": "polyhedron", "dimension": 3, "vertices": 8, "edges": 12,
+                 "objVertices": 8, "objFaces": 12, "namedObjMatches": True, "svg": None},
+        "e8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
+        "legacyE8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
+        "dynkin": {"kind": "dynkin-diagram", "rank": 8, "nodes": 8, "edges": 7,
+                   "objVertices": 8, "objEdges": 7,
+                   "svg": {"valid": True, "roots": 0, "circles": 8, "petrie": 0}},
+        "polytope": {"kind": "4d-polytope", "dimension": 4, "vertices": 120,
+                     "edges": 720, "obj": None, "svg": None},
+        "rootlab": {"kind": "rank-2-root-system", "rank": 2, "count": 12, "coxeterNumber": 6},
+        "tiling": {"kind": "coxeter-multigrid-tiling", "name": "H2", "families": 5,
+                   "tiles": 702, "edges": 1459},
+    }
+    for view in ["bloom", "e8coxeter", "raymarched"]:
+        expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "obj": None}
+    if exports != expected:
+        fail(f"{label} geometry export integration diverged: {exports}")
+    assert_clean_browser_errors(page_errors, console_errors, label)
+
+
 def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None, label: str = "dev") -> None:
     page, page_errors, console_errors = open_checked_page(browser, base_url + "/index.html", label=label, viewport=viewport)
     assert_layout_accessibility(page, label, 24)
     capture_visual_evidence(page, "desktop-1400x900")
+    exercise_build_parity(page, page_errors, console_errors, label)
     for view in VIEWS:
         page.evaluate("(view) => window.__app.switchView(view)", view)
         page.wait_for_timeout(900)
@@ -1379,6 +1522,7 @@ def exercise_scene_persistence(browser, base_url: str) -> None:
           const pose = {json.dumps(pose)};
           localStorage.setItem('e8_studio_config_v1', JSON.stringify({{
             view: 'dynkin', dynkin: 'E8', palette: 'rainbow',
+            showAmbient: false,
             cameraRotation: pose.theta, cameraPhi: pose.phi,
             cameraDistance: pose.distance,
           }}));
@@ -1501,12 +1645,14 @@ def smoke_browser() -> None:
                 tablet.close()
                 smoke_mobile(browser, base_url)
                 page, page_errors, console_errors = open_checked_page(browser, base_url + "/dist/index.html", label="dist-http")
+                exercise_build_parity(page, page_errors, console_errors, "dist-http")
                 exercise_weyl_chamber(page, page_errors, console_errors, "dist-http-weyl")
                 exercise_gallery_reset(page, page_errors, console_errors, "dist-http-gallery-reset")
                 page.close()
                 page, page_errors, console_errors = open_checked_page(
                     browser, base_url + "/dist/web/index.html", label="web-dist-http"
                 )
+                exercise_build_parity(page, page_errors, console_errors, "web-dist-http")
                 exercise_weyl_chamber(page, page_errors, console_errors, "web-dist-http-weyl")
                 exercise_gallery_reset(page, page_errors, console_errors, "web-dist-http-gallery-reset")
                 page.close()
@@ -1515,6 +1661,7 @@ def smoke_browser() -> None:
                     page, page_errors, console_errors = open_checked_page(
                         browser, standalone.resolve().as_uri(), label="standalone-file"
                     )
+                    exercise_build_parity(page, page_errors, console_errors, "standalone-file")
                     exercise_weyl_chamber(page, page_errors, console_errors, "standalone-file-weyl")
                     page.close()
             finally:

@@ -64,7 +64,7 @@ The Studio is designed to produce work you can keep or use elsewhere:
 
 - **Snapshot** saves the current render as a PNG exactly as it appears.
 - **High-resolution PNG** captures a larger render; **Transparent PNG** removes the background for compositing.
-- **Share** copies the clean hosted E8 Studio link once the project is running on GitHub Pages.
+- **Share** copies a versioned scene link that restores the selected geometry, visual settings, and camera, including Tiling Lab controls. Personal and device preferences stay local.
 - **Video** records an animated WebM clip while the geometry, camera, palettes, and effects continue moving.
 - **Postcard Studio** creates a vertical 9:16 composition with an editable caption for social sharing or presentation.
 - **SVG** exports the E8 Coxeter diagram as editable vector artwork with the active structural coloring.
