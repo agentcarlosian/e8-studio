@@ -14,17 +14,7 @@ assert.deepEqual(MODEL_VIEW_ORDER, [
   'bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin',
 ]);
 
-const expectedExports = {
-  bloom: ['png', 'data'],
-  platonic: ['png', 'obj', 'data'],
-  e8coxeter: ['png', 'svg', 'data'],
-  quasicrystal: ['png', 'data'],
-  polytope: ['png', 'data'],
-  raymarched: ['png', 'data'],
-  rootlab: ['png', 'data'],
-  tiling: ['png', 'data'],
-  dynkin: ['png', 'svg', 'obj', 'data'],
-};
+const expectedExports = Object.fromEntries(MODEL_VIEW_ORDER.map(view => [view, ['png', 'svg', 'obj', 'ply', 'csv', 'data', ...(['platonic','polytope'].includes(view) ? ['3mf','stl'] : [])]]));
 
 for (const view of MODEL_VIEW_ORDER) {
   assert.deepEqual(exportFormatsForView(view), expectedExports[view], `${view} export contract`);

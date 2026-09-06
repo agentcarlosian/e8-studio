@@ -1,3 +1,7 @@
+import { renderModelExport, bindModelExport } from '../ui/model-export.js';
+import { exportModelRecord } from '../services/model-files.js';
+import { convexHullFaces } from '../math/convex-hull.js';
+import { polytopeFaces } from '../math/polytope-faces.js';
 import { createMobileEnvironments } from './backgrounds.js';
 import {
   DEFAULT_STATE,
@@ -650,6 +654,7 @@ const MOBILE_TOUR_RUNTIME_STATE_KEYS = [
   'softFx',
   'fxMode',
   'showVertices',
+  'showFaces',
   'showRootMirrors',
   'showRootChambers',
   'showRootSimple',
@@ -1469,6 +1474,7 @@ function cacheElements() {
   els.mirrorsToggle = document.getElementById('mirrors-toggle');
   els.edgesToggle = document.getElementById('edges-toggle');
   els.verticesToggle = document.getElementById('vertices-toggle');
+  els.facesToggle = document.getElementById('faces-toggle');
   els.modelSelect = document.getElementById('model-select');
   els.bloomTimelineField = document.getElementById('bloom-timeline-field');
   els.bloomTime = document.getElementById('bloom-time');
@@ -1806,6 +1812,7 @@ function bindEvents() {
   els.petrieToggle.addEventListener('change', () => setSettingState({ showPetrie: els.petrieToggle.checked }, 'petrie-toggle'));
   els.mirrorsToggle.addEventListener('change', () => setSettingState({ showMirrors: els.mirrorsToggle.checked }, 'mirrors-toggle'));
   els.edgesToggle.addEventListener('change', () => setSettingState({ showEdges: els.edgesToggle.checked }, 'edges-toggle'));
+  els.facesToggle.addEventListener('change', () => setSettingState({ showFaces: els.facesToggle.checked }, 'faces-toggle'));
   els.verticesToggle.addEventListener('change', () => setSettingState({ showVertices: els.verticesToggle.checked }, 'vertices-toggle'));
   els.rootMirrorsToggle.addEventListener('change', () => setSettingState({ showRootMirrors: els.rootMirrorsToggle.checked }, 'root-mirrors-toggle'));
   els.rootChambersToggle.addEventListener('change', () => setSettingState({ showRootChambers: els.rootChambersToggle.checked }, 'root-chambers-toggle'));
@@ -2059,6 +2066,7 @@ function handleAppAction(action) {
 
 function handleExportAction(action) {
   if (!action) return false;
+  if (action === 'open-export') { openMobileModelExport(); return true; }
   if (action === 'share-png') {
     shareSnapshot();
     return true;
@@ -2244,7 +2252,7 @@ function activeGeometryRecord() {
       dimension: 3,
       verts: cloneJson(shape.verts || []),
       edges: cloneJson(shape.edges || []),
-      faces: cloneJson(shape.faces || []),
+      faces: STAR_SHAPES.has(state.shape) ? cloneJson(shape.faces || []) : convexHullFaces(shape.verts),
       mckay: {
         source,
         symmetry: info.symmetry || null,
@@ -2265,6 +2273,7 @@ function activeGeometryRecord() {
       dimension: 4,
       verts: cloneJson(poly.verts || []),
       edges: cloneJson(poly.edges || []),
+      faces: cloneJson(polytopeFaces(state.polytope4d, poly)),
     };
     if (poly.conjugacy_classes) record.conjugacy_classes = cloneJson(poly.conjugacy_classes);
     return record;
@@ -2391,7 +2400,37 @@ function activeGeometryRecord() {
   };
 }
 
+function openMobileModelExport() {
+  const record = activeObjRecord();
+  if (!record) return;
+  const model = { ...record, edges: record.lines, data: activeGeometryRecord() };
+  // The print builder uses the geometry kind, independent of mobile data labels.
+  if (state.modelMode === 'platonic') model.data = { ...model.data, kind: 'polyhedron' };
+  const dialog = document.createElement('dialog');
+  dialog.className = 'model-export-dialog';
+  dialog.innerHTML = renderModelExport(model, ['platonic', 'poly4d'].includes(state.modelMode));
+  dialog.setAttribute('aria-labelledby', 'model-export-title');
+  document.body.appendChild(dialog);
+  const cleanup = bindModelExport(dialog, {
+    model,
+    download: async (blob, name) => {
+      if (await shareNativeBlob(blob, name, 'E8 Studio model export', 'E8 Studio model')) return;
+      downloadBlob(blob, name);
+    },
+    png: async () => { forceRender(); downloadBlob(await canvasToPngBlob(), `${model.name}.png`); },
+  });
+  dialog.querySelector('[data-modal-close]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => { cleanup(); dialog.remove(); }, { once: true });
+  dialog.showModal();
+}
+
 function activeObjRecord() {
+  if (state.modelMode === 'rootlab') {
+    const model = exportModelRecord(activeGeometryRecord());
+    const record = { ...model, lines: model.edges, pointsOnly: false };
+    record.text = objTextFromParts(record);
+    return record;
+  }
   if (state.modelMode === 'platonic') {
     const shape = platonicGeometry[state.shape];
     if (!shape) return null;
@@ -2400,7 +2439,7 @@ function activeObjRecord() {
       name: state.shape,
       vertices: cloneJson(shape.verts || []),
       lines: cloneJson(shape.edges || []),
-      faces: cloneJson(shape.faces || []),
+      faces: STAR_SHAPES.has(state.shape) ? cloneJson(shape.faces || []) : convexHullFaces(shape.verts),
       pointsOnly: false,
       note: 'Canonical Platonic solid mesh from mobile data.',
     };
@@ -2421,7 +2460,7 @@ function activeObjRecord() {
       name: polyName,
       vertices,
       lines: cloneJson(poly.edges || []),
-      faces: [],
+      faces: cloneJson(polytopeFaces(polyName, poly)),
       pointsOnly: false,
       note: '4D vertices projected into 3D with the current mobile rotation.',
     };
@@ -4337,6 +4376,7 @@ function scenePatchForTarget(target) {
     rootSystem: target.rootSystem || DEFAULT_STATE.rootSystem,
     tilingSystem: target.tilingSystem || DEFAULT_STATE.tilingSystem,
     showVertices: DEFAULT_STATE.showVertices,
+    showFaces: DEFAULT_STATE.showFaces,
     autoRotate: false,
     autoZoom: false,
     autoExtrude: false,
@@ -4465,6 +4505,7 @@ function syncControlValues() {
   els.mirrorsToggle.checked = state.showMirrors;
   els.edgesToggle.checked = state.showEdges;
   els.verticesToggle.checked = state.showVertices;
+  els.facesToggle.checked = state.showFaces;
   syncSubsetControls();
   els.rootRange.value = String(state.selectedRoot ?? 0);
   els.rootOutput.textContent = state.selectedRoot == null ? 'None' : `#${state.selectedRoot}`;
@@ -8524,7 +8565,7 @@ function drawPlatonicModel(layout, paletteSet, drawStats, interactionLiteFrame) 
   const frame = projectedModelFrameMetrics(projected);
 
   let visibleEdges = edges;
-  if (!interactionLiteFrame) {
+  if (!interactionLiteFrame && state.showFaces) {
     const entries = faces
       .map(face => ({
         face,
@@ -8711,6 +8752,22 @@ function drawPolytope4DModel(layout, paletteSet, drawStats, interactionLiteFrame
   const frame = projectedModelFrameMetrics(projected);
 
   const dense = polyName === '600cell' || polyName === '120cell';
+  const faces = polytopeFaces(polyName, poly);
+  drawStats.modelFaces = faces.length;
+  if (state.showFaces && !interactionLiteFrame) {
+    const orderedFaces = faces.map(face => ({ face, depth: face.reduce((z, i) => z + projected[i].z, 0) / face.length })).sort((a, b) => b.depth - a.depth);
+    drawStats.modelFaceFills = orderedFaces.length;
+    ctx.save();
+    ctx.globalAlpha = dense ? 0.045 : 0.16;
+    for (let i = 0; i < orderedFaces.length; i++) {
+      const face = orderedFaces[i].face;
+      ctx.fillStyle = paletteSet.colors[i % paletteSet.colors.length];
+      ctx.beginPath();
+      face.forEach((index, j) => j ? ctx.lineTo(projected[index].x, projected[index].y) : ctx.moveTo(projected[index].x, projected[index].y));
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
   const edgeWidth = dense ? (interactionLiteFrame ? 0.72 : 1.05) : (interactionLiteFrame ? 1.25 : 1.9);
   const edgeAlpha = dense ? (interactionLiteFrame ? 0.58 : 0.74) : (interactionLiteFrame ? 0.82 : 0.96);
   if (state.fxMode === 'ripple') {

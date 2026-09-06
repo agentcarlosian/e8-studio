@@ -111,6 +111,8 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_export_delivery.mjs"])
     run(["node", "scripts/test_image_export_recovery.mjs"])
     run(["node", "scripts/test_geometry_exports.mjs"])
+    run(["node", "scripts/test_model_files.mjs"])
+    run([sys.executable, "scripts/test_print_packages.py"])
     run(["node", "scripts/test_mobile_state.mjs"])
     run(["node", "scripts/test_quantum_orbitals.mjs"])
     run(["node", "scripts/test_curriculum.mjs"])
@@ -501,12 +503,12 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
             const result = {
               cube: { kind: cube.kind, dimension: cube.dimension, vertices: cube.verts.length,
                 edges: cube.edges.length, objVertices: lines(cubeObj, 'v '), objFaces: lines(cubeObj, 'f '),
-                namedObjMatches: app.getOBJ('cube') === cubeObj, svg: app.getCurrentSVG() },
+                namedObjMatches: app.getOBJ('cube') === cubeObj, svg: svgInfo(app.getCurrentSVG()) },
             };
             for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
               const geometry = select(view);
               result[view] = { kind: geometry.kind, dimension: geometry.dimension,
-                count: geometry.roots8d.length, obj: app.getCurrentOBJ() };
+                count: geometry.roots8d.length, objVertices: lines(app.getCurrentOBJ(), 'v ') };
             }
             select('e8coxeter', { showPetrie: true });
             result.e8Svg = svgInfo(app.getCurrentSVG());
@@ -533,7 +535,8 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
     )
     expected = {
         "cube": {"kind": "polyhedron", "dimension": 3, "vertices": 8, "edges": 12,
-                 "objVertices": 8, "objFaces": 12, "namedObjMatches": True, "svg": None},
+                 "objVertices": 8, "objFaces": 12, "namedObjMatches": True,
+                 "svg": {"valid": True, "roots": 0, "circles": 8, "petrie": 0}},
         "e8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
         "legacyE8Svg": {"valid": True, "roots": 240, "circles": 248, "petrie": 1},
         "dynkin": {"kind": "dynkin-diagram", "rank": 8, "nodes": 8, "edges": 7,
@@ -546,7 +549,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                    "tiles": 702, "edges": 1459},
     }
     for view in ["bloom", "e8coxeter", "raymarched"]:
-        expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "obj": None}
+        expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "objVertices": 240}
     if exports != expected:
         fail(f"{label} geometry export integration diverged: {exports}")
     assert_clean_browser_errors(page_errors, console_errors, label)
@@ -933,7 +936,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or scene_workspace["footerActions"] != [
                 "resetConfig", "surprise", "shareSnapshot", "sharePage",
                 "togglePresentationMode", "openVideoExport", "togglePerf",
-                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet", "startQuickStart"
+                "toggleCommandPalette", "copyDiagnostics", "openCheatsheet", "openModelExport", "startQuickStart"
             ]
             or scene_workspace["sdfSurfaceControls"] != 3
             or style_workspace["viewSections"] != 0
@@ -963,7 +966,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
             or "eight concentric rings" not in learn_workspace["orientationText"]):
         fail(f"View/Visuals/Learn workspace contract failed: {sdf_effect_contract}")
     visual_order = style_workspace["subtitles"]
-    expected_order = ["Background", "Palette", "Color shift", "Effects", "Quick looks", "Interface theme", "Export"]
+    expected_order = ["Background", "Palette", "Color shift", "Effects", "Quick looks", "Interface theme"]
     try:
         positions = [visual_order.index(label) for label in expected_order]
     except ValueError:
@@ -1055,8 +1058,12 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       for (const view of ['bloom', 'platonic', 'e8coxeter', 'quasicrystal', 'polytope', 'raymarched', 'rootlab', 'tiling', 'dynkin']) {
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
-        formats[view] = [...document.querySelectorAll('[data-section="style"] [data-act^="export"]')]
-          .map(button => button.textContent.trim());
+        window.__app.setPanelMode(['platonic', 'polytope'].includes(view) ? 'scene' : 'style');
+        window.__app.openModelExport();
+        formats[view] = [...document.querySelectorAll('#learning-modal [data-file-format]')]
+          .filter(button => button.getClientRects().length)
+          .map(button => button.dataset.fileFormat);
+        document.querySelector('#learning-modal [data-modal-close]').click();
       }
       window.__app.switchView('dynkin');
       window.__app.setDynkin('E8');
@@ -1072,17 +1079,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         },
       };
     }""")
-    expected_export_formats = {
-        "bloom": ["PNG", "Data"],
-        "platonic": ["PNG", "OBJ", "Data"],
-        "e8coxeter": ["PNG", "SVG", "Data"],
-        "quasicrystal": ["PNG", "Data"],
-        "polytope": ["PNG", "Data"],
-        "raymarched": ["PNG", "Data"],
-        "rootlab": ["PNG", "Data"],
-        "tiling": ["PNG", "Data"],
-        "dynkin": ["PNG", "SVG", "OBJ", "Data"],
-    }
+    expected_export_formats = {view: ['png','svg','obj','ply','csv','data'] + (['3mf','stl'] if view in ['platonic','polytope'] else [])
+                               for view in ['bloom','platonic','e8coxeter','quasicrystal','polytope','raymarched','rootlab','tiling','dynkin']}
     if export_contract["formats"] != expected_export_formats:
         fail(f"View-aware export buttons drifted: {export_contract['formats']}")
     dynkin_export = export_contract["dynkin"]
@@ -1715,6 +1713,7 @@ td,th{{border:1px solid #2a2a3a;padding:8px;text-align:left}}
 
 
 def check_studio_ui() -> None:
+    run([sys.executable, "scripts/test_shape_controls.py"])
     run([sys.executable, "scripts/test_quick_start.py"])
     run([sys.executable, "scripts/test_studio_ui.py"])
     run([sys.executable, "scripts/test_learning_center.py"])

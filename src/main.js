@@ -9,6 +9,8 @@
 
 import * as THREE from 'three';
 import * as simplexNoise from 'simplex-noise';
+import { exportModelRecord } from './services/model-files.js';
+import { renderModelExport, bindModelExport } from './ui/model-export.js';
 import { createGeometryExporters } from './services/geometry-export.js';
 import { createQuickStart } from './ui/quick-start.js';
 import { renderLearningCenter, bindLearningCenterNavigation } from './ui/learning-center.js';
@@ -1428,6 +1430,7 @@ function defaultParams() {
     bloomSpeed: 0.05,
     pointScale: 1,
     showVertices: false,
+    showFaces: true,
     showEdges: false,
     showRings: true,
     showPetrie: false,       // toggle real Hamiltonian 30-cycle (Petrie polygon)
@@ -1656,6 +1659,7 @@ function normalizeParams(target) {
   if (typeof target.autoModel !== 'boolean') target.autoModel = false;
   if (typeof target.autoFx !== 'boolean') target.autoFx = false;
   if (typeof target.showVertices !== 'boolean') target.showVertices = false;
+  if (typeof target.showFaces !== 'boolean') target.showFaces = true;
   for (const key of ['rootShowMirrors', 'rootShowChambers', 'rootShowSimple', 'rootShowOrbit']) {
     if (typeof target[key] !== 'boolean') target[key] = true;
   }
@@ -2006,9 +2010,9 @@ function svgEsc(value) {
 
 // Scene serialization is independent of the renderer and delivery platform.
 function objForShape(name) { return createGeometryExporters(DATA, params).objForShape(name); }
-function objForCurrentView() { return createGeometryExporters(DATA, params).objForCurrentView(); }
+function objForCurrentView() { return createGeometryExporters(DATA, params).objForCurrentView(currentView?.getProjectedVertices?.()); }
 function geometryForView() { return createGeometryExporters(DATA, params).geometryForView(); }
-function svgForCurrentView() { return createGeometryExporters(DATA, params).svgForCurrentView(); }
+function svgForCurrentView() { return createGeometryExporters(DATA, params).svgForCurrentView(currentView?.getProjectedVertices?.()); }
 function svgForCurrentE8() { return createGeometryExporters(DATA, params).svgForCurrentE8(); }
 
 function ensurePerfOverlay() {
@@ -3730,6 +3734,17 @@ window.__app = {
     }
     return info;
   },
+  openModelExport() {
+    try {
+      const model = exportModelRecord(geometryForView(), currentView?.getProjectedVertices?.());
+      const host = showLearningModal(renderModelExport(model, ['platonic', 'polytope'].includes(params.view)));
+      const savedSvg = ['e8coxeter', 'dynkin'].includes(params.view) ? svgForCurrentView() : null;
+      learningCenterCleanup = bindModelExport(host, {
+        model, download: (blob, name) => exportRecording.downloadBlob(blob, name, 'E8 Studio model export'),
+        png: async () => { if (!await app.exportHighResPNG(2)) throw new Error('PNG could not be created.'); }, svg: () => savedSvg,
+      });
+    } catch (error) { showSavedToast(`Export unavailable: ${error.message}`); }
+  },
   exportHighResPNG(scale = 2) {
     return exportRecording.exportHighResPNG({ renderer, camera, scene, scale });
   },
@@ -3742,7 +3757,7 @@ window.__app = {
       showSavedToast('SVG is not available for this view');
       return null;
     }
-    const name = params.view === 'dynkin' ? `dynkin_${params.dynkin}.svg` : 'e8_coxeter.svg';
+    const name = `${geometryForView()?.name || params.view}.svg`;
     downloadText(svg, name, 'image/svg+xml');
     showSavedToast('Saved SVG');
     return svg;
@@ -3756,7 +3771,7 @@ window.__app = {
       showSavedToast('OBJ is not available for this view');
       return null;
     }
-    const subject = params.view === 'dynkin' ? `dynkin_${params.dynkin}` : params.shape;
+    const subject = params.view === 'dynkin' ? `dynkin_${params.dynkin}` : params.view === 'polytope' ? `${params.poly4d}_projection` : (geometryForView()?.name || params.view);
     downloadText(obj, `${subject}.obj`, 'text/plain');
     showSavedToast(`Saved ${subject}.obj`);
     return obj;
@@ -3910,6 +3925,7 @@ window.__app = {
     refreshPanel();
     showSavedToast(params.autoModel ? 'Auto model on' : 'Auto model off');
   },
+  toggleFaces() { updateParam('showFaces', !params.showFaces); },
   toggleVertices() {
     updateParam('showVertices', !params.showVertices);
   },

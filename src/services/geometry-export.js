@@ -1,3 +1,5 @@
+import { exportModelRecord, modelOBJ, modelSVG } from './model-files.js';
+import { convexHullFaces } from '../math/convex-hull.js';
 import { colorAt, e8ColoringT } from '../ui/palettes.js';
 import { getStellation } from '../math/stellations.js';
 import { deformPlatonicVert, morphActive } from '../math/morph.js';
@@ -5,6 +7,7 @@ import { generateRank2RootSystem } from '../math/rank2-roots.js';
 import { generateCoxeterTiling } from '../math/coxeter-tilings.js';
 import { generateE8Quasicrystal } from '../math/e8-quasicrystal.js';
 import { viewSupportsExport } from '../state/model-registry.js';
+import { polytopeFaces } from '../math/polytope-faces.js';
 
 // Pure document serializers: no renderer, browser storage, or delivery effects.
 // Each context uses the caller's current scene so resets cannot leave stale state.
@@ -31,22 +34,27 @@ export function createGeometryExporters(DATA, params) {
   // Resolve a shape name to its raw geometry (3-D convex Platonic solid or
   // self-intersecting Kepler–Poinsot star), regardless of the current view.
   function shapeGeometry(name) {
-    if (DATA.platonic && DATA.platonic[name]) return DATA.platonic[name];
+    if (DATA.platonic && DATA.platonic[name]) {
+      const shape = DATA.platonic[name];
+      return { ...shape, faces: convexHullFaces(shape.verts) };
+    }
     const st = getStellation(name);
     return st ? { verts: st.verts, edges: st.edges, faces: st.faces } : null;
   }
 
   // The active Platonic morph (twist/spike/jitter) — exports apply it so a morphed
-  // solid exports exactly as it renders (3D-print your twisted creation).
+  // solid retains those geometric deformations; camera orientation is excluded.
   function currentMorph() {
     return { twist: params.shapeTwist || 0, spike: params.shapeSpike || 0, jitter: params.shapeJitter || 0 };
   }
   function morphedVerts(verts, m) {
-    return morphActive(m) ? verts.map(v => deformPlatonicVert(v[0], v[1], v[2], m)) : verts;
+    const deformed = morphActive(m) ? verts.map(v => deformPlatonicVert(v[0], v[1], v[2], m)) : verts;
+    const e = params.e8MorphT || 0;
+    return deformed.map(([x,y,z]) => [x*(1-.08*e), y*(1-.08*e), z*(1+.75*e)]);
   }
 
   // Wavefront OBJ for a Platonic/star solid — the universal 3-D interchange format
-  // (imports into Blender / Unity / Maya, and 3-D-prints directly). OBJ indices
+  // (imports into Blender / Unity / Maya). OBJ indices
   // are 1-based. `l` lines carry the wireframe edges alongside the `f` faces.
   function objForShape(name) {
     const g = shapeGeometry(name);
@@ -76,11 +84,22 @@ export function createGeometryExporters(DATA, params) {
     return text;
   }
 
-  function objForCurrentView() {
+  function objForCurrentView(projectedVertices = null) {
     if (!viewSupportsExport(params.view, 'obj')) return null;
     if (params.view === 'platonic') return objForShape(params.shape);
     if (params.view === 'dynkin') return objForDynkin(params.dynkin);
-    return null;
+    if (params.view === 'polytope') {
+      const poly = DATA.polytopes4d?.[params.poly4d];
+      if (!poly || !projectedVertices || projectedVertices.length !== poly.verts.length
+          || !projectedVertices.every(v => v.length === 3 && v.every(Number.isFinite))) return null;
+      const rows = [`# E8 Studio: ${params.poly4d}, current 4D-to-3D projection`,
+        '# Projected polygonal 2-faces; not a closed 3D printing volume.', `o ${params.poly4d}`];
+      for (const v of projectedVertices) rows.push(`v ${v.map(n => n.toFixed(6)).join(' ')}`);
+      for (const f of polytopeFaces(params.poly4d, poly)) rows.push(`f ${f.map(i => i + 1).join(' ')}`);
+      for (const e of poly.edges) rows.push(`l ${e.map(i => i + 1).join(' ')}`);
+      return rows.join('\n') + '\n';
+    }
+    return modelOBJ(exportModelRecord(geometryForView(), projectedVertices));
   }
 
   // A clean, documented geometry record for the CURRENT view — portable to any
@@ -92,7 +111,7 @@ export function createGeometryExporters(DATA, params) {
     const v = params.view;
     if (v === 'polytope') {
       const p = DATA.polytopes4d?.[params.poly4d];
-      return p && { ...meta, kind: '4d-polytope', name: params.poly4d, dimension: 4, verts: p.verts, edges: p.edges };
+      return p && { ...meta, kind: '4d-polytope', name: params.poly4d, dimension: 4, verts: p.verts, edges: p.edges, faces: polytopeFaces(params.poly4d, p) };
     }
     if (v === 'sixhundred') {
       const p = DATA.polytopes4d?.['600cell'];
@@ -283,11 +302,12 @@ export function createGeometryExporters(DATA, params) {
   </svg>`;
   }
 
-  function svgForCurrentView() {
+  function svgForCurrentView(projectedVertices = null) {
     if (!viewSupportsExport(params.view, 'svg')) return null;
     if (params.view === 'e8coxeter') return svgForCurrentE8();
     if (params.view === 'dynkin') return svgForCurrentDynkin();
-    return null;
+    if ((params.view === 'polytope' || params.view === 'sixhundred') && !projectedVertices) return null;
+    return modelSVG(exportModelRecord(geometryForView(), projectedVertices));
   }
 
   return { objForShape, objForCurrentView, geometryForView, svgForCurrentView, svgForCurrentE8 };

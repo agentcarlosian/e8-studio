@@ -18,7 +18,7 @@ import { THEMES, THEME_LABELS } from './theme.js';
 import { CODE_ART_SHADERS } from '../content/essays.js';
 import { BADGE_INFO } from '../content/learning.js';
 import { activeViewModifiers } from '../state/selection-policy.js';
-import { exportFormatsForView, viewCapabilities } from '../state/model-registry.js';
+import { viewCapabilities } from '../state/model-registry.js';
 import { STELLATION_NAMES, STELLATION_LABELS, STELLATION_INFO } from '../math/stellations.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEM_ORDER } from '../math/rank2-roots.js';
 import { COXETER_TILING_ORDER, generateCoxeterTiling } from '../math/coxeter-tilings.js';
@@ -267,6 +267,7 @@ function renderViewSection(params, data, uiState = {}) {
       // point-sphere toggle discoverable even though the optional morph tools
       // move into a disclosure below.
       html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
+      html += toggle('Colored faces', params.showFaces !== false, 'toggleFaces');
 
       // Camera and motion are the primary way users explore a solid. Present
       // them in full where the old Morph block used to dominate the panel.
@@ -490,6 +491,7 @@ function renderPolytopeControls(params, data) {
   }
   html += '</div>';
   html += toggle('Vertex nodes', !!params.showVertices, 'toggleVertices');
+      html += toggle('Colored faces', params.showFaces !== false, 'toggleFaces');
   html += '<div class="ps-subtitle">4D projection</div>';
   html += '<div class="ps-help">Change how strongly the fourth coordinate affects the 3D projection.</div>';
   html += slider('4D depth', 'morph4d', params.morph4d || 0, -2, 2, 0.01, v => v.toFixed(2));
@@ -636,13 +638,6 @@ function renderStyleSection(params, data, uiState = {}) {
   }
   html += '</div>';
 
-  const exportFormats = exportFormatsForView(params.view);
-  html += '<div class="ps-subtitle">Export</div><div class="seg seg-wrap">';
-  if (exportFormats.includes('png')) html += '<button data-act="exportHighResPNG" data-arg="2" title="High-resolution image of this view">PNG</button>';
-  if (exportFormats.includes('svg')) html += '<button data-act="exportSVG" title="Scalable vector diagram of this view">SVG</button>';
-  if (exportFormats.includes('obj')) html += '<button data-act="exportOBJ" title="Wavefront geometry for this view">OBJ</button>';
-  if (exportFormats.includes('data')) html += '<button data-act="exportGeometryJSON" title="Canonical model data as JSON">Data</button>';
-  html += '</div>';
 
   html += '</div>';
   return html;
@@ -1169,6 +1164,7 @@ export class ControlPanel {
               <button data-act="toggleCommandPalette" title="Open the command palette">Commands</button>
               <button data-act="copyDiagnostics" title="Copy browser and renderer diagnostics">Diagnostics</button>
               <button data-act="openCheatsheet" title="Open keyboard shortcuts">Keyboard help</button>
+              <button data-act="openModelExport" title="Export images, geometry, data, and print files">Export</button>
               <button data-act="startQuickStart">Guided introduction</button>
             </div>
           </details>

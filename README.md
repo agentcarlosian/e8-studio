@@ -50,7 +50,7 @@ E8 Studio is both an explorer and a generative visual instrument. You can:
 
 - Choose from dozens of curated color palettes, including mathematically driven E8 color modes.
 - Place the geometry in white clouds, galactic star fields, engraved gold mandalas, flowing neon plasma, sampled hydrogen probability clouds, ocean surf, white hurricanes, amber eclipses, and other procedural backgrounds. Tide and Ember replace Grid and Barset; saved scenes migrate automatically. The traced ocean uses High quality on desktop; Mobile Low keeps a simpler animated sea.
-- Use the focused **Visuals** workspace for the complete palette, color-shift, background, effect, lighting, quick-look, theme, and export controls.
+- Use the focused **Visuals** workspace for the complete palette, color-shift, background, effect, lighting, quick-look, and theme controls. Open **Tools → Export** for downloadable files.
 - Apply view-aware shader effects: point and mesh views expose the full compatible catalog, while E8 SDF provides native Glow, Pulse, Heat, Iridescent, Hologram, and X-ray surface treatments.
 - Animate individual sliders, extrusion, rotations, morphs, palette shifts, and camera movement.
 - Spin the model itself, move the camera independently with Orbit, Dive, or Spiral, or take direct control with drag, scroll, and touch gestures.
@@ -67,9 +67,13 @@ The Studio is designed to produce work you can keep or use elsewhere:
 - **Share** copies a versioned scene link that restores the selected geometry, visual settings, and camera, including Tiling Lab controls. Personal and device preferences stay local.
 - **Video** records an animated WebM clip while the geometry, camera, palettes, and effects continue moving.
 - **Postcard Studio** creates a vertical 9:16 composition with an editable caption for social sharing or presentation.
-- **SVG** exports the E8 Coxeter diagram as editable vector artwork with the active structural coloring.
-- **OBJ** exports the selected Platonic or star solid, including supported live deformations, for Blender, CAD, or 3D workflows.
-- **JSON** exports canonical geometry and metadata for custom visualization, analysis, or teaching material.
+- **Tools → Export** opens one panel for every model; mobile has **Share and tools → Export**.
+- **SVG** saves an editable XY diagram; E8 and Dynkin retain their specialized desktop diagrams.
+- **OBJ** and **PLY** save geometry for modeling tools. **CSV** saves the corresponding XYZ coordinate table.
+- **JSON** exports original geometry and metadata, retaining native 4D and 8D coordinates.
+- **STL** and **3MF** turn Platonic solids and 4D projections into sized print meshes. Choose a solid convex hull for regular Platonic solids or joined struts for a frame. 3MF stores millimeter units; import STL as millimeters. Check supports and thin features in your slicer.
+
+Geometry files describe the mathematical model; shader effects belong in PNG. See the [format and printing guide](docs/architecture/model-exports.md) for per-model details and limitations.
 
 Exports are generated locally. The hosted Studio does not require an account or send your render to a server.
 

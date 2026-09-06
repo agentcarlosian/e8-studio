@@ -52,6 +52,7 @@ const DEFAULT_STATE = {
   showMirrors: false,
   showEdges: true,
   showVertices: false,
+  showFaces: true,
   showRootMirrors: true,
   showRootChambers: true,
   showRootSimple: true,
@@ -269,6 +270,7 @@ function normalizeMobileState(next, { learnTopicIds = null } = {}) {
   if (typeof next.showMirrors !== 'boolean') next.showMirrors = false;
   if (typeof next.showEdges !== 'boolean') next.showEdges = DEFAULT_STATE.showEdges;
   if (typeof next.showVertices !== 'boolean') next.showVertices = false;
+  if (typeof next.showFaces !== 'boolean') next.showFaces = true;
   if (typeof next.showRootMirrors !== 'boolean') next.showRootMirrors = DEFAULT_STATE.showRootMirrors;
   if (typeof next.showRootChambers !== 'boolean') next.showRootChambers = DEFAULT_STATE.showRootChambers;
   if (typeof next.showRootSimple !== 'boolean') next.showRootSimple = DEFAULT_STATE.showRootSimple;

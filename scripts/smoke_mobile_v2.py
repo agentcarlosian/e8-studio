@@ -993,7 +993,7 @@ def main() -> int:
             poly_data = page.evaluate("() => window.__mobileApp.copyModelData({ copy: false, download: false })")
             check("geometry data export follows 4D polytope", poly_data["ok"] and poly_data["geometry"]["kind"] == "4d-polytope" and poly_data["geometry"]["name"] == "600cell" and len(poly_data["geometry"]["verts"]) == 120 and len(poly_data["geometry"]["edges"]) == 720, str(poly_data["geometry"].keys()))
             poly_obj = page.evaluate("() => window.__mobileApp.copyModelObj({ copy: false, download: false })")
-            check("OBJ export follows projected 4D polytope", poly_obj["ok"] and poly_obj["obj"]["kind"] == "4d-polytope-projected-obj" and poly_obj["obj"]["name"] == "600cell" and poly_obj["obj"]["vertices"] == 120 and poly_obj["obj"]["lines"] == 720 and poly_obj["obj"]["faces"] == 0, str(poly_obj["obj"]))
+            check("OBJ export follows projected 4D polytope", poly_obj["ok"] and poly_obj["obj"]["kind"] == "4d-polytope-projected-obj" and poly_obj["obj"]["name"] == "600cell" and poly_obj["obj"]["vertices"] == 120 and poly_obj["obj"]["lines"] == 720 and poly_obj["obj"]["faces"] == 1200, str(poly_obj["obj"]))
             page.evaluate("() => window.__mobileApp.openSettings('view')")
             page.locator("#polytope4d-select").evaluate("el => { el.value = '120cell'; el.dispatchEvent(new Event('change', { bubbles: true })); }")
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
@@ -1011,6 +1011,14 @@ def main() -> int:
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
             vertices_off = page.evaluate("() => ({ state: window.__mobileApp.getState(), metrics: window.__mobileApp.getMetrics() })")
             check("Vertex nodes toggle removes optional point markers cleanly", not vertices_off["state"]["showVertices"] and vertices_off["metrics"]["lastDrawStats"]["modelVertexFills"] == 0, str(vertices_off))
+            for mode, count in [('platonic', 20), ('poly4d', 720)]:
+                page.evaluate("mode => window.__mobileApp.setState({modelMode: mode, shape: 'icosahedron', polytope4d: '120cell'})", mode)
+                for enabled in [False, True]:
+                    page.evaluate("() => window.__mobileApp.openSettings('view')")
+                    page.locator('#faces-toggle').set_checked(enabled)
+                    page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.forceRender(); }")
+                    face_state = page.evaluate("() => ({state:window.__mobileApp.getState(), draw:window.__mobileApp.getMetrics().lastDrawStats})")
+                    check(f"{mode} colored faces {'on' if enabled else 'off'}", face_state['state']['showFaces'] == enabled and face_state['draw']['modelFaceFills'] == (count if enabled else 0), str(face_state['draw']))
             page.evaluate("() => { window.__mobileApp.closeSettings(); window.__mobileApp.setState({ modelMode: 'poly4d', polytope4d: '24cell', autoModel: true, autoRotate: true, autoColor: false, softFx: false, rotation: 0 }); window.__mobileApp.forceRender(); }")
             poly_auto_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.wait_for_function("before => window.__mobileApp.getMetrics().autoModelSwitchCount > before && window.__mobileApp.getState().modelMode === 'poly4d'", arg=poly_auto_before["autoModelSwitchCount"], timeout=4000)

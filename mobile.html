@@ -365,6 +365,10 @@
               <input id="edges-toggle" type="checkbox">
             </label>
             <label class="toggle-row" data-model-context="vertex-models">
+              <span><strong>Colored faces</strong><small>Fill the faces of solids and projected 4D polytopes.</small></span>
+              <input id="faces-toggle" type="checkbox">
+            </label>
+            <label class="toggle-row" data-model-context="vertex-models">
               <span>
                 <strong>Vertex nodes</strong>
                 <small>Show point markers on solids and 4D polytopes.</small>
@@ -641,6 +645,7 @@
             <details id="mobile-tools-details" class="mobile-disclosure">
               <summary>Share and tools</summary>
               <div class="mobile-disclosure-body">
+                <div class="info-actions"><div><strong>Export model</strong><small>Images, geometry, data, STL and 3MF.</small></div><button type="button" data-export-action="open-export">Export</button></div>
                 <div class="info-actions" aria-label="Export"><div><strong>Snapshot</strong><small>Share the current canvas as a PNG.</small></div><button id="share-png" type="button" data-export-action="share-png">Share PNG</button></div>
                 <div class="info-actions" aria-label="Postcard"><div><strong>Postcard</strong><small>Create a 9:16 share image with the active scene caption.</small></div><button id="share-postcard" type="button" data-export-action="share-postcard">Postcard</button></div>
                 <div class="info-actions" aria-label="Geometry data"><div><strong>Data</strong><small>Copy the active model geometry as JSON.</small></div><button id="copy-data" type="button" data-export-action="copy-data">Copy JSON</button></div>

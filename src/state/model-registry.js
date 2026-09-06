@@ -13,19 +13,19 @@ export const MODEL_REGISTRY = Object.freeze({
   bloom: Object.freeze({
     label: 'E8 Bloom',
     shortLabel: 'Bloom',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: true, rotate: true, lighting: false, bloom: true, e8: false, poly: false, sdf: false, extrude: true, math: false }),
   }),
   platonic: Object.freeze({
     label: 'Platonic Solid',
     shortLabel: 'Platonic',
-    exports: Object.freeze(['png', 'obj', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data', '3mf', 'stl']),
     controls: Object.freeze({ shape: true, rotate: true, lighting: true, bloom: false, e8: false, poly: false, sdf: false, extrude: true, math: 'platonic' }),
   }),
   e8coxeter: Object.freeze({
     label: 'E8 Coxeter Plane',
     shortLabel: 'E8',
-    exports: Object.freeze(['png', 'svg', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: true, rotate: true, lighting: false, bloom: false, e8: true, poly: false, sdf: false, extrude: true, math: 'e8', coloring: true }),
   }),
   sixhundred: Object.freeze({
@@ -37,37 +37,37 @@ export const MODEL_REGISTRY = Object.freeze({
   quasicrystal: Object.freeze({
     label: 'E8 Quasicrystal Lab',
     shortLabel: 'Quasi',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'quasicrystal' }),
   }),
   polytope: Object.freeze({
     label: '4D Polytope',
     shortLabel: '4D',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data', '3mf', 'stl']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: true, bloom: false, e8: false, poly: true, sdf: false, extrude: true, math: false }),
   }),
   raymarched: Object.freeze({
     label: 'E8 SDF',
     shortLabel: 'SDF',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: true, extrude: true, math: false }),
   }),
   rootlab: Object.freeze({
     label: 'Root System Lab',
     shortLabel: 'Root Lab',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'rootlab' }),
   }),
   tiling: Object.freeze({
     label: 'Coxeter Tiling Lab',
     shortLabel: 'Tilings',
-    exports: Object.freeze(['png', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'tiling' }),
   }),
   dynkin: Object.freeze({
     label: 'Dynkin Diagram',
     shortLabel: 'Dynkin',
-    exports: Object.freeze(['png', 'svg', 'obj', 'data']),
+    exports: Object.freeze(['png', 'svg', 'obj', 'ply', 'csv', 'data']),
     controls: Object.freeze({ shape: false, rotate: true, lighting: false, bloom: false, e8: false, poly: false, sdf: false, extrude: false, math: 'dynkin' }),
   }),
 });
