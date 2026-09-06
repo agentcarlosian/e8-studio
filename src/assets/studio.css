@@ -99,6 +99,10 @@ body > main > .ov {
 body > main > .ov h2 { font-size: 12px; }
 body[data-theme="dark-gold"] { --studio-muted: #a5a094; }
 /* The phone keeps its dedicated full-height drawer and unobstructed canvas. */
+body.desktop-touch-shell > main > .ov {
+  padding: 0; border: 0;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bg-0) 92%, transparent);
+}
 body.desktop-touch-shell #panel .view-card { min-height: 80px; font-size: 12px; }
 body.desktop-touch-shell #panel .ps-mode-tabs button { min-height: 44px; }
 body.desktop-touch-shell #panel .seg button, body.desktop-touch-shell #panel .shape-pill { min-height: 44px; font-size: 12px; }

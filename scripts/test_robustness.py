@@ -464,7 +464,8 @@ def main() -> int:
                   global_quality["low"]["chip"] == "Low"
                   and global_quality["low"]["buttons"] == ["Low", "Balanced", "High"]
                   and global_quality["low"]["disabled"] > 0
-                  and global_quality["low"]["backgrounds"] == 4
+                  # Tide's detailed surface is reserved for High quality.
+                  and global_quality["low"]["backgrounds"] == 3
                   and global_quality["high"]["quality"] == "high"
                   and global_quality["high"]["reduced"] is False
                   and global_quality["high"]["chip"] == "High"
