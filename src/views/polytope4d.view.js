@@ -334,8 +334,16 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     },
 
     getProjectedVertices() {
-      const positions = group.userData.vPoints.geometry.attributes.position;
-      return Array.from({ length: positions.count }, (_, i) => [positions.getX(i), positions.getY(i), positions.getZ(i)]);
+      // Export can be requested between a selection change and the next frame.
+      // Compute from the active parameters instead of reading a zeroed/stale GPU buffer.
+      const params = runtimeParams(), name = params.poly4d || lastPoly;
+      const poly = data.polytopes4d[name];
+      const angles = params.polyAutoRotate ? [angleXY,angleZW,angleXZ,angleYW,angleXW,angleYZ]
+        : ['polyRotXY','polyRotZW','polyRotXZ','polyRotYW','polyRotXW','polyRotYZ'].map(key => params[key] || 0);
+      const matrix = computeRotation(...angles);
+      const depth = (params.morph4d || 0) + (params.e8MorphT || 0) * 1.25;
+      const radius = name === 'tesseract' ? baseScale * 0.6 : baseScale;
+      return poly.verts.map(v => project4to3(apply4(matrix,v),depth).map(x => Math.fround(x*radius)));
     },
 
     dispose() {

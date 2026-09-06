@@ -111,6 +111,8 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_export_delivery.mjs"])
     run(["node", "scripts/test_image_export_recovery.mjs"])
     run(["node", "scripts/test_geometry_exports.mjs"])
+    run(["node", "scripts/test_model_files.mjs"])
+    run([sys.executable, "scripts/test_print_packages.py"])
     run(["node", "scripts/test_mobile_state.mjs"])
     run(["node", "scripts/test_quantum_orbitals.mjs"])
     run(["node", "scripts/test_curriculum.mjs"])
@@ -1056,9 +1058,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         window.__app.switchView(view);
         window.__app.setPanelMode('style');
         window.__app.setPanelMode(['platonic', 'polytope'].includes(view) ? 'scene' : 'style');
-        formats[view] = [...document.querySelectorAll('#panel [data-act^="export"]')]
+        window.__app.openModelExport();
+        formats[view] = [...document.querySelectorAll('#learning-modal [data-file-format]')]
           .filter(button => button.getClientRects().length)
-          .map(button => button.textContent.trim());
+          .map(button => button.dataset.fileFormat);
+        document.querySelector('#learning-modal [data-modal-close]').click();
       }
       window.__app.switchView('dynkin');
       window.__app.setDynkin('E8');
@@ -1074,17 +1078,8 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         },
       };
     }""")
-    expected_export_formats = {
-        "bloom": ["PNG", "JSON"],
-        "platonic": ["PNG", "OBJ", "JSON"],
-        "e8coxeter": ["PNG", "SVG", "JSON"],
-        "quasicrystal": ["PNG", "JSON"],
-        "polytope": ["PNG", "OBJ · 3D projection", "JSON"],
-        "raymarched": ["PNG", "JSON"],
-        "rootlab": ["PNG", "JSON"],
-        "tiling": ["PNG", "JSON"],
-        "dynkin": ["PNG", "SVG", "OBJ", "JSON"],
-    }
+    expected_export_formats = {view: ['png','svg','obj','ply','csv','data'] + (['3mf','stl'] if view in ['platonic','polytope'] else [])
+                               for view in ['bloom','platonic','e8coxeter','quasicrystal','polytope','raymarched','rootlab','tiling','dynkin']}
     if export_contract["formats"] != expected_export_formats:
         fail(f"View-aware export buttons drifted: {export_contract['formats']}")
     dynkin_export = export_contract["dynkin"]

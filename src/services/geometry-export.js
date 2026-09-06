@@ -1,3 +1,4 @@
+import { exportModelRecord, modelOBJ, modelSVG } from './model-files.js';
 import { convexHullFaces } from '../math/convex-hull.js';
 import { colorAt, e8ColoringT } from '../ui/palettes.js';
 import { getStellation } from '../math/stellations.js';
@@ -42,16 +43,18 @@ export function createGeometryExporters(DATA, params) {
   }
 
   // The active Platonic morph (twist/spike/jitter) — exports apply it so a morphed
-  // solid exports exactly as it renders (3D-print your twisted creation).
+  // solid retains those geometric deformations; camera orientation is excluded.
   function currentMorph() {
     return { twist: params.shapeTwist || 0, spike: params.shapeSpike || 0, jitter: params.shapeJitter || 0 };
   }
   function morphedVerts(verts, m) {
-    return morphActive(m) ? verts.map(v => deformPlatonicVert(v[0], v[1], v[2], m)) : verts;
+    const deformed = morphActive(m) ? verts.map(v => deformPlatonicVert(v[0], v[1], v[2], m)) : verts;
+    const e = params.e8MorphT || 0;
+    return deformed.map(([x,y,z]) => [x*(1-.08*e), y*(1-.08*e), z*(1+.75*e)]);
   }
 
   // Wavefront OBJ for a Platonic/star solid — the universal 3-D interchange format
-  // (imports into Blender / Unity / Maya, and 3-D-prints directly). OBJ indices
+  // (imports into Blender / Unity / Maya). OBJ indices
   // are 1-based. `l` lines carry the wireframe edges alongside the `f` faces.
   function objForShape(name) {
     const g = shapeGeometry(name);
@@ -96,7 +99,7 @@ export function createGeometryExporters(DATA, params) {
       for (const e of poly.edges) rows.push(`l ${e.map(i => i + 1).join(' ')}`);
       return rows.join('\n') + '\n';
     }
-    return null;
+    return modelOBJ(exportModelRecord(geometryForView(), projectedVertices));
   }
 
   // A clean, documented geometry record for the CURRENT view — portable to any
@@ -299,11 +302,12 @@ export function createGeometryExporters(DATA, params) {
   </svg>`;
   }
 
-  function svgForCurrentView() {
+  function svgForCurrentView(projectedVertices = null) {
     if (!viewSupportsExport(params.view, 'svg')) return null;
     if (params.view === 'e8coxeter') return svgForCurrentE8();
     if (params.view === 'dynkin') return svgForCurrentDynkin();
-    return null;
+    if ((params.view === 'polytope' || params.view === 'sixhundred') && !projectedVertices) return null;
+    return modelSVG(exportModelRecord(geometryForView(), projectedVertices));
   }
 
   return { objForShape, objForCurrentView, geometryForView, svgForCurrentView, svgForCurrentE8 };

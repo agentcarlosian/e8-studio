@@ -60,6 +60,7 @@
     "android:debug": "npm run mobile:build && npx cap run android",
     "android:aab": "npm run mobile:build && cd android && gradlew.bat bundleRelease",
     "pwa": "npm run build:offline && echo 'PWA dist ready in dist/ - serve with: python -m http.server 8771'",
+    "test:model-files": "node scripts/test_model_files.mjs",
     "test:geometry-exports": "node scripts/test_geometry_exports.mjs",
     "test:mobile-state": "node scripts/test_mobile_state.mjs",
     "test:quick-start": "python scripts/test_quick_start.py",

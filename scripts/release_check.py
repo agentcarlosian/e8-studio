@@ -103,6 +103,7 @@ def main() -> int:
         run([sys.executable, "scripts/build_release_artifacts.py"])
         check_release_artifacts()
         run([sys.executable, "scripts/test_share_artifacts.py"])
+        run([sys.executable, "scripts/test_export_panel.py", "--mobile-url", "/dist/e8-studio-mobile-v2.html"])
         check_worktree_clean()
     except (AssertionError, subprocess.CalledProcessError) as exc:
         print(f"RELEASE CHECK FAILED: {exc}", file=sys.stderr)

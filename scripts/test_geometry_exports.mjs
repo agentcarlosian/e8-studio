@@ -24,7 +24,7 @@ assert.match(twisted.objForCurrentView(), /# morph: twist=1/);
 for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
   const out = make({ view });
   assert.equal(out.geometryForView().roots8d.length, 240);
-  assert.equal(out.objForCurrentView(), null);
+  assert.equal(out.objForCurrentView().split('\nv ').length - 1, 240);
 }
 const svg = make({ view: 'e8coxeter', showPetrie: true }).svgForCurrentView();
 assert.equal((svg.match(/<title>E8 root /g) || []).length, 240);

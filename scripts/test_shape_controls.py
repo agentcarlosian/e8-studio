@@ -20,17 +20,17 @@ def main():
                 for name in names:
                     page.evaluate("o=>window.__app[o.view==='platonic'?'setShape':'setPoly4d'](o.name)", {'view':view,'name':name})
                     page.wait_for_timeout(120)
-                    button = page.locator('[data-section="view"] [data-act="exportOBJ"]')
-                    # The View workspace exposes both downloads without visiting Visuals.
-                    if not button.count(): button = page.locator('#panel [data-act="exportOBJ"]')
+                    page.evaluate('window.__app.openModelExport()')
+                    button = page.locator('[data-file-format="obj"]')
                     assert button.is_visible(), name
                     with page.expect_download() as event: button.click()
                     event.value.save_as(out / (name + '.obj'))
+                    page.locator('[data-modal-close]').click()
                     obj = (out / (name + '.obj')).read_text(encoding='utf-8')
                     vertices = [[float(n) for n in line.split()[1:]] for line in obj.splitlines() if line.startswith('v ')]
                     assert vertices and any(line.startswith('f ') for line in obj.splitlines()), name
                     if view == 'polytope':
-                        live = page.evaluate('window.__app.currentView.getProjectedVertices()')
+                        live = page.evaluate('()=>{const p=window.__app.currentView.group.userData.vPoints.geometry.attributes.position;return Array.from({length:p.count},(_,i)=>[p.getX(i),p.getY(i),p.getZ(i)]);}')
                         assert len(vertices) == len(live)
                         assert all(abs(a-b)<0.000002 for x,y in zip(vertices,live) for a,b in zip(x,y)), name
                 for enabled in [True, False]:
@@ -42,7 +42,8 @@ def main():
                     page.screenshot(path=str(out / f'{view}-faces-{enabled}.png'))
                 page.reload(); page.wait_for_function('()=>!!window.__app?.currentView')
                 assert page.evaluate('window.__app.params.showFaces') is False
-            with page.expect_download() as event: page.locator('[data-act="exportGeometryJSON"]').click()
+            page.evaluate('window.__app.openModelExport()')
+            with page.expect_download() as event: page.locator('[data-file-format="data"]').click()
             event.value.save_as(out/'polytope.json')
             raw=json.loads((out/'polytope.json').read_text())
             assert raw['dimension']==4 and all(len(v)==4 for v in raw['verts']) and raw['faces']

@@ -1,3 +1,5 @@
+import { renderModelExport, bindModelExport } from '../ui/model-export.js';
+import { exportModelRecord } from '../services/model-files.js';
 import { convexHullFaces } from '../math/convex-hull.js';
 import { polytopeFaces } from '../math/polytope-faces.js';
 import { createMobileEnvironments } from './backgrounds.js';
@@ -2064,6 +2066,7 @@ function handleAppAction(action) {
 
 function handleExportAction(action) {
   if (!action) return false;
+  if (action === 'open-export') { openMobileModelExport(); return true; }
   if (action === 'share-png') {
     shareSnapshot();
     return true;
@@ -2397,7 +2400,37 @@ function activeGeometryRecord() {
   };
 }
 
+function openMobileModelExport() {
+  const record = activeObjRecord();
+  if (!record) return;
+  const model = { ...record, edges: record.lines, data: activeGeometryRecord() };
+  // The print builder uses the geometry kind, independent of mobile data labels.
+  if (state.modelMode === 'platonic') model.data = { ...model.data, kind: 'polyhedron' };
+  const dialog = document.createElement('dialog');
+  dialog.className = 'model-export-dialog';
+  dialog.innerHTML = renderModelExport(model, ['platonic', 'poly4d'].includes(state.modelMode));
+  dialog.setAttribute('aria-labelledby', 'model-export-title');
+  document.body.appendChild(dialog);
+  const cleanup = bindModelExport(dialog, {
+    model,
+    download: async (blob, name) => {
+      if (await shareNativeBlob(blob, name, 'E8 Studio model export', 'E8 Studio model')) return;
+      downloadBlob(blob, name);
+    },
+    png: async () => { forceRender(); downloadBlob(await canvasToPngBlob(), `${model.name}.png`); },
+  });
+  dialog.querySelector('[data-modal-close]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => { cleanup(); dialog.remove(); }, { once: true });
+  dialog.showModal();
+}
+
 function activeObjRecord() {
+  if (state.modelMode === 'rootlab') {
+    const model = exportModelRecord(activeGeometryRecord());
+    const record = { ...model, lines: model.edges, pointsOnly: false };
+    record.text = objTextFromParts(record);
+    return record;
+  }
   if (state.modelMode === 'platonic') {
     const shape = platonicGeometry[state.shape];
     if (!shape) return null;
