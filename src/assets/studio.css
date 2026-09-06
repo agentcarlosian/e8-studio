@@ -121,3 +121,16 @@ body.desktop-touch-shell #panel .ps-section { padding-top: 16px; }
 body.desktop-touch-shell .ov-br {
   top: calc(var(--desktop-touch-vv-top, 0px) + var(--desktop-touch-vh, 100vh) - max(74px, env(safe-area-inset-bottom)));
 }
+/* A narrow canvas needs a second row for the scene readout. */
+@media (max-width: 360px) {
+  body.desktop-touch-shell .ov-tl {
+    max-width: calc(var(--desktop-touch-vw, 100vw) - 170px);
+  }
+  body.desktop-touch-shell .global-quality-control {
+    top: calc(var(--desktop-touch-vv-top, 0px) + max(14px, env(safe-area-inset-top)));
+  }
+  body.desktop-touch-shell .ov-tr {
+    top: calc(var(--desktop-touch-vv-top, 0px) + max(116px, calc(env(safe-area-inset-top) + 110px)));
+    max-width: calc(var(--desktop-touch-vw, 100vw) - 32px);
+  }
+}
