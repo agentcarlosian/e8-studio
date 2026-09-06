@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Stacked PRs receive the same checks before their base reaches main.
   workflow_dispatch:
 
 permissions:
