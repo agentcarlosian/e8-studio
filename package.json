@@ -37,6 +37,7 @@
     "test:recording": "node scripts/test_recording_recovery.mjs",
     "test:exports": "node scripts/test_export_delivery.mjs",
     "test:image-exports": "node scripts/test_image_export_recovery.mjs",
+    "smoke:backgrounds": "python scripts/smoke_bg.py",
     "test:visual-system": "node scripts/test_visual_system.mjs",
     "test:model-contracts": "node scripts/test_model_contracts.mjs",
     "test:rank2-roots": "node scripts/test_rank2_roots.mjs",

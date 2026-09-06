@@ -7,7 +7,8 @@ so branch protection can continue requiring them.
 The Linux `verify` job runs `release:check`, the mathematical tests, and the
 Mobile V2 browser smoke suite. `release:check` already runs the canonical
 verifier (including the Vite build and browser tests against `dist/web`), module
-contracts, visual-system checks, robustness tests, and standalone artifact tests.
+contracts, visual-system checks, all 30 background rendering cases, the complete
+learning/export/share journey, robustness tests, and standalone artifact tests.
 Those checks are not repeated as separate Linux steps. Windows retains its
 independent build and contract checks.
 

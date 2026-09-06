@@ -10,6 +10,10 @@ import {
   autoZoomMaxForModel,
 } from '../src/mobile/state.js';
 
+for (const [legacy, current] of Object.entries({ grid: 'tide', synthwave: 'ember', barset: 'ember', cloud: 'aurora', space: 'starfield' })) {
+  assert.equal(restoreMobileState({ background: legacy }).background, current);
+  assert.equal(restoreMobileState({ background: current }).background, current);
+}
 
 const defaultsBefore = { ...DEFAULT_STATE };
 const legacy = { modelMode: 'e8_3d', background: 'space', showEdges: false, zoom: 5 };

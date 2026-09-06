@@ -37,7 +37,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
       # Includes the web build, browser checks, module contracts, visual-system
-      # checks, robustness checks, and standalone release artifact checks.
+      # checks, background rendering, robustness, and standalone artifact checks.
       - run: npm run release:check
       - run: python scripts/test_math.py
       - run: npm run smoke:mobile-v2

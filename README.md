@@ -49,7 +49,7 @@ Click **Launch E8 Studio** and start exploring immediately. The hosted Studio ru
 E8 Studio is both an explorer and a generative visual instrument. You can:
 
 - Choose from dozens of curated color palettes, including mathematically driven E8 color modes.
-- Place the geometry in star fields, nebulae, galactic dust, deep-space fields, aurorae, grids, and other procedural backgrounds.
+- Place the geometry in white clouds, galactic star fields, engraved gold mandalas, flowing neon plasma, sampled hydrogen probability clouds, ocean surf, white hurricanes, amber eclipses, and other procedural backgrounds. Tide and Ember replace Grid and Barset; saved scenes migrate automatically. The traced ocean uses High quality on desktop; Mobile Low keeps a simpler animated sea.
 - Use the focused **Visuals** workspace for the complete palette, color-shift, background, effect, lighting, quick-look, theme, and export controls.
 - Apply view-aware shader effects: point and mesh views expose the full compatible catalog, while E8 SDF provides native Glow, Pulse, Heat, Iridescent, Hologram, and X-ray surface treatments.
 - Animate individual sliders, extrusion, rotations, morphs, palette shifts, and camera movement.

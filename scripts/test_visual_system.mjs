@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as THREE from 'three';
+import { BGRuntime } from '../src/fx/bg-runtime.js';
 import { THEMES, THEME_LABELS, DEFAULT_THEME } from '../src/ui/theme.js';
 import { PALETTE_GROUPS, PALETTE_NAMES, PALETTE_PRESETS, paletteFamily, palettePreviewCSS } from '../src/ui/palettes.js';
-import { BACKGROUND_PRESETS, BG_MODES, backgroundModesForQuality, coerceBackgroundForQuality } from '../src/ui/backgrounds.js';
+import { BACKGROUND_PRESETS, BG_MODES, backgroundModesForQuality, coerceBackgroundForQuality, normalizeBackgroundMode } from '../src/ui/backgrounds.js';
 import { shouldWritePlatonicFaceDepth } from '../src/views/platonic.view.js';
 import { SurfaceFXMaterial, makeTriangleBarycentrics } from '../src/fx/fx-surface-material.js';
 import { buildSixHundredClassColors } from '../src/views/sixhundred.view.js';
@@ -90,11 +92,65 @@ for (const name of PALETTE_NAMES) {
 }
 
 assert.deepEqual(BG_MODES, Object.keys(BACKGROUND_PRESETS));
-assert.deepEqual(backgroundModesForQuality('low'), ['void', 'starfield', 'grid', 'eclipse']);
+assert.deepEqual(backgroundModesForQuality('low'), ['void', 'starfield', 'eclipse']);
+assert.equal(coerceBackgroundForQuality('tide', 'low'), 'void', 'traced ocean stays out of low-power desktop mode');
+assert.equal(coerceBackgroundForQuality('grid', 'medium'), 'void', 'legacy grid cannot bypass the ocean quality budget');
+assert.equal(coerceBackgroundForQuality('tide', 'high'), 'tide');
 assert.ok(backgroundModesForQuality('medium').length > backgroundModesForQuality('low').length);
 assert.equal(backgroundModesForQuality('high').length, BG_MODES.length);
 assert.equal(coerceBackgroundForQuality('quantum', 'low'), 'void');
 assert.equal(coerceBackgroundForQuality('quantum', 'high'), 'quantum');
+assert.equal(BG_MODES.length, 12);
+for (const [legacy, current] of Object.entries({ grid: 'tide', synthwave: 'ember', barset: 'ember', cloud: 'aurora', space: 'starfield' })) {
+  assert.equal(normalizeBackgroundMode(legacy), current, `${legacy} saved scenes migrate`);
+  assert.equal(coerceBackgroundForQuality(legacy, 'high'), current);
+  assert.ok(!BG_MODES.includes(legacy), `${legacy} is absent from the selector`);
+}
+assert.equal(normalizeBackgroundMode('unknown'), 'void');
+assert.equal(normalizeBackgroundMode('__proto__'), 'void');
+const scene = new THREE.Scene();
+const background = new BGRuntime(scene, new THREE.Camera());
+assert.deepEqual(background.materials.aurora.uniforms.uColorB.value.toArray(), [0.40, 0.41, 0.42],
+  'array palettes initialize as RGB instead of silently becoming white');
+assert.deepEqual(background.materials.void.uniforms.uColor.value.toArray(), [0.027, 0.027, 0.047]);
+background.setMode('grid');
+assert.equal(background.currentMesh.name, 'bg-tide');
+const renderSize = { getSize: target => target.set(600, 300), getPixelRatio: () => 2 };
+background.update(1, renderSize);
+background.update(1.05, renderSize);
+const runningTime = background.materials.tide.uniforms.uTime.value;
+assert.ok(runningTime > 0);
+assert.deepEqual(background.materials.tide.uniforms.uTexSize.value.toArray(), [1200, 600]);
+background.update(10, renderSize, { paused: true });
+assert.equal(background.materials.tide.uniforms.uTime.value, runningTime, 'pause freezes background animation');
+background.update(10.05, renderSize);
+assert.ok(background.materials.tide.uniforms.uTime.value < 0.11, 'resume does not jump across paused time');
+background._motionPreference = { matches: true };
+const frozenTime = background.materials.tide.uniforms.uTime.value;
+background.update(11, renderSize);
+assert.equal(background.materials.tide.uniforms.uTime.value, frozenTime, 'reduced motion freezes animation');
+background.setMode('ember');
+background.update(12, renderSize);
+assert.equal(background.materials.ember.uniforms.uAspect.value, 2, 'swapping modes refreshes resolution');
+assert.equal(background.materials.ember.uniforms.uTime.value, frozenTime);
+background.setIntensity(0.3);
+assert.ok(Object.values(background.materials).every(material => material.uniforms.uIntensity.value === 0.3));
+background.setMode('quantum');
+const quantumGroup = background.currentMesh;
+assert.deepEqual(quantumGroup.userData.orbital, { n: 4, l: 3, m: 1, samples: 64000 });
+const quantumPoints = quantumGroup.getObjectByName('quantum-probability-cloud');
+assert.ok(quantumPoints.isPoints && !quantumPoints.material.depthWrite && !quantumPoints.material.transparent,
+  'probability cloud renders before foreground geometry without writing depth');
+background.setMode('tide');
+background.setMode('quantum');
+assert.equal(background.currentMesh, quantumGroup, 'mode swaps reuse the sampled cloud');
+background.setMode('void');
+assert.equal(scene.children.length, 0, 'mode swaps leave no stale background meshes');
+background._sharedGeo.dispose();
+Object.values(background.materials).forEach(material => material.dispose());
+quantumPoints.geometry.dispose();
+quantumGroup.children[0].material.dispose();
+
 
 for (const shape of ['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron']) {
   assert.equal(shouldWritePlatonicFaceDepth(shape), true, `${shape} faces write depth`);
