@@ -33,7 +33,7 @@ function fit(vertices, size) {
 // Capsule union sampled on a bounded grid, then a conforming tetrahedral contour.
 // All edges share one scalar field, so crossing struts and nodes become one surface.
 // Work is yielded between slices; closing the dialog cancels before delivery.
-export async function createPrintMesh(model, {size=80, thickness=3, mode='struts', signal, onProgress=()=>{}} = {}) {
+export const createPrintMesh = async function(model, {size=80, thickness=3, mode='struts', signal, onProgress=()=>{}} = {}) {
   if (!Number.isFinite(size) || size<10 || size>300) throw new Error('Choose a size from 10 to 300 mm.');
   if (mode!=='solid' && (!Number.isFinite(thickness) || thickness<0.5 || thickness>20 || thickness>=size/2)) throw new Error('Choose a strut diameter from 0.5 to 20 mm, smaller than half the model size.');
   const pause = async progress => { signal?.throwIfAborted(); onProgress(progress); await new Promise(resolve=>setTimeout(resolve,0)); signal?.throwIfAborted(); };
@@ -109,4 +109,4 @@ export async function createPrintMesh(model, {size=80, thickness=3, mode='struts
   mesh.stats=validatePrintMesh(mesh);
   await pause(1);
   return mesh;
-}
+};

@@ -27,7 +27,7 @@ def download(page, fmt, name):
             assert z.testzip() is None
             assert ET.fromstring(z.read('3D/3dmodel.model')).attrib['unit']=='millimeter'
 
-def main(mobile_path="/dist/index.html"):
+def main(mobile_path="/dist/index.html", desktop_path="/dist/web/index.html"):
     OUT.mkdir(parents=True,exist_ok=True)
     server,base=start_server()
     try:
@@ -35,7 +35,7 @@ def main(mobile_path="/dist/index.html"):
             browser=p.chromium.launch(headless=True,executable_path=find_chromium_executable(),args=chromium_webgl_args())
             page=browser.new_page(viewport={'width':1440,'height':1000},reduced_motion='reduce',accept_downloads=True)
             errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-            page.goto(base+'/dist/web/index.html');page.wait_for_function('()=>!!window.__app?.currentView')
+            page.goto(base+desktop_path);page.wait_for_function('()=>!!window.__app?.currentView')
             page.evaluate("()=>{const a=window.__app;a.switchView('platonic');a.setShape('cube');a.setPanelMode('scene');a.setParam('autoRotate',false);a.setParam('polyAutoRotate',false);}")
             page.locator('.panel-tools-menu summary').click()
             left=page.locator('[data-act="openCheatsheet"]').bounding_box();right=page.locator('[data-act="openModelExport"]').bounding_box()
@@ -78,4 +78,6 @@ if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser()
     parser.add_argument('--mobile-url',default='/dist/index.html')
-    main(parser.parse_args().mobile_url)
+    parser.add_argument('--desktop-url',default='/dist/web/index.html')
+    args=parser.parse_args()
+    main(args.mobile_url,args.desktop_url)
