@@ -72,6 +72,7 @@ jobs:
       - run: python scripts/test_math.py
       - run: node scripts/test_state_modules.mjs
       - run: npm run test:lifecycle
+      - run: npm run test:deferred-view
       - run: npm run test:animation
       - run: npm run test:recording
       - run: npm run test:exports
@@ -79,6 +80,7 @@ jobs:
       - run: npm run test:visual-system
       - run: npm run test:curriculum
       - run: npm run test:e8-quasicrystal
+      - run: npm run test:quasicrystal-comparison
 
   deploy:
     needs: [verify, windows-build]

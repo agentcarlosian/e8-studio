@@ -5167,7 +5167,7 @@ function syncLearnPanel() {
     const started = !!learningProgress.lessons?.[recommendedId] || state.learnTopic === recommendedId;
     els.learnRecommendedCard.innerHTML = `<span class="mobile-learn-kicker">${started ? 'Continue learning' : 'Start here'}</span>
       <h3>${escapeHtml(recommended.title)}</h3>
-      <p>${escapeHtml(recommended.shortAnswer)}</p>
+      <p>${escapeHtml(recommended.lesson?.guide?.whyItMatters || recommended.shortAnswer)}</p>
       <button type="button" data-info-action="open-context-lesson">${started ? 'Continue' : 'Start lesson'} →</button>`;
   }
   renderLearnTopics();
@@ -5209,13 +5209,14 @@ function syncLearnPanel() {
   </section>` : '';
   const ideasHtml = (record.keyIdeas || []).slice(0, 3).map((idea, index) => `<article><span>${index + 1}</span><div><h4>${index === 0 ? 'Start with the rule' : index === 1 ? 'Connect it to the picture' : 'Keep this distinction'}</h4><p>${escapeHtml(idea)}</p></div></article>`).join('');
   const guide = record.lesson?.guide;
-  const guideHtml = guide ? `<section class="mobile-learn-section mobile-learn-vocabulary"><h4>A little vocabulary</h4><dl>${guide.terms.map(([term, definition]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(definition)}</dd></div>`).join('')}</dl></section><section class="mobile-learn-section mobile-learn-example"><span class="mobile-learn-kicker">Make it concrete</span><h4>${escapeHtml(guide.example.title)}</h4><p>${escapeHtml(guide.example.body)}</p></section><aside class="mobile-learn-distinction"><strong>Keep this distinction</strong><p>${escapeHtml(guide.misconception)}</p></aside>` : '';
+  const guideHtml = guide ? `<section class="mobile-learn-section mobile-learn-example"><span class="mobile-learn-kicker">Make it concrete</span><h4>${escapeHtml(guide.example.title)}</h4><p>${escapeHtml(guide.example.body)}</p></section><section class="mobile-learn-section mobile-learn-vocabulary"><h4>Words for what you just saw</h4><dl>${guide.terms.map(([term, definition]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(definition)}</dd></div>`).join('')}</dl></section><aside class="mobile-learn-distinction"><strong>Keep this distinction</strong><p>${escapeHtml(guide.misconception)}</p></aside>` : '';
   const recallHtml = guide ? `<section class="mobile-learn-section mobile-learn-recall"><h4>Check your understanding</h4><p>${escapeHtml(guide.check.question)}</p><details><summary>Reveal answer</summary><p>${escapeHtml(guide.check.answer)}</p></details></section>` : '';
   if (els.learnReaderProgress) els.learnReaderProgress.textContent = `Lesson ${index + 1} of ${curriculumLessons.length}`;
   els.learnTopicCard.innerHTML = `
     <header class="mobile-learn-lesson-head">
       <span class="mobile-learn-kicker">${escapeHtml(record.pathTitle)} · ${record.estimatedMinutes} min</span>
       <h3 id="learn-reader-title" class="mobile-learn-title" tabindex="-1">${escapeHtml(record.title)}</h3>
+      ${guide?.whyItMatters ? `<p class="mobile-learn-purpose">${escapeHtml(guide.whyItMatters)}</p>` : ''}
     </header>
     <section class="mobile-learn-answer"><span>The direct answer</span><p>${escapeHtml(record.shortAnswer)}</p></section>
     ${ideasHtml ? `<section class="mobile-learn-section"><h4>Build the idea</h4><div class="mobile-learn-ideas">${ideasHtml}</div></section>` : ''}

@@ -20,6 +20,7 @@ for (const lesson of LEARNING_LESSONS) {
   assert.ok(Array.isArray(lesson.keyIdeas) && lesson.keyIdeas.length >= 2, `${lesson.id} key ideas`);
   assert.ok(Array.isArray(lesson.objectives) && lesson.objectives.length >= 2, `${lesson.id} objectives`);
   assert.ok(['Start here', 'Build intuition', 'Go deeper'].includes(lesson.guide?.level), `${lesson.id} reading level`);
+  assert.ok(lesson.guide.whyItMatters?.length >= 55, `${lesson.id} beginner-facing purpose`);
   assert.ok(lesson.guide.terms.length >= 2 && lesson.guide.terms.every(([term, meaning]) => term && meaning), `${lesson.id} inline vocabulary`);
   assert.ok(lesson.guide.example?.title && lesson.guide.example.body && lesson.guide.misconception, `${lesson.id} worked example and distinction`);
   assert.ok(lesson.guide.check?.question?.endsWith('?') && lesson.guide.check.answer, `${lesson.id} retrieval question and explanation`);

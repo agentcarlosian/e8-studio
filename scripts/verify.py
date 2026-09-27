@@ -105,7 +105,9 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_rank2_roots.mjs"])
     run(["node", "scripts/test_coxeter_tilings.mjs"])
     run(["node", "scripts/test_e8_quasicrystal.mjs"])
+    run(["node", "scripts/test_quasicrystal_comparison.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
+    run(["node", "scripts/test_deferred_view.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
     run(["node", "scripts/test_recording_recovery.mjs"])
     run(["node", "scripts/test_export_delivery.mjs"])
@@ -1348,8 +1350,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         fail(f"Contextual Dynkin Learn contract failed: {dynkin_learn}")
     page.locator('.learning-center-launch').click()
     page.wait_for_selector(".learning-center-dialog", timeout=5000)
+    if not page.locator('.learning-home-hero').is_visible():
+        fail('Learning Center did not open its question-led home')
+    page.locator('.learning-home-actions button:not(.learning-home-primary)').click()
     if page.locator(".learning-center-content h2").text_content() != "Reading Dynkin diagrams":
-        fail("Dynkin did not open its mapped curriculum lesson")
+        fail("Continue with this view did not open the mapped Dynkin lesson")
     page.click("[data-modal-close]")
 
     page.evaluate("window.__app.switchView('e8coxeter')")
@@ -1383,6 +1388,14 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         fail(f"Learning Center open performance budget exceeded: {learning_open_ms:.1f}ms > 500ms")
     page.wait_for_selector(".learning-center-dialog", timeout=5000)
     capture_visual_evidence(page, "learning-center-desktop")
+    home = page.evaluate("""() => ({
+      questions: document.querySelectorAll('.learning-home-question-grid button').length,
+      paths: document.querySelectorAll('.learning-home-path').length,
+      primary: document.querySelector('.learning-home-primary')?.dataset.learningLesson,
+    })""")
+    if home != {"questions": 3, "paths": 4, "primary": "why-five-solids"}:
+        fail(f"Learning Center home failed: {home}")
+    page.locator('.learning-home-question-grid [data-learning-lesson="meet-e8"]').click()
     learning_center = page.evaluate(
         """() => ({
           paths: document.querySelectorAll('.learning-path').length,
@@ -1410,8 +1423,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       navigationMinHeight: Math.min(...[...document.querySelectorAll('.learning-lesson-nav button')].map(button => button.getBoundingClientRect().height)),
       navigationBeforeSources: !!(document.querySelector('.learning-lesson-nav')?.compareDocumentPosition(document.querySelector('.learning-more')) & Node.DOCUMENT_POSITION_FOLLOWING),
     })""")
-    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] != 4 or why_five["experimentExplanations"] != why_five["experimentSteps"] or not why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
+    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] < 5 or why_five["experimentExplanations"] != why_five["experimentSteps"] or why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
         fail(f"Why-only-five answer and proof failed: {why_five}")
+    page.locator('.learning-more-header').click()
+    if not page.locator('.learning-source-card').first.is_visible():
+        fail('Lesson sources did not open on request')
     page.evaluate("window.__app.resetView()")
     if page.locator("#learning-modal:not(.hidden)").count() or page.locator("#learning-experiment-coach").count():
         fail("Desktop Reset did not dismiss transient learning surfaces")
@@ -1445,6 +1461,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     )
     if completed_lesson != {"stored": True, "label": "✓ Done", "pressed": "true"}:
         fail(f"Learning Center completion persistence failed: {completed_lesson}")
+    page.locator('.learning-more-header').click()
     page.click('[data-learning-essay="e8_mckay"]')
     page.wait_for_selector('.essay-panel', timeout=5000)
     essay_reader = page.evaluate("""() => ({

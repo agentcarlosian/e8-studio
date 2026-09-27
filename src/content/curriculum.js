@@ -111,7 +111,7 @@ export const LEARNING_PATHS = [
       },
       {
         id: 'six-hundred-cell', title: 'The 600-cell', view: 'polytope', estimatedMinutes: 8, prerequisites: ['into-four-dimensions'],
-        shortAnswer: 'The 600-cell is the regular 4D polytope {3,3,5}: 600 tetrahedral cells meet around 120 vertices. Its vertex coordinates can also be read as the 120 unit quaternions of the binary icosahedral group, which is why it repeatedly appears near exceptional symmetry.',
+        shortAnswer: 'The name counts its 600 tetrahedral cells, not its vertices. There are 120 vertices and 720 edges in the complete four-dimensional figure. A screen projection may overlap them, but rotation does not change those counts. Its vertex coordinates also have a deeper description as 120 unit quaternions of the binary icosahedral group.',
         keyIdeas: ['Its 120 vertices and 720 edges are intrinsic even when a projection overlaps them.', 'It is dual to the 120-cell and carries strong icosahedral symmetry.'],
         objectives: ['Identify the 600-cell’s basic counts.', 'Relate its vertices to binary icosahedral unit quaternions.'],
         activity: 'Compare vertex classes while rotating the 4D projection.',

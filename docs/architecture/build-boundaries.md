@@ -16,8 +16,9 @@ Electron, and Android artifacts through separate verified build paths.
 
 The Vite build is emitted to `dist/web/`, uses relative asset URLs, bundles the
 runtime JavaScript dependencies from `package-lock.json`, and copies canonical
-JSON into `dist/web/data/`. Its built HTML contains no runtime jsDelivr import
-map or CSP allowance.
+JSON into `dist/web/data/`. The default E8 renderer is ready at startup; other
+desktop renderers are loaded when selected and cached after their first use.
+The built HTML contains no runtime jsDelivr import map or CSP allowance.
 
 ## Intended code ownership
 
@@ -83,9 +84,10 @@ Side effects cross the shared-core boundary through explicit adapters:
   Safe-area behavior is owned by the mobile shell CSS and the pinned Capacitor
   integration; upstream regressions must fail verification instead of being
   silently patched during a build.
-- Vite separates desktop rendering/views and learning content from the shell
-  bootstrap. Dynamic, on-demand view loading remains a measured
-  optimization opportunity, but no longer blocks clear package ownership.
+- Vite separates the default visual core from nondefault view modules. A local
+  three-run Chromium sample showed about 80 KB less initial JavaScript with a
+  first 4D view switch increasing from 8.6 ms to 31.3 ms; device results need
+  separate measurement. The large default Three.js core remains a loading cost.
 - Dependency security is checked before release; Electron and electron-builder
   upgrades require packaging regression tests in addition to the web suite.
 
@@ -106,9 +108,13 @@ Side effects cross the shared-core boundary through explicit adapters:
 - Ambient camera noise uses the same npm module in web and standalone outputs.
   Browser verification checks drift and geometry exports on each output.
 - `src/ui/learning-center.js` renders the desktop lesson reader and owns local
-  search, section navigation, responsive library behavior, and the angle-rule
+  home, search, section navigation, responsive library behavior, and the angle-rule
   calculator. Its cleanup releases the media-query listener on replacement or
   dismissal. The shell retains progress writes, quizzes, and Studio actions.
+- `src/platform/view-factories.js` owns the view registry and web-only dynamic
+  imports. `src/platform/deferred-view.js` holds a temporary view until its
+  renderer arrives and cancels late construction after disposal. The legacy
+  builder resolves those loaders to already inlined synchronous factories.
 - `src/content/lesson-guides.js` adds vocabulary, examples, misconceptions, and
   retrieval questions to every curriculum lesson. The curriculum generator
   includes these additive fields in the mobile artifact, keeping teaching notes

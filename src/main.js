@@ -13,7 +13,8 @@ import { exportModelRecord } from './services/model-files.js';
 import { renderModelExport, bindModelExport } from './ui/model-export.js';
 import { createGeometryExporters } from './services/geometry-export.js';
 import { createQuickStart } from './ui/quick-start.js';
-import { renderLearningCenter, bindLearningCenterNavigation } from './ui/learning-center.js';
+import { renderLearningCenter, renderLearningHome, bindLearningCenterNavigation } from './ui/learning-center.js';
+import { createQuasicrystalComparison } from './ui/quasicrystal-comparison.js';
 
 import { PALETTE_NAMES, SHIFT_PRESETS, BLEND_MODES, COLORING_NAMES, PALETTE_PRESETS, buildPalette, colorAt, palettePreviewCSS } from './ui/palettes.js';
 if (typeof window !== 'undefined') {
@@ -47,6 +48,8 @@ import {
 } from './state/camera.js';
 import { ExportRecordingService, isCapacitorNative } from './services/export-recording.js';
 import { createResourceScope } from './platform/resource-scope.js';
+import { createDeferredView } from './platform/deferred-view.js';
+import { VIEW_DEFINITIONS } from './platform/view-factories.js';
 import { FrameHealthController } from './platform/frame-health.js';
 import { EssayPanel } from './ui/essays.js';
 import { ESSAYS, CODE_ART_SHADERS } from './content/essays.js';
@@ -56,15 +59,6 @@ import { FACT_SOURCES } from './content/sources.js';
 import { GLOSSARY, GLOSSARY_GROUPS, getGlossaryMatches, getGlossaryEntry } from './content/glossary.js';
 import { findWeylWord, formatWeylWord, weylWordSteps } from './math/weyl.js';
 import { applyTheme, applyLayout, THEMES, LAYOUTS, DEFAULT_LAYOUT } from './ui/theme.js';
-import { createE8CoxeterView } from './views/e8coxeter.view.js';
-import { createPlatonicView } from './views/platonic.view.js';
-import { createDynkinView } from './views/dynkin.view.js';
-import { createPolytope4DView } from './views/polytope4d.view.js';
-import { createBloomView } from './views/bloom.view.js';
-import { createRaymarchedView } from './views/raymarched-e8.view.js';
-import { createRootLabView } from './views/rootlab.view.js';
-import { createTilingView } from './views/tiling.view.js';
-import { createQuasicrystalView } from './views/quasicrystal.view.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEMS } from './math/rank2-roots.js';
 import { COXETER_TILINGS, generateCoxeterTiling } from './math/coxeter-tilings.js';
 import { QUASICRYSTAL_REACHES } from './math/e8-quasicrystal.js';
@@ -140,20 +134,33 @@ function setStatus(msg) {
 }
 
 // ---------- View registry ----------
-const VIEWS = [
-  // Primary tabs — the most visually rich views, by user preference
-  { id: 'bloom',       label: 'Bloom',       factory: createBloomView,     primary: true },
-  { id: 'platonic',    label: 'Platonic',    factory: createPlatonicView,  primary: true },
-  { id: 'e8coxeter',   label: 'E₈ Coxeter',  factory: createE8CoxeterView, primary: true },
-  { id: 'quasicrystal', label: 'Quasicrystal', factory: createQuasicrystalView, primary: true },
-  { id: 'polytope',    label: '4D Polytope', factory: createPolytope4DView, primary: true },
-  { id: 'raymarched',  label: 'E₈ SDF',      factory: createRaymarchedView, primary: true },
-  // Secondary view: visible in the More menu and View workspace without
-  // displacing the six visual-first primary tabs.
-  { id: 'rootlab',     label: 'Root Lab',    factory: createRootLabView,   primary: false },
-  { id: 'tiling',      label: 'Tiling Lab',  factory: createTilingView,    primary: false },
-  { id: 'dynkin',      label: 'Dynkin',      factory: createDynkinView,    primary: false },
-];
+const VIEWS = VIEW_DEFINITIONS.map(def => ({
+  ...def,
+  factory: def.factory || (options => createDeferredView({
+    name: def.name,
+    load: def.load,
+    options,
+    onReady(view) {
+      if (currentView !== view) return;
+      const realView = view.realView;
+      scene.remove(view.object3d);
+      scene.add(realView.object3d);
+      currentView = realView;
+      const activeDefinition = VIEWS.find(item => item.id === def.id);
+      if (activeDefinition) activeDefinition.factory = view.resolvedFactory;
+      fxRuntime?.rescan();
+      syncRenderPixelRatioUniforms();
+      setStatus(`${def.label} ready`);
+    },
+    onError(error, view) {
+      console.error(`[view-load] ${def.id}:`, error);
+      if (currentView === view) {
+        showSavedToast(`${def.label} could not load; returned to E8`);
+        switchView('e8coxeter', { save: false });
+      }
+    },
+  })),
+}));
 
 const AUTO_MODEL_SEQUENCE = Object.freeze([
   { view: 'e8coxeter' },
@@ -220,6 +227,7 @@ const COMMAND_ITEMS = [
 
 // ---------- Three.js ----------
 let scene, camera, renderer, currentView, gui, params;
+let quasiComparison = null;
 let camTarget = null;
 const cameraController = new CameraController();
 let fxRuntime = null; // FXRuntime instance, created in initThree()
@@ -1167,8 +1175,10 @@ function switchView(id, options = {}) {
   }
   refreshPanel();
   updateOverlays(id);
+  quasiComparison?.setView(id, params);
   if (window.essayPanel) window.essayPanel.setView(id);
   if (options.save !== false) saveConfig(params);
+  return currentView.ready || Promise.resolve(true);
 }
 
 function formatOverlayNumber(value) {
@@ -1804,6 +1814,9 @@ function updateParam(k, v, options = {}) {
   if (options.overlay || k === 'bloomAmount' || k === 'morph4d' || k === 'e8MorphT') {
     updateOverlays(params.view);
   }
+  if (params.view === 'quasicrystal' && ['quasiMode', 'quasiReach', 'quasiWindow', 'quasiPhason'].includes(k)) {
+    quasiComparison?.update(params);
+  }
   if (options.refresh !== false) refreshPanel();
 }
 
@@ -2296,10 +2309,10 @@ function applyLearningExperimentStep(lessonId, stepId) {
   if (!lesson || !entry?.action) return false;
   closeLearningModal();
   const targetView = entry.action.view || lesson.view;
-  if (params.view !== targetView) switchView(targetView, { resetSelection: false });
   Object.assign(params, entry.action.params || {}, { autoModel: false, intro: false });
   normalizeParams(params);
-  // Rebuild after applying the setup so shape/diagram changes are immediate.
+  // Configure before constructing the view. A first switch here used to start
+  // a throwaway renderer when the target module loaded on demand.
   switchView(targetView, { resetSelection: false });
   saveConfig(params);
   refreshPanel();
@@ -2310,6 +2323,14 @@ function applyLearningExperimentStep(lessonId, stepId) {
 }
 
 function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = null } = {}) {
+  if (!lessonId) {
+    const host = showLearningModal(renderLearningHome(learningProgress, params?.view || 'e8coxeter'));
+    host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog', 'learning-home-dialog');
+    host.querySelectorAll('[data-learning-lesson]').forEach(button => {
+      button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
+    });
+    return;
+  }
   const lesson = learningLessonById(lessonId)
     || learningProgress.recommendedLesson(params?.view || 'e8coxeter')
     || LEARNING_LESSONS[0];
@@ -2326,6 +2347,7 @@ function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = nu
   host.querySelectorAll('[data-learning-lesson]').forEach(button => {
     button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
   });
+  host.querySelector('[data-learning-home]')?.addEventListener('click', () => openLearningCenter());
   host.querySelector('[data-learning-open-view]')?.addEventListener('click', event => {
     closeLearningModal();
     switchView(event.currentTarget.dataset.learningOpenView);
@@ -3242,7 +3264,7 @@ window.__app = {
   setCompareMode(m) {
     updateParam('compareMode', m, { overlay: true });
   },
-  switchView(v) { switchView(v); },
+  switchView(v) { return switchView(v); },
   setPalette(p) {
     updateParam('palette', p, { refresh: false });
     if (scene) {
@@ -3322,6 +3344,19 @@ window.__app = {
     refreshPanel();
     updateOverlays(params.view);
   },
+  toggleQuasiComparison() {
+    if (params.view !== 'quasicrystal') return;
+    if (!quasiComparison) quasiComparison = createQuasicrystalComparison(document.querySelector('main'), DATA.e8);
+    panel.quasiComparisonOpen = !panel.quasiComparisonOpen;
+    if (panel.quasiComparisonOpen) quasiComparison.show(params);
+    else quasiComparison.hide();
+    refreshPanel();
+    if (panel.quasiComparisonOpen && document.body.classList.contains('desktop-controls-open')) {
+      document.getElementById('desktop-controls-close')?.click();
+      quasiComparison.focusClose();
+    }
+  },
+  resetQuasiComparisonBaseline() { quasiComparison?.resetBaseline(); },
   setQuasiReach(reach) {
     params.autoModel = false;
     updateParam('quasiReach', Number(reach), { refresh: false });
@@ -4780,6 +4815,7 @@ async function main() {
   // Bug fix 2026-06-24: previously hardcoded 'e8coxeter' here, which overwrote
   // the persisted view on reload. Now we honor the loaded params.view.
   switchView(params.view);
+  if (currentView?.ready) await currentView.ready;
   startAutoSave(() => params);
 
   animate();

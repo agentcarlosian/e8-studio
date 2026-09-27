@@ -52,11 +52,18 @@ body:not(.desktop-touch-shell) .global-quality-control { top: 10px; right: 20px;
 #panel .view-card:hover { border-color: var(--accent); color: var(--ink-0); background: var(--bg-2); }
 #panel .view-card.on { background: color-mix(in srgb, var(--accent) 12%, var(--bg-1)); border-color: var(--accent); color: var(--accent); }
 #panel .view-card.on svg { opacity: 1; }
-.exploration-invite { margin-top: 14px; padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 7%, var(--bg-1)), var(--bg-1)); }
-.exploration-invite strong { font-size: 13px; font-weight: 600; color: var(--ink-0); }
-.exploration-invite p { font-size: 12px; line-height: 1.5; color: var(--ink-1); margin: 4px 0 10px; }
-.exploration-invite button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 35px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg-0); color: var(--accent); font: 600 12px 'Inter', sans-serif; cursor: pointer; }
-.exploration-invite button:hover { border-color: var(--accent); }
+.exploration-invite { margin: 0 0 16px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line)); border-radius: 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--bg-1)), var(--bg-1) 72%); }
+.exploration-invite-heading > span { display: block; margin-bottom: 7px; color: var(--accent); font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .08em; }
+.exploration-invite-heading strong { font-size: 15px; font-weight: 650; color: var(--ink-0); }
+.exploration-invite-heading p { font-size: 12px; line-height: 1.5; color: var(--ink-1); margin: 5px 0 12px; }
+.exploration-routes { display: grid; gap: 7px; }
+.exploration-invite button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 53px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg-0); color: var(--accent); font: 600 12px 'Inter', sans-serif; text-align: left; cursor: pointer; }
+.exploration-invite button strong, .exploration-invite button small { display: block; }
+.exploration-invite button strong { color: var(--ink-0); font-size: 12px; }
+.exploration-invite button small { margin-top: 3px; color: var(--ink-2); font-size: 10px; font-weight: 400; line-height: 1.35; }
+.exploration-invite button:hover { border-color: var(--accent); background: var(--bg-2); }
+#panel .quasi-compare-launch { width: 100%; min-height: 44px; margin: 9px 0 12px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line)); border-radius: 7px; background: color-mix(in srgb, var(--accent) 8%, var(--bg-1)); color: var(--accent); font: 600 12px 'Inter', sans-serif; cursor: pointer; }
+#panel .quasi-compare-launch:hover { background: color-mix(in srgb, var(--accent) 15%, var(--bg-1)); }
 #panel .gallery-nav { grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 6px; }
 #panel .gallery-nav button { min-height: 38px; }
 #panel .gallery-nav-current span { font-size: 12px; }

@@ -25,12 +25,23 @@ def main():
                     page.add_init_script('window.__forceSdfSafeMode = true')
                     page.goto(os.environ.get('LEARNING_UI_URL', base + '/dist/web/index.html'), wait_until='domcontentloaded')
                     page.wait_for_function('() => !!window.__app?.currentView')
+                    page.evaluate('window.__app.openLearningCenter()')
+                    assert page.locator('.learning-home-question-grid button').count() == 3
+                    assert page.locator('.learning-home-path').count() == 4
+                    assert page.locator('.learning-home-hero').is_visible()
+                    page.screenshot(path=str(shots / f'home-{width}.png'))
+                    page.locator('.learning-home-question-grid [data-learning-lesson="meet-e8"]').click()
+                    assert page.locator('#learning-lesson-title').inner_text() == 'What am I looking at?'
+                    page.locator('[data-learning-home]').click()
+                    assert page.locator('.learning-home-hero').is_visible()
                     page.evaluate("window.__app.openLearningCenter('meet-e8')")
                     page.wait_for_selector('.learning-center-dialog')
                     page.wait_for_timeout(120)
                     assert page.locator('.learning-concepts dt').count() == 2
+                    assert page.locator('.learning-lesson-purpose').is_visible()
                     assert page.locator('#learning-lesson-title').is_visible(), 'phone shell must not hide lesson headers'
                     assert page.locator('.learning-evidence tbody tr').count() == 4
+                    assert not page.locator('.learning-source-card').first.is_visible(), 'resources stay collapsed until requested'
                     assert page.locator('.learning-library').evaluate('(el) => el.open') == (width > 760)
                     bounds = page.locator('.learning-center-dialog').bounding_box()
                     assert bounds['x'] >= 0 and bounds['y'] >= 0 and bounds['x'] + bounds['width'] <= width + 1

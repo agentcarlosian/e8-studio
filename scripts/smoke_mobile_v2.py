@@ -589,6 +589,8 @@ def main() -> int:
                 explanationCount: document.querySelectorAll('.mobile-learn-activity .mobile-learn-takeaway').length,
                 hiddenLessonDetails: document.querySelectorAll('.mobile-learn-activity details').length,
                 vocabulary: document.querySelectorAll('.mobile-learn-vocabulary dt').length,
+                purpose: document.querySelector('.mobile-learn-purpose')?.textContent,
+                exampleBeforeWords: !!(document.querySelector('.mobile-learn-example')?.compareDocumentPosition(document.querySelector('.mobile-learn-vocabulary')) & Node.DOCUMENT_POSITION_FOLLOWING),
                 workedExample: !!document.querySelector('.mobile-learn-example p')?.textContent,
                 recall: !!document.querySelector('.mobile-learn-recall details'),
                 sourceLinks: document.querySelectorAll('.mobile-learn-sources a[href]').length,
@@ -602,6 +604,7 @@ def main() -> int:
                 readerOverflow: getComputedStyle(document.getElementById('learn-reader-scroll')).overflowY
             })""")
             check("Why-five opens in a dedicated reader", why_five["state"]["learnTopic"] == "why-five-solids" and why_five["sheetReader"] and why_five["libraryHidden"] and why_five["readerVisible"], str(why_five))
+            check("Lessons lead with purpose and a worked example", "simple corner rule" in (why_five["purpose"] or "") and why_five["exampleBeforeWords"], str(why_five))
             check("Lessons include shared vocabulary, examples, self-checks, and sources", why_five["vocabulary"] == 2 and why_five["workedExample"] and why_five["recall"] and why_five["sourceLinks"] >= 2, str(why_five))
             check("Why-five directly teaches the five cases", "less than 360°" in why_five["text"] and "3 triangles" in why_five["text"] and "Dodecahedron" in why_five["text"] and "3 hexagons" in why_five["text"] and "Flat tiling" in why_five["text"], why_five["text"])
             check("Lesson reader is readable and has persistent navigation", why_five["bodySize"] >= 16 and why_five["bodyLineHeight"] >= 24 and all(box["height"] >= 48 for box in why_five["nav"]), str(why_five))
@@ -955,7 +958,7 @@ def main() -> int:
                 const chipBox = chip.getBoundingClientRect();
                 const labelBox = label.getBoundingClientRect();
                 return {
-                    text: chip.textContent.trim().replace(/\s+/g, ' '),
+                    text: chip.textContent.trim().replace(/\\s+/g, ' '),
                     chipRight: chipBox.right,
                     labelRight: labelBox.right,
                     width: chipBox.width,
