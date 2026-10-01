@@ -41,6 +41,7 @@ jobs:
       - run: npm run release:check
       - run: python scripts/test_math.py
       - run: npm run smoke:mobile-v2
+      - run: python -B scripts/test_packaging_assets.py --native-only
       # Publish the exact dist/web checked by release:check. No later step
       # rebuilds it, and PR runs never create a deployment artifact.
       - name: Upload verified Pages artifact
@@ -69,6 +70,8 @@ jobs:
       - run: npm ci
       - run: python -m pip install -r requirements-dev.txt
       - run: npm run build:web
+      - run: npm run build:mobile
+      - run: python -B scripts/test_packaging_assets.py --native-only
       - run: python scripts/test_math.py
       - run: node scripts/test_state_modules.mjs
       - run: npm run test:lifecycle

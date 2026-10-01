@@ -11,14 +11,28 @@ Electron, and Android artifacts through separate verified build paths.
 | Legacy inline | `npm run build:legacy` | Python module rewriter | Compatibility baseline |
 | Offline/PWA | `npm run build:offline` | Legacy inline + vendored dependencies | Existing Electron/PWA input |
 | Desktop share | `npm run build:single` | Fully inlined HTML | File-sharing artifact |
-| Mobile native | `npm run build:mobile` | Vite ESM bundle + hybrid Canvas/WebGL HTML | Capacitor input |
+| Mobile native | `npm run build:mobile` | Vite ESM bundle + hybrid Canvas/WebGL HTML | Clean `dist/mobile/index.html` is Capacitor input; `dist/index.html` remains for browser smoke tests |
 | Mobile share | `npm run build:mobile:single` | Same Vite bundle + standalone HTML | Phone-sharing artifact |
 
-The Vite build is emitted to `dist/web/`, uses relative asset URLs, bundles the
-runtime JavaScript dependencies from `package-lock.json`, and copies canonical
-JSON into `dist/web/data/`. The default E8 renderer is ready at startup; other
-desktop renderers are loaded when selected and cached after their first use.
+The Vite build emits `index.html` and a Canvas2D `mobile.html` fallback under
+`dist/web/`, uses relative asset URLs, bundles runtime JavaScript dependencies
+from `package-lock.json`, and copies canonical JSON into `dist/web/data/`.
+Only the core E8 data is fetched at desktop startup; other datasets and
+renderers load when their view is selected. The default E8 renderer is ready at
+startup, and loaded view factories are cached for later selections.
 The built HTML contains no runtime jsDelivr import map or CSP allowance.
+
+`npm run mobile:build` syncs only `dist/mobile/` into Capacitor. The mobile
+builder replaces that directory with one inlined `index.html`; unrelated
+`dist/` files such as release manifests, share files, and web assets stay out
+of the Android package. The optional PWA uses a cache name derived from its
+built HTML and local assets. Online navigations fetch fresh HTML, and offline
+navigations use the cached page. `python -B scripts/test_packaging_assets.py`
+checks the staging contract and a two-build PWA update in local Chromium as
+part of the normal verifier. After `npm run build:mobile`,
+`python -B scripts/test_packaging_assets.py --native-only` checks the actual
+Capacitor input; both Linux and Windows CI run that inventory gate. This does
+not build an APK or desktop installer.
 
 ## Intended code ownership
 

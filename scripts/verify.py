@@ -129,6 +129,11 @@ def check_python_syntax() -> None:
         compile(source, str(path), "exec", ast.PyCF_ONLY_AST)
 
 
+def check_packaging_assets() -> None:
+    # Uses a temporary site and local Chromium; it does not rewrite shared dist.
+    run([sys.executable, "-B", "scripts/test_packaging_assets.py"])
+
+
 def load_json(name: str):
     return json.loads((ROOT / "data" / f"{name}.json").read_text(encoding="utf-8"))
 
@@ -1730,6 +1735,7 @@ td,th{{border:1px solid #2a2a3a;padding:8px;text-align:left}}
 
 
 def check_studio_ui() -> None:
+    run([sys.executable, "scripts/test_startup_recovery.py", "--built"])
     run([sys.executable, "scripts/test_shape_controls.py"])
     run([sys.executable, "scripts/test_quick_start.py"])
     run([sys.executable, "scripts/test_studio_ui.py"])
@@ -1750,6 +1756,7 @@ def main() -> int:
         ("js syntax", check_js_syntax),
         ("lifecycle contracts", check_lifecycle_contracts),
         ("python syntax", check_python_syntax),
+        ("packaging assets", check_packaging_assets),
         ("data invariants", check_data_invariants),
         ("palette registry", check_palette_registry),
         ("browser helper self-test", check_browser_failure_helper),

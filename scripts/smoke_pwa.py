@@ -5,10 +5,9 @@
   - icon assets exist
   - the app loads + the service worker registers (over http, where SW works)
 
-Note: a true offline test requires simulating network failure, which headless
-Chromium doesn't expose cleanly. This test confirms the PWA *plumbing* is
-correct; the actual offline behavior is guaranteed by the cache-first SW
-strategy + the self-contained dist (verified separately by the offline load).
+This checks the generated application's PWA plumbing. The isolated
+test_packaging_assets.py exercises a two-build upgrade and an offline reload
+in Chromium without changing this shared dist directory.
 """
 import json
 import sys
