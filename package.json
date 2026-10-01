@@ -22,7 +22,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "python scripts/build.py",
+    "build": "python scripts/build_offline.py",
     "build:legacy": "python scripts/build.py",
     "build:web": "vite build",
     "build:offline": "python scripts/build_offline.py",

@@ -76,10 +76,7 @@ def write_fixture_index(site: Path, version: str) -> None:
 
 def test_pwa_upgrade(temp_root: Path) -> None:
     site = temp_root / "site"
-    vendor = site / "vendor"
-    vendor.mkdir(parents=True)
-    for name in ("three.module.js", "three.core.js", "chroma-js.js", "simplex-noise.js"):
-        (vendor / name).write_text(f"// fixture {name}\n", encoding="utf-8")
+    site.mkdir(parents=True)
 
     write_fixture_index(site, "version one")
     old_cache = write_pwa_assets(site)

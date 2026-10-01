@@ -24,7 +24,7 @@ def check_package_scripts() -> None:
     pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     scripts = pkg.get("scripts", {})
     expected = {
-        "build": "python scripts/build.py",
+        "build": "python scripts/build_offline.py",
         "build:web": "vite build",
         "verify": "python scripts/verify.py",
         "serve": "python -m http.server 8771",

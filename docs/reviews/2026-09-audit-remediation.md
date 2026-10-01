@@ -63,3 +63,25 @@ shareable HTML, and Electron outputs, so it needs a separate parallel-build
 and parity-gated slice. Physical Android, Safari/iOS, Electron installer, and
 a Gradle APK were not tested on this host. Remote CI was not run; no remote
 branch or public site was changed during this work.
+
+## October 1 standalone builder follow-up
+
+The release offline/PWA/Electron page and portable desktop share file now use
+the same one-chunk Vite ESM bundle with inline CSS and geometry data. The old
+Python ESM rewriter remains available through `build:legacy` for comparison;
+it is no longer on the release path. The new default `npm run build` writes the
+offline page and removes obsolete generated `dist/vendor` sidecars only after
+verifying the resolved target remains inside this project's `dist` directory.
+Electron's package file list no longer includes those sidecars.
+
+Focused parity used the existing camera and geometry export assertions for the
+actual PWA over HTTP and the share file over `file://`. A copied share file in
+a temporary directory outside `dist/` also passed them and switched to the 4D
+view without page errors; this covered a redirect failure that older tests
+missed. The candidate PWA advanced its content-derived cache revision, removed
+the prior revision, and reopened offline with the updated HTML. Production
+output hashes matched the parity-tested candidate. Production PWA registration,
+standalone file boot/no-WebGL fallback, and synthetic Electron package
+inventory checks passed. The Electron executable is unavailable on this local
+host; a native Electron launch and installer still need a platform gate. The
+clean full release gate for this follow-up has not yet completed.

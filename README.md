@@ -136,6 +136,7 @@ Vite prints the local development URL. Development source should be opened throu
 
 ```bash
 npm run build:web          # Desktop site and Canvas2D fallback → dist/web
+npm run build:offline      # Inline PWA/Electron page → dist/index.html
 npm run build:single       # Self-contained desktop HTML
 npm run build:mobile       # Mobile smoke HTML + clean dist/mobile Capacitor input
 npm run build:share        # Desktop and mobile standalone files

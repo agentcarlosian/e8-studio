@@ -284,9 +284,8 @@ def main():
 # ── CSP: hash every inline <script> so script-src can drop 'unsafe-inline' ──
 # The dist embeds inline scripts (importmap, error handler, the concatenated
 # module). Rather than allow ALL inline scripts ('unsafe-inline', which defeats
-# CSP's XSS protection), we pin each by its SHA-256 hash. build_offline.py calls
-# harden_csp() again after its rewrites (the module hash changes when CDN URLs
-# are vendored, and it injects a SW-registration script).
+# CSP's XSS protection), we pin each by its SHA-256 hash. The Vite-backed inline
+# builder also uses this helper after composing its offline and share scripts.
 INLINE_SCRIPT_RE = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S)
 _HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.S)
 

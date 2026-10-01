@@ -1,8 +1,8 @@
 import { createE8CoxeterView } from '../views/e8coxeter.view.js';
 
 // The default view is available at first render. Other renderers load only
-// when selected. The standalone builder resolves these loaders to its already
-// inlined modules, keeping file:// artifacts self-contained.
+// when selected. The standalone Vite build includes their dynamic modules in
+// its single inline bundle, keeping file:// artifacts self-contained.
 export const VIEW_DEFINITIONS = Object.freeze([
   { id: 'bloom', label: 'Bloom', name: 'bloom', data: ['platonic', 'polytopes4d'], load: () => import('../views/bloom.view.js').then(m => m.createBloomView), primary: true },
   { id: 'platonic', label: 'Platonic', name: 'platonic', data: ['platonic', 'mckay'], load: () => import('../views/platonic.view.js').then(m => m.createPlatonicView), primary: true },

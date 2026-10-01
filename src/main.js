@@ -100,8 +100,8 @@ if (typeof window !== 'undefined') {
 const noise2D = simplexNoise.createNoise2D();
 
 // ---------- Data ----------
-// The standalone builder replaces deferred imports with synchronous factories.
-// All JSON is already inlined there, so hydrate before any view is constructed.
+// Standalone builds inline the complete ESM graph and the JSON data, so hydrate
+// data before any view is constructed.
 // HTTP builds have no INLINE_DATA and fetch only the default E8 files at launch.
 const DATA = typeof window !== 'undefined' && window.INLINE_DATA
   ? { ...window.INLINE_DATA } : {};
@@ -4999,9 +4999,7 @@ function toggleFullscreen() {
   else document.exitFullscreen();
 }
 
-// Defer main() call so it runs AFTER all module blocks have registered their
-// window.__modules exports. Without this, main() runs synchronously after
-// main.js's block but BEFORE persistence.js/panel.js/etc. register themselves.
+// Defer startup until the document and bundled module have finished evaluating.
 if (typeof window !== 'undefined') {
   setTimeout(() => main().catch(err => {
     setStatus('ERROR: ' + err.message);

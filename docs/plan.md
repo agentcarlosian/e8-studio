@@ -70,8 +70,9 @@ baseline, not evidence that the issues below are already fixed.
       two builds.
 - [x] Preserve Learning Center search/scroll state, coach focus, and mobile
       per-step experiment access; tighten the two identified math labels.
-- [ ] Simplify the legacy standalone build path only after output parity is
-      demonstrated; add native packaging and browser/device gates as feasible.
+- [x] Replace the release standalone module rewriter with a one-chunk Vite
+      build after HTTP/PWA/copied-file parity; retain `build:legacy` for comparison.
+      Add native packaging and browser/device gates as feasible.
 - [x] Run focused tests after each slice, then full source, web, standalone,
       mobile, rendering, and release checks on a clean local commit. Record
       limits and do not push or deploy without a separate decision.
@@ -83,6 +84,7 @@ upgrade. The clean local `npm run release:check` passed on the implemented code
 at `b3a6ccb`, including the 67 robustness checks, 30-scene graphics sweep,
 share-file boot, and 45 digital export downloads. A dense Pattern patch still
 takes about 86 ms per nearby change in a local Node sample, above a 16 ms frame
-budget; first Diffraction computation also remains full work. Legacy build
-migration, physical-device/browser matrix, and installer packages remain
-separate follow-up work.
+budget; first Diffraction computation also remains full work. The Vite-backed
+offline/share builder passed focused copied-file and actual PWA upgrade/offline
+parity on October 1. A clean release gate on the migration commit, physical
+device/browser matrix, and installer packages remain separate gates.

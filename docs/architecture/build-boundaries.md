@@ -8,19 +8,26 @@ Electron, and Android artifacts through separate verified build paths.
 | Output | Command | Current implementation | Role |
 | --- | --- | --- | --- |
 | Web | `npm run build:web` | Vite 8, npm-pinned dependencies | Primary hosted build |
-| Legacy inline | `npm run build:legacy` | Python module rewriter | Compatibility baseline |
-| Offline/PWA | `npm run build:offline` | Legacy inline + vendored dependencies | Existing Electron/PWA input |
-| Desktop share | `npm run build:single` | Fully inlined HTML | File-sharing artifact |
+| Legacy inline | `npm run build:legacy` | Retained Python module rewriter | Comparison baseline only |
+| Offline/PWA/Electron | `npm run build:offline` (also `npm run build`) | Vite one-chunk ESM bundle + inline CSS/data | Local-only `dist/index.html`; service worker and manifest beside it |
+| Desktop share | `npm run build:single` | Same Vite bundle + inline CSS/data | Portable `dist/e8-studio.html` with no sibling files |
 | Mobile native | `npm run build:mobile` | Vite ESM bundle + hybrid Canvas/WebGL HTML | Clean `dist/mobile/index.html` is Capacitor input; `dist/index.html` remains for browser smoke tests |
 | Mobile share | `npm run build:mobile:single` | Same Vite bundle + standalone HTML | Phone-sharing artifact |
 
-The Vite build emits `index.html` and a Canvas2D `mobile.html` fallback under
+The hosted Vite build emits `index.html` and a Canvas2D `mobile.html` fallback under
 `dist/web/`, uses relative asset URLs, bundles runtime JavaScript dependencies
 from `package-lock.json`, and copies canonical JSON into `dist/web/data/`.
 Only the core E8 data is fetched at desktop startup; other datasets and
 renderers load when their view is selected. The default E8 renderer is ready at
 startup, and loaded view factories are cached for later selections.
-The built HTML contains no runtime jsDelivr import map or CSP allowance.
+The built HTML contains no runtime jsDelivr import map or CSP allowance. The
+offline and share outputs compile the same ESM graph through
+`scripts/bundle_desktop.mjs`, inline seven view datasets, and embed the resulting
+single script and styles. Deferred view imports remain asynchronous at the API
+boundary but need no external chunk request. The offline page precaches only
+itself, its manifest, and icon. Electron packages `dist/index.html` without a
+`dist/vendor` dependency. The share file can be copied outside the repository
+and opened directly through `file://` without redirecting to `dist/`.
 
 `npm run mobile:build` syncs only `dist/mobile/` into Capacitor. The mobile
 builder replaces that directory with one inlined `index.html`; unrelated
@@ -77,8 +84,8 @@ Side effects cross the shared-core boundary through explicit adapters:
 
 ## Migration rules
 
-1. Vite and legacy outputs must pass the same browser behavior checks before
-   the default `build` command changes.
+1. The hosted Vite, offline, and share outputs must pass the same browser
+   behavior checks before changing the default `build` command.
 2. New desktop modules must be reachable through normal ESM imports; they must
    not be added only to `scripts/build.py::JS_FILES`.
 3. Shared-core modules may be consumed by both shells, but renderer objects may
@@ -89,8 +96,8 @@ Side effects cross the shared-core boundary through explicit adapters:
 
 ## Known migration blockers
 
-- The legacy single-file format still depends on regex-based ESM rewriting and
-  a manually ordered `JS_FILES` list.
+- `build:legacy` retains the regex-based ESM rewriter and a manually ordered
+  `JS_FILES` list as a comparison baseline. It is no longer a release input.
 - `src/main.js` and `src/mobile/main.js` still own significant UI orchestration.
   Future extraction should preserve the platform-neutral `ResourceScope`
   ownership and the existing lifecycle contracts.
@@ -125,10 +132,10 @@ Side effects cross the shared-core boundary through explicit adapters:
   home, search, section navigation, responsive library behavior, and the angle-rule
   calculator. Its cleanup releases the media-query listener on replacement or
   dismissal. The shell retains progress writes, quizzes, and Studio actions.
-- `src/platform/view-factories.js` owns the view registry and web-only dynamic
-  imports. `src/platform/deferred-view.js` holds a temporary view until its
-  renderer arrives and cancels late construction after disposal. The legacy
-  builder resolves those loaders to already inlined synchronous factories.
+- `src/platform/view-factories.js` owns the view registry and dynamic imports.
+  `src/platform/deferred-view.js` holds a temporary view until its renderer
+  arrives and cancels late construction after disposal. The standalone bundle
+  includes these modules in one inlined script.
 - `src/content/lesson-guides.js` adds vocabulary, examples, misconceptions, and
   retrieval questions to every curriculum lesson. The curriculum generator
   includes these additive fields in the mobile artifact, keeping teaching notes
@@ -137,6 +144,7 @@ Side effects cross the shared-core boundary through explicit adapters:
   including filtering, the corner calculator, quiz recovery, experiment resume,
   keyboard focus, and persistence. It runs in the studio UI verification stage.
 
-The desktop legacy rewriter remains a compatibility path. New extractions must
-use normal ESM imports and preserve the parity tests before moving that path.
+The desktop legacy rewriter remains a compatibility baseline. New extractions
+must use normal ESM imports and pass hosted, PWA, copied-file, and Electron
+package gates.
 See [verified deployment](verified-deployment.md) for the CI-to-Pages contract.

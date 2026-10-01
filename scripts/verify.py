@@ -38,7 +38,7 @@ def fail(message: str) -> None:
 
 
 def check_build() -> None:
-    run([sys.executable, "scripts/build.py"])
+    run([sys.executable, "scripts/build_offline.py"])
 
 
 def check_web_build() -> None:
@@ -62,6 +62,7 @@ def check_web_build() -> None:
 
 def check_dependency_alignment() -> None:
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
     versions = {
         "three": package.get("dependencies", {}).get("three"),
         "chroma-js": package.get("dependencies", {}).get("chroma-js"),
@@ -73,14 +74,14 @@ def check_dependency_alignment() -> None:
         "chroma-js.js": f"https://cdn.jsdelivr.net/npm/chroma-js@{versions['chroma-js']}/+esm",
         "simplex-noise.js": f"https://cdn.jsdelivr.net/npm/simplex-noise@{versions['simplex-noise']}/+esm",
     }
-    sources = json.loads((ROOT / "vendor" / "sources.json").read_text(encoding="utf-8"))
-    if sources != expected_urls:
-        fail(f"Vendored dependency sources do not match package.json: {sources} != {expected_urls}")
+    for name, version in versions.items():
+        locked = lock.get("packages", {}).get(f"node_modules/{name}", {}).get("version")
+        if locked != version:
+            fail(f"package-lock.json has {name} {locked!r}; package.json pins {version!r}")
     direct_urls = {key: value for key, value in expected_urls.items() if key != "three.core.js"}
-    for path in [ROOT / "index.html", ROOT / "scripts" / "build.py", ROOT / "scripts" / "build_offline.py"]:
+    for path in [ROOT / "index.html", ROOT / "scripts" / "build.py"]:
         text = path.read_text(encoding="utf-8")
-        required_urls = expected_urls if path.name == "build_offline.py" else direct_urls
-        for url in required_urls.values():
+        for url in direct_urls.values():
             if url not in text:
                 fail(f"{path.relative_to(ROOT)} does not pin {url}")
 
@@ -91,8 +92,11 @@ def check_standalone_build() -> None:
     if not standalone.exists() or standalone.stat().st_size < 1_000_000:
         fail("Desktop standalone build is missing or unexpectedly small")
     text = standalone.read_text(encoding="utf-8")
-    if "__standaloneImportThree" not in text:
-        fail("Desktop standalone does not embed Three.js and its shared core")
+    if "window.INLINE_DATA = " not in text or "WebGLRenderer" not in text:
+        fail("Desktop standalone does not embed geometry data and Three.js")
+    if any(marker in text for marker in ('src="src/', 'href="src/', 'cdn.jsdelivr.net',
+                                        'manifest.webmanifest', 'serviceWorker')):
+        fail("Desktop standalone has a runtime asset or PWA dependency")
 
 
 def check_js_syntax() -> None:
@@ -133,6 +137,8 @@ def check_packaging_assets() -> None:
     # Uses a temporary site and local Chromium; it does not rewrite shared dist.
     run([sys.executable, "-B", "scripts/test_packaging_assets.py"])
     run([sys.executable, "-B", "scripts/test_android_apk.py", "--self-test"])
+    run(["node", "scripts/test_electron_package.mjs", "--self-test"])
+    run([sys.executable, "-B", "scripts/test_desktop_candidate.py"])
 
 
 def load_json(name: str):
