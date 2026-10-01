@@ -11,6 +11,7 @@ export function createQuasicrystalView({ data, palette, scale: baseScale, contex
   let modelGroup = null;
   let construction = null;
   let pointMaterial = null;
+  let pointBaseSize = 17;
   let activeSignature = '';
 
   function build(params = runtimeParams()) {
@@ -36,6 +37,7 @@ export function createQuasicrystalView({ data, palette, scale: baseScale, contex
     group.add(modelGroup);
 
     const paletteName = params.palette || palette;
+    pointBaseSize = mode === 'window' ? 15 : mode === 'diffraction' ? 22 : 17;
     if (mode === 'window') buildWindow(modelGroup, construction, baseScale, relief, paletteName);
     else if (mode === 'diffraction') buildDiffraction(modelGroup, construction, baseScale, relief, paletteName);
     else buildPattern(modelGroup, construction, baseScale, relief, paletteName);
@@ -65,7 +67,7 @@ export function createQuasicrystalView({ data, palette, scale: baseScale, contex
         group.rotation.z += dt * (params.rotationSpeed || 0.003) * 42 * motionScale;
       }
       if (pointMaterial?.uniforms?.uBaseSize) {
-        pointMaterial.uniforms.uBaseSize.value = 17 * (params.pointScale || 1);
+        pointMaterial.uniforms.uBaseSize.value = pointBaseSize * (params.pointScale || 1);
       }
     },
 
@@ -251,7 +253,7 @@ function addWindowPoints(parent, patch, radius, relief, palette) {
         <div><b>two coordinates of the hidden 6D component</b></div>
         <div>hidden radius: <b>${formatNumber(point.shiftedInternalRadius)}</b></div>
         <div>window radius: <b>${formatNumber(patch.windowRadius)}</b></div>
-        <div style="color:var(--muted);margin-top:4px">The circle is a readable 2D slice of the spherical six-dimensional acceptance window.</div>`,
+        <div style="color:var(--muted);margin-top:4px">The circle bounds this two-coordinate view. Acceptance checks all six hidden coordinates.</div>`,
     })),
   });
 }
@@ -297,7 +299,7 @@ function addDiffractionPeaks(parent, patch, radius, relief, palette) {
     name: 'QuasicrystalPoints', positions, colors, sizes,
     baseSize: 22,
     tooltipData: patch.diffraction.map((peak, index) => ({
-      html: `<div class="ttip-head">Reciprocal peak #${index}</div>
+      html: `<div class="ttip-head">Reciprocal sample #${index}</div>
         <div><b>relative strength ${formatNumber(peak.strength)}</b></div>
         <div>structure-factor intensity: <b>${formatNumber(peak.intensity)}</b></div>
         <div>reciprocal radius: <b>${formatNumber(peak.radius)}</b></div>
