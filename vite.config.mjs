@@ -43,6 +43,10 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
+      input: {
+        main: resolve(ROOT, 'index.html'),
+        mobile: resolve(ROOT, 'mobile.html'),
+      },
       output: {
         manualChunks(id) {
           const normalized = id.replaceAll('\\', '/');

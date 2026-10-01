@@ -13,7 +13,7 @@ import { exportModelRecord } from './services/model-files.js';
 import { renderModelExport, bindModelExport } from './ui/model-export.js';
 import { createGeometryExporters } from './services/geometry-export.js';
 import { createQuickStart } from './ui/quick-start.js';
-import { renderLearningCenter, renderLearningHome, bindLearningCenterNavigation } from './ui/learning-center.js';
+import { renderLearningCenter, renderLearningHome, bindLearningCenterNavigation, captureLearningCenterUiState } from './ui/learning-center.js';
 import { createQuasicrystalComparison } from './ui/quasicrystal-comparison.js';
 
 import { PALETTE_NAMES, SHIFT_PRESETS, BLEND_MODES, COLORING_NAMES, PALETTE_PRESETS, buildPalette, colorAt, palettePreviewCSS } from './ui/palettes.js';
@@ -100,32 +100,43 @@ if (typeof window !== 'undefined') {
 const noise2D = simplexNoise.createNoise2D();
 
 // ---------- Data ----------
-const DATA = {};
+// The standalone builder replaces deferred imports with synchronous factories.
+// All JSON is already inlined there, so hydrate before any view is constructed.
+// HTTP builds have no INLINE_DATA and fetch only the default E8 files at launch.
+const DATA = typeof window !== 'undefined' && window.INLINE_DATA
+  ? { ...window.INLINE_DATA } : {};
+const pendingDataLoads = new Map();
+function loadDataFile(name) {
+  if (DATA[name]) return Promise.resolve(DATA[name]);
+  if (pendingDataLoads.has(name)) return pendingDataLoads.get(name);
+  const pending = (async () => {
+    // Standalone file:// builds inline the same canonical JSON files.
+    const inline = typeof window !== 'undefined' ? window.INLINE_DATA?.[name] : null;
+    if (inline) return inline;
+    const response = await fetch(`./data/${name}.json`);
+    if (!response.ok) throw new Error(`${name}.json returned HTTP ${response.status}`);
+    return response.json();
+  })().then(data => {
+    if (!data || typeof data !== 'object') throw new Error(`${name}.json has no usable data`);
+    DATA[name] = data;
+    pendingDataLoads.delete(name);
+    return data;
+  }).catch(error => {
+    pendingDataLoads.delete(name); // A later selection may retry a transient failure.
+    throw error;
+  });
+  pendingDataLoads.set(name, pending);
+  return pending;
+}
+
 async function loadData() {
-  // Try inlined data first (for file:// use), fall back to fetch (for http://)
-  const trySources = async (name) => {
-    if (typeof window !== 'undefined' && window.INLINE_DATA && window.INLINE_DATA[name]) {
-      return window.INLINE_DATA[name];
-    }
-    return fetch('./data/' + name + '.json').then(r => r.json());
-  };
-  const [e8, e8math, platonic, polytopes4d, dynkin, mckay, mckaySubsets] = await Promise.all([
-    trySources('e8'),
-    trySources('e8_math'),
-    trySources('platonic'),
-    trySources('polytopes4d'),
-    trySources('dynkin'),
-    trySources('mckay'),
-    trySources('mckay_subsets'),
-  ]);
-  DATA.e8 = e8;
-  DATA.e8_math = e8math;
-  DATA.platonic = platonic;
-  DATA.polytopes4d = polytopes4d;
-  DATA.dynkin = dynkin;
-  DATA.mckay = mckay;
-  DATA.mckay_subsets = mckaySubsets;
-  setStatus('loaded · 240 roots · 120 600-cell verts');
+  // Only data needed by the default E8 renderer belongs on the launch path.
+  await Promise.all([loadDataFile('e8'), loadDataFile('e8_math')]);
+  setStatus('loaded · 240 E8 roots');
+}
+
+function loadViewData(definition) {
+  return Promise.all((definition.data || []).map(loadDataFile));
 }
 
 // ---------- Status ----------
@@ -138,11 +149,18 @@ const VIEWS = VIEW_DEFINITIONS.map(def => ({
   ...def,
   factory: def.factory || (options => createDeferredView({
     name: def.name,
-    load: def.load,
+    load: async () => {
+      const [factory] = await Promise.all([def.load(), loadViewData(def)]);
+      return factory;
+    },
     options,
     onReady(view) {
       if (currentView !== view) return;
       const realView = view.realView;
+      // Keep the proxy active until data-dependent UI has rendered. If a
+      // malformed dataset trips either path, onError can still recover it.
+      refreshPanel();
+      updateOverlays(def.id);
       scene.remove(view.object3d);
       scene.add(realView.object3d);
       currentView = realView;
@@ -157,6 +175,10 @@ const VIEWS = VIEW_DEFINITIONS.map(def => ({
       if (currentView === view) {
         showSavedToast(`${def.label} could not load; returned to E8`);
         switchView('e8coxeter', { save: false });
+        // Replace any debounced snapshot of the failed view, including a
+        // restored view that failed during startup.
+        saveConfig(params, { immediate: true });
+        setStatus(`${def.label} unavailable: ${error?.message || String(error)}`);
       }
     },
   })),
@@ -498,7 +520,30 @@ function hideRenderFallback() {
   if (el) el.classList.add('hidden');
 }
 
-function showRenderFallback(title, detail) {
+function canvas2DStudioUrl() {
+  // Vite emits mobile.html beside index.html; the source server does too.
+  // Standalone file:// and Electron packages may omit the separate mobile
+  // artifact, so never offer an unverified sibling link there.
+  return /^https?:$/.test(location.protocol) ? new URL('./mobile.html', location.href) : null;
+}
+
+async function openCanvas2DStudio() {
+  const url = canvas2DStudioUrl();
+  if (!url) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok || !(await response.text()).includes('id="mobile-canvas"')) {
+      throw new Error('2D Studio is absent from this build');
+    }
+    location.assign(url.href);
+  } catch (error) {
+    console.warn('[render-fallback] 2D Studio unavailable:', error);
+    setStatus('2D Studio unavailable in this copy');
+    showRenderFallback('2D Studio unavailable', 'This copy does not contain the Canvas2D Studio. Please use a full web build or the separate mobile file.', { webglUnavailable: true });
+  }
+}
+
+function showRenderFallback(title, detail, { webglUnavailable = false } = {}) {
   webglFallbackUsed = true;
   renderFailureShown = true;
   let el = document.getElementById('render-fallback');
@@ -516,11 +561,14 @@ function showRenderFallback(title, detail) {
       </div>
       <div class="fallback-copy">
         <strong>${svgEsc(title || 'Live render unavailable')}</strong>
-        <p>${svgEsc(detail || 'E8 Studio can keep exploring in reduced mode on this device.')}</p>
+        <p>${svgEsc(detail || 'The live render is unavailable on this device.')}</p>
+        ${webglUnavailable && !canvas2DStudioUrl() ? '<p>The standalone 2D mobile file can be opened separately if it was supplied with this copy.</p>' : ''}
       </div>
       <div class="fallback-actions">
         <button data-act="retryWebGL">Retry</button>
-        <button data-act="enableReducedMode">Reduced mode</button>
+        ${webglUnavailable
+          ? (canvas2DStudioUrl() ? '<button data-act="openCanvas2DStudio">Open 2D Studio</button>' : '')
+          : '<button data-act="enableReducedMode">Reduced quality</button>'}
       </div>
     </div>
   `;
@@ -545,7 +593,7 @@ function installWebGLContextHandlers(canvas) {
       params.mobileQuality = 'low';
       saveConfig(params);
     }
-    showRenderFallback('The live render paused', 'Android reclaimed the graphics context. Reduced mode is ready, or retry after a reload.');
+    showRenderFallback('The live render paused', 'The graphics context was lost. Open the 2D Studio, or retry after it returns.', { webglUnavailable: true });
   });
   canvas.addEventListener('webglcontextrestored', () => {
     showSavedToast('Graphics context restored');
@@ -1148,15 +1196,13 @@ function switchView(id, options = {}) {
   // so 1.6 leaves comfortable margin.
   const baseScale = 1.6;
 
-  // Different views need different data + scale
-  // Spread DATA so all fields are visible to views that reach for DATA.X directly
-  const data = { ...DATA, e8: DATA.e8, e8_math: DATA.e8_math, platonic: DATA.platonic, polytopes4d: DATA.polytopes4d, dynkin: DATA.dynkin, mckay: DATA.mckay, mckay_subsets: DATA.mckay_subsets };
-
   activeViewScope = createResourceScope({
     onDisposeError: error => console.warn('[resource-scope] dispose error:', error),
   });
   currentView = def.factory({
-    data,
+    // Keep the shared reference: deferred factories see their JSON after it
+    // arrives, while the panel can refresh against the same object.
+    data: DATA,
     palette: params.palette,
     scale: baseScale,
     context: buildRuntimeContext(),
@@ -1194,6 +1240,14 @@ function updateOverlays(viewId) {
   // Count only visible views so the "view N / M" badge matches the model grid.
   const visibleViews = VIEWS.filter(v => !v.hidden);
   const idx = visibleViews.findIndex(v => v.id === viewId);
+  const definition = VIEWS.find(view => view.id === viewId);
+  if (definition?.data?.some(name => !DATA[name])) {
+    tl.innerHTML = `<b>${definition.label.toUpperCase()}</b><br>Loading view data…`;
+    tr.textContent = '';
+    bl.textContent = '';
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}`;
+    return;
+  }
 
   if (viewId === 'platonic') {
     // Round 9: stellations aren't in DATA.platonic / DATA.mckay, so guard for
@@ -2177,17 +2231,25 @@ function learningState() {
 
 let learningModalReturnFocus = null;
 let learningCenterCleanup = null;
+let learningCenterLibraryState = null;
+let experimentCoachReturnFocus = null;
 
-function closeLearningModal() {
+function rememberLearningCenterUiState(host) {
+  const state = captureLearningCenterUiState(host);
+  if (state) learningCenterLibraryState = state;
+}
+
+function closeLearningModal({ restoreFocus = true } = {}) {
   const host = document.getElementById('learning-modal');
   if (!host || host.classList.contains('hidden')) return false;
+  rememberLearningCenterUiState(host);
   learningCenterCleanup?.();
   learningCenterCleanup = null;
   host.classList.add('hidden');
   setStudioChromeInert(false);
   const target = learningModalReturnFocus;
   learningModalReturnFocus = null;
-  requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
+  if (restoreFocus) requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
   return true;
 }
 
@@ -2225,6 +2287,7 @@ function showLearningModal(html) {
   learningCenterCleanup?.();
   learningCenterCleanup = null;
   const host = ensureLearningModal();
+  rememberLearningCenterUiState(host);
   if (host.classList.contains('hidden')) learningModalReturnFocus = document.activeElement;
   host.innerHTML = `<div class="learning-dialog" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
   const dialog = host.querySelector('.learning-dialog');
@@ -2241,10 +2304,13 @@ function showLearningModal(html) {
   return host;
 }
 
-function closeExperimentCoach() {
+function closeExperimentCoach({ restoreFocus = true } = {}) {
   const coach = document.getElementById('learning-experiment-coach');
   if (!coach) return false;
   coach.remove();
+  const target = experimentCoachReturnFocus;
+  experimentCoachReturnFocus = null;
+  if (restoreFocus) requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
   return true;
 }
 
@@ -2269,12 +2335,13 @@ function showExperimentCoach(lessonId, stepId) {
     coach = document.createElement('aside');
     coach.id = 'learning-experiment-coach';
     coach.className = 'learning-experiment-coach';
-    coach.setAttribute('aria-label', 'Guided experiment');
+    coach.setAttribute('role', 'region');
+    coach.setAttribute('aria-labelledby', 'learning-experiment-coach-title');
     document.body.appendChild(coach);
   }
   coach.innerHTML = `
     <div class="experiment-coach-head">
-      <div><span>Guided experiment · ${stepIndex + 1}/${steps.length}</span><strong>${svgEsc(lesson.experiment.title)}</strong></div>
+      <div><span>Guided experiment · ${stepIndex + 1}/${steps.length}</span><strong id="learning-experiment-coach-title" role="heading" aria-level="2" tabindex="-1">${svgEsc(lesson.experiment.title)}: ${svgEsc(entry.title)}</strong></div>
       <button data-experiment-coach-close aria-label="Close guided experiment">×</button>
     </div>
     <div class="experiment-coach-body">
@@ -2288,7 +2355,7 @@ function showExperimentCoach(lessonId, stepId) {
       <button class="${observed ? 'complete' : ''}" data-experiment-coach-observed>${observed ? '✓ Observed' : 'Mark observed'}</button>
       ${next ? `<button data-experiment-coach-next>Next step →</button>` : ''}<button data-experiment-coach-review>Back to lesson</button>
     </div>`;
-  coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', closeExperimentCoach);
+  coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', () => closeExperimentCoach());
   coach.querySelector('[data-experiment-coach-apply]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, entry.id));
   coach.querySelector('[data-experiment-coach-observed]')?.addEventListener('click', () => {
     learningProgress.setExperimentStepComplete(lesson.id, entry.id, !observed);
@@ -2297,8 +2364,13 @@ function showExperimentCoach(lessonId, stepId) {
   });
   coach.querySelector('[data-experiment-coach-next]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, next.id));
   coach.querySelector('[data-experiment-coach-review]')?.addEventListener('click', () => {
-    closeExperimentCoach();
+    const target = experimentCoachReturnFocus;
+    closeExperimentCoach({ restoreFocus: false });
     openLearningCenter(lesson.id);
+    learningModalReturnFocus = target;
+  });
+  requestAnimationFrame(() => {
+    if (coach.isConnected) coach.querySelector('#learning-experiment-coach-title')?.focus({ preventScroll: true });
   });
   return true;
 }
@@ -2307,7 +2379,10 @@ function applyLearningExperimentStep(lessonId, stepId) {
   const lesson = learningLessonById(lessonId);
   const entry = lesson?.experiment?.steps?.find(step => step.id === stepId);
   if (!lesson || !entry?.action) return false;
-  closeLearningModal();
+  if (!document.getElementById('learning-modal')?.classList.contains('hidden') && !experimentCoachReturnFocus) {
+    experimentCoachReturnFocus = learningModalReturnFocus || document.getElementById('canvas');
+  }
+  closeLearningModal({ restoreFocus: false });
   const targetView = entry.action.view || lesson.view;
   Object.assign(params, entry.action.params || {}, { autoModel: false, intro: false });
   normalizeParams(params);
@@ -2339,7 +2414,7 @@ function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = nu
   const experimentState = learningProgress.experimentState(lesson.id);
   const host = showLearningModal(renderLearningCenter(lesson, learningProgress));
   host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog');
-  learningCenterCleanup = bindLearningCenterNavigation(host);
+  learningCenterCleanup = bindLearningCenterNavigation(host, learningCenterLibraryState);
   requestAnimationFrame(() => {
     host.querySelector('.learning-center-content').scrollTop = scrollTop;
     if (focusSelector) host.querySelector(focusSelector)?.focus({ preventScroll: true });
@@ -3196,7 +3271,7 @@ window.__app = {
     applyQualityProfile();
     saveConfig(params);
     if (!renderer) {
-      location.reload();
+      void openCanvas2DStudio();
       return;
     }
     if (currentView) switchView(params.view);
@@ -3204,6 +3279,7 @@ window.__app = {
     refreshPanel();
     showSavedToast('Reduced mode on');
   },
+  openCanvas2DStudio() { return openCanvas2DStudio(); },
   retryWebGL() { location.reload(); },
   unlockReward(id) {
     learningProgress.unlock(id);
@@ -4775,7 +4851,7 @@ async function main() {
     params.reducedMode = true;
     params.mobileQuality = 'low';
     saveConfig(params);
-    showRenderFallback('Live WebGL could not start', 'Reduced mode is ready for this device. You can also retry after closing other apps.');
+    showRenderFallback('Live WebGL could not start', 'Open the Canvas2D Studio, or retry after graphics support returns.', { webglUnavailable: true });
     return;
   }
   buildTabs();
@@ -4819,6 +4895,24 @@ async function main() {
   startAutoSave(() => params);
 
   animate();
+
+  // The default E8 scene draws without these interpretive highlight subsets.
+  // Fetch them after launch, then rebuild E8 only if it is still the active
+  // view; a failed optional file must not hold up the first frame.
+  if (!DATA.mckay_subsets) {
+    void loadDataFile('mckay_subsets').then(() => {
+      if (params.view === 'e8coxeter' && currentView) {
+        switchView('e8coxeter', { save: false, resetSelection: false });
+      } else {
+        refreshPanel();
+      }
+    }).catch(error => {
+      console.warn('[data-load] McKay highlights unavailable:', error);
+      runtimeErrors.push({ type: 'data-load', view: 'e8coxeter', message: error?.message || String(error), time: Date.now() });
+      if (runtimeErrors.length > 20) runtimeErrors.shift();
+      if (params.view === 'e8coxeter') showSavedToast('McKay highlights unavailable; E8 still works');
+    });
+  }
 
   // Keyboard
   window.addEventListener('keydown', (e) => {

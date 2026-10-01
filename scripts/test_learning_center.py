@@ -62,6 +62,9 @@ def main():
                     search.fill('five regular')
                     page.locator('.learning-lesson-link[data-learning-lesson="why-five-solids"]').click()
                     assert page.locator('#learning-lesson-title').inner_text() == 'Why exactly five regular solids?'
+                    assert search.input_value() == 'five regular', 'lesson navigation preserves the library search'
+                    if width < 761:
+                        assert page.locator('.learning-library').evaluate('(el) => el.open'), 'phone library stays open after selection'
                     assert page.locator('.learning-evidence tbody tr').count() == 6
                     if width < 761:
                         corners = page.locator('.learning-corner select').all()
@@ -85,6 +88,8 @@ def main():
                     page.locator('[data-learning-complete]').click()
                     page.wait_for_timeout(80)
                     assert page.locator('[data-learning-complete]').get_attribute('aria-pressed') == 'true'
+                    assert page.locator('.learning-recall details').evaluate('(el) => el.open'), 'self-check disclosure survives a lesson refresh'
+                    assert search.input_value() == 'five regular', 'progress updates preserve the library search'
                     assert page.locator('[data-learning-complete]').evaluate('(el) => el === document.activeElement')
                     assert page.locator('.learning-center-content').evaluate('(el) => el.scrollTop > 100')
                     page.locator('[data-learning-quiz]').click()
@@ -98,6 +103,7 @@ def main():
                     assert page.locator('.quiz-result li').count() == 3
                     page.locator('[data-quiz-back]').click()
                     assert page.locator('#learning-lesson-title').inner_text() == 'Why exactly five regular solids?'
+                    assert search.input_value() == 'five regular', 'quiz return preserves the library search'
                     page.wait_for_timeout(100)
                     page.screenshot(path=str(shots / f'quiz-return-{width}.png'))
                     page.locator('.learning-hero-action [data-learning-run-step]').click()

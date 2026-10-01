@@ -39,7 +39,7 @@ export function renderLearningHome(learningProgress, activeView = 'e8coxeter') {
         <p>Build intuition with one idea at a time: read a short explanation, try a guided scene, then check what you noticed. Your progress stays on this device.</p>
         <div class="learning-home-actions">
           <button class="learning-home-primary" data-learning-lesson="why-five-solids">Begin with regular solids <span aria-hidden="true">↗</span></button>
-          <button data-learning-lesson="${svgEsc(currentLesson.id)}">Continue with this view <span aria-hidden="true">→</span></button>
+          <button data-learning-lesson="${svgEsc(currentLesson.id)}">Open this view's lesson <span aria-hidden="true">→</span></button>
         </div>
         <div class="learning-home-progress" role="status">${summary.lessonsComplete} of ${summary.lessonsTotal} lessons complete</div>
       </header>
@@ -157,7 +157,7 @@ export function renderLearningCenter(lesson, learningProgress) {
   const nextStep = experimentState.nextStep;
   return `
     <button class="modal-close" data-modal-close aria-label="Close Learning Center">×</button>
-    <div class="learning-center-shell">
+    <div class="learning-center-shell" data-learning-current="${svgEsc(lesson.id)}">
       <details class="learning-library" open>
         <summary class="learning-library-toggle">Browse lessons <span>${learningSummary.lessonsTotal} lessons · ${LEARNING_PATHS.length} paths</span></summary>
       <aside class="learning-center-nav" aria-label="Learning paths">
@@ -257,13 +257,28 @@ export function renderLearningCenter(lesson, learningProgress) {
   `;
 }
 
-export function bindLearningCenterNavigation(host) {
+export function captureLearningCenterUiState(host) {
+  const library = host?.querySelector?.('.learning-library');
+  if (!library) return null;
+  return {
+    lessonId: host.querySelector('[data-learning-current]')?.dataset.learningCurrent || null,
+    query: host.querySelector('#learning-search')?.value || '',
+    libraryOpen: library.open,
+    libraryScrollTop: host.querySelector('.learning-center-nav')?.scrollTop || 0,
+    sourcesOpen: !!host.querySelector('.learning-more')?.open,
+    recallOpen: !!host.querySelector('.learning-recall details')?.open,
+  };
+}
+
+export function bindLearningCenterNavigation(host, savedState = null) {
   const library = host.querySelector('.learning-library');
   const narrow = window.matchMedia('(max-width: 760px)');
   const adapt = () => { library.open = !narrow.matches; };
   adapt();
+  if (savedState) library.open = savedState.libraryOpen;
   narrow.addEventListener('change', adapt);
   const input = host.querySelector('#learning-search');
+  if (savedState) input.value = savedState.query;
   const links = [...host.querySelectorAll('[data-learning-search]')];
   const paths = [...host.querySelectorAll('[data-learning-path]')];
   const filter = () => {
@@ -280,6 +295,18 @@ export function bindLearningCenterNavigation(host) {
   input.addEventListener('input', filter);
   host.querySelector('[data-learning-clear]').addEventListener('click', () => { input.value = ''; filter(); input.focus(); });
   filter();
+  if (savedState) {
+    const nav = host.querySelector('.learning-center-nav');
+    requestAnimationFrame(() => {
+      if (nav?.isConnected) nav.scrollTop = savedState.libraryScrollTop;
+    });
+    if (savedState.lessonId === host.querySelector('[data-learning-current]')?.dataset.learningCurrent) {
+      const sources = host.querySelector('.learning-more');
+      const recall = host.querySelector('.learning-recall details');
+      if (sources) sources.open = savedState.sourcesOpen;
+      if (recall) recall.open = savedState.recallOpen;
+    }
+  }
   const cornerSides = host.querySelector('[data-corner-sides]');
   const cornerCount = host.querySelector('[data-corner-count]');
   if (cornerSides && cornerCount) {
