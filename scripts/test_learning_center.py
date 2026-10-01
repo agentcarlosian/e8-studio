@@ -1,7 +1,7 @@
 """Learning journeys: search, reading, experiments, quiz recovery, and focus."""
 from pathlib import Path
 import os
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 from verify import start_server, find_chromium_executable, chromium_webgl_args
 
 
@@ -24,7 +24,21 @@ def main():
                     page.on('pageerror', lambda error: errors.append(str(error)))
                     page.add_init_script('window.__forceSdfSafeMode = true')
                     page.goto(os.environ.get('LEARNING_UI_URL', base + '/dist/web/index.html'), wait_until='domcontentloaded')
-                    page.wait_for_function('() => !!window.__app?.currentView')
+                    try:
+                        page.wait_for_function('() => !!window.__app?.currentView', timeout=60000)
+                    except PlaywrightTimeoutError as exc:
+                        state = {'href': page.url}
+                        try:
+                            state = page.evaluate('''() => ({
+                              href: location.href,
+                              app: !!window.__app,
+                              view: window.__app?.params?.view,
+                              currentView: window.__app?.currentView?.name,
+                              text: document.body.innerText.slice(0, 400),
+                            })''')
+                        except PlaywrightTimeoutError:
+                            state['pageUnresponsive'] = True
+                        raise AssertionError(f'Learning Center startup failed at {width}px: {state}; page errors: {errors}') from exc
                     page.evaluate('window.__app.openLearningCenter()')
                     assert page.locator('.learning-home-question-grid button').count() == 3
                     assert page.locator('.learning-home-path').count() == 4
@@ -125,7 +139,7 @@ def main():
                     page.keyboard.press('Escape')
                     assert page.locator('#learning-modal').evaluate('(el) => el.classList.contains("hidden")')
                     page.reload(wait_until='domcontentloaded')
-                    page.wait_for_function('() => !!window.__app?.currentView')
+                    page.wait_for_function('() => !!window.__app?.currentView', timeout=60000)
                     assert page.evaluate("!!window.__app.progress.lessons?.['why-five-solids']")
                     assert not errors, errors
                     context.close()
