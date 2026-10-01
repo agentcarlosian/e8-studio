@@ -54,7 +54,12 @@ sampled edge lists. Those numbers depend on CPU/load and do not guarantee a
 device frame rate. Dense Pattern dragging still exceeds a 16 ms frame budget;
 an incremental graph or staged rendering needs separate design and testing.
 
-The legacy Python module rewriter remains in the standalone build path.
-Physical Android, Safari/iOS, Electron installer, and a Gradle APK were not
-tested. The clean-commit release gate and remote CI are separate checks; no
-remote branch or public site was changed during this work.
+The clean local `npm run release:check` passed on code commit `b3a6ccb`,
+including the 67 robustness checks, four-size Studio and Learning Center
+journeys, 30-scene background sweep, standalone file boot/fallback, and 45
+digital export downloads. The legacy Python module rewriter remains in the
+standalone build path. Migrating it would also change the offline PWA,
+shareable HTML, and Electron outputs, so it needs a separate parallel-build
+and parity-gated slice. Physical Android, Safari/iOS, Electron installer, and
+a Gradle APK were not tested on this host. Remote CI was not run; no remote
+branch or public site was changed during this work.
