@@ -72,7 +72,10 @@ baseline, not evidence that the issues below are already fixed.
       per-step experiment access; tighten the two identified math labels.
 - [x] Replace the release standalone module rewriter with a one-chunk Vite
       build after HTTP/PWA/copied-file parity; retain `build:legacy` for comparison.
-      Add native packaging and browser/device gates as feasible.
+- [x] Add WebKit engine and no-WebGL recovery smoke, Android APK and Electron
+      package inventory gates, and a packaged Electron runtime check.
+- [ ] Run the new package jobs remotely and exercise physical Android,
+      Safari/iOS, and installed Electron behavior on their target platforms.
 - [x] Run focused tests after each slice, then full source, web, standalone,
       mobile, rendering, and release checks on a clean local commit. Record
       limits and do not push or deploy without a separate decision.
@@ -82,9 +85,11 @@ fault injection, four-size Studio/Learning Center journeys, mobile smoke,
 standalone file:// boot/fallback, exact native staging, and a two-build PWA
 upgrade. The clean local `npm run release:check` passed on the implemented code
 at `b3a6ccb`, including the 67 robustness checks, 30-scene graphics sweep,
-share-file boot, and 45 digital export downloads. A dense Pattern patch still
-takes about 86 ms per nearby change in a local Node sample, above a 16 ms frame
-budget; first Diffraction computation also remains full work. The Vite-backed
-offline/share builder passed focused copied-file and actual PWA upgrade/offline
-parity on October 1. A clean release gate on the migration commit, physical
-device/browser matrix, and installer packages remain separate gates.
+share-file boot, and 45 digital export downloads. The Vite-backed offline/share
+builder passed copied-file and actual PWA upgrade/offline parity. After the
+October 1 performance work, dense Pattern browser view-update medians were
+40.7 ms and 29.2 ms in two local headless Chromium samples, down from 352.5 ms
+and 288.4 ms; rendered-frame timing still varies and is not a 60 FPS claim.
+The clean `npm run release:check` passed on code commit `79f890f`, followed by
+math, WebKit, mobile smoke, and Capacitor sync checks. See
+`docs/reviews/2026-10-continuation.md` for evidence and remaining limits.
