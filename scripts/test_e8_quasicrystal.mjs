@@ -25,6 +25,13 @@ for (const [reach, radius, phason, expectedDigest] of [
   [6, 2.4, 0.31, '6ad96b7cf3bc8e600d7bedebea606b5b28d8636f11ec0cac3b658188db7c2093'],
   [8, 1.42, 0, 'fa49ca5bdf88b44490b206072bc733b8232db656b316d33187a7fcea7707e8ff'],
   [4, 2.4, 0.31, '94fa565e337440872d22eab3e8661c334335fa9a0f168246dde2b630c11d9c8a'],
+  // Cover both dense fast-path radii, the full-radius fallback, and a sparse
+  // accepted patch. These hashes pin the ordered links, including sort ties.
+  [8, 2, -1.2, '1d8de4b4d9b5d0e75efaa55a256fd34a9f436c43da58f93d19ba5720a9eefa8d'],
+  [8, 2.2, 0.31, '5a20e0e6061aaa68fca0b92138b9bf603c4bf01d4e4ae2aff1e7c4fe5a5db29c'],
+  [8, 2.4, 1.2, '52d2b943f92f221acc5af2f6963cfb837cbb74ef99f8131a2af83730fdfc8359'],
+  [6, 2.4, -1.2, 'caf8f2938f21e9c9ca8a2564aa9a4e11406e1e493194ec9992d71e18cb81e932'],
+  [4, 0.8, -1.2, '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'],
 ]) {
   const linked = generateE8Quasicrystal(e8, {
     maxNormSq: reach, windowRadius: radius, phason, includeDiffraction: false,

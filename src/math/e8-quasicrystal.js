@@ -249,36 +249,55 @@ function buildProximityEdges(points) {
   const baseCellX = points.map(point => Math.floor(point.normalized[0] / threshold));
   const baseCellY = points.map(point => Math.floor(point.normalized[1] / threshold));
   // At dense settings the 7,200-link cap is reached well inside the search
-  // radius. A short pass is exact if it reaches the cap; otherwise use the
-  // original full radius. The degree-five bound rules out the short pass for
-  // small patches that cannot possibly fill the cap.
+  // radius. Use a smaller first radius for the most crowded patches; patches
+  // with fewer points need more room to fill the cap. A short pass is exact if
+  // it reaches the cap; otherwise use the original full radius. The degree-five
+  // bound rules out the short pass for patches that cannot fill the cap.
   if (points.length * 2.5 >= edgeLimit) {
-    const nearby = proximityEdgesWithin(points, threshold * 0.4, edgeLimit, baseCellX, baseCellY);
+    const firstRadius = threshold * (points.length >= 12000 ? 0.28
+      : points.length >= 7000 ? 0.46 : 0.52);
+    const nearby = proximityEdgesWithin(points, firstRadius, edgeLimit, baseCellX, baseCellY);
     if (nearby.length === edgeLimit) return nearby;
   }
   return proximityEdgesWithin(points, threshold, edgeLimit, baseCellX, baseCellY);
 }
 
 function proximityEdgesWithin(points, radius, edgeLimit, baseCellX, baseCellY) {
-  const buckets = new Map();
   const cellX = new Int32Array(points.length);
   const cellY = new Int32Array(points.length);
-  points.forEach((point, index) => {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index];
     cellX[index] = Math.floor(point.normalized[0] / radius);
     cellY[index] = Math.floor(point.normalized[1] / radius);
-    const key = `${cellX[index]},${cellY[index]}`;
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(index);
-  });
+    minX = Math.min(minX, cellX[index]);
+    maxX = Math.max(maxX, cellX[index]);
+    minY = Math.min(minY, cellY[index]);
+    maxY = Math.max(maxY, cellY[index]);
+  }
+  // A padded integer grid replaces string keys and per-cell arrays. The
+  // padding makes every neighboring cell lookup valid, even at the boundary.
+  const stride = maxY - minY + 3;
+  const heads = new Int32Array((maxX - minX + 3) * stride);
+  heads.fill(-1);
+  const next = new Int32Array(points.length);
+  for (let index = 0; index < points.length; index++) {
+    const key = (cellX[index] - minX + 1) * stride + cellY[index] - minY + 1;
+    next[index] = heads[key];
+    heads[key] = index;
+  }
   const candidates = [];
   const radiusSq = radius * radius * (1 + 1e-12);
-  points.forEach((point, index) => {
-    const bx = cellX[index];
-    const by = cellY[index];
+  for (let index = 0; index < points.length; index++) {
+    const point = points[index];
+    const baseKey = (cellX[index] - minX + 1) * stride + cellY[index] - minY + 1;
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
-        const nearby = buckets.get(`${bx + dx},${by + dy}`) || [];
-        for (const otherIndex of nearby) {
+        for (let otherIndex = heads[baseKey + dx * stride + dy];
+          otherIndex !== -1; otherIndex = next[otherIndex]) {
           if (otherIndex <= index) continue;
           const other = points[otherIndex];
           const deltaX = point.normalized[0] - other.normalized[0];
@@ -289,7 +308,7 @@ function proximityEdgesWithin(points, radius, edgeLimit, baseCellX, baseCellY) {
         }
       }
     }
-  });
+  }
   // JS sort is stable, so ties in the original full-radius search followed
   // source index, then neighbor-cell order, then neighbor index. Preserve that
   // order even when the short pass uses smaller spatial buckets.
