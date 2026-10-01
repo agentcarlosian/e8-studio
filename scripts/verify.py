@@ -132,6 +132,7 @@ def check_python_syntax() -> None:
 def check_packaging_assets() -> None:
     # Uses a temporary site and local Chromium; it does not rewrite shared dist.
     run([sys.executable, "-B", "scripts/test_packaging_assets.py"])
+    run([sys.executable, "-B", "scripts/test_android_apk.py", "--self-test"])
 
 
 def load_json(name: str):

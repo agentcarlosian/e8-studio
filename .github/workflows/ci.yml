@@ -53,7 +53,7 @@ jobs:
 
   windows-build:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -84,6 +84,41 @@ jobs:
       - run: npm run test:curriculum
       - run: npm run test:e8-quasicrystal
       - run: npm run test:quasicrystal-comparison
+      - run: python -m playwright install webkit
+      - run: python -B scripts/test_webkit_compat.py
+
+  android-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # AGP 8.13 requires JDK 17; install exactly the API/build tools named by
+      # android/variables.gradle and the plugin's compatibility table.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;35.0.0"
+      - run: npm ci
+      - run: npm run build:mobile
+      - run: python -B scripts/test_packaging_assets.py --native-only
+      - run: npx cap sync android
+      - name: Assemble unsigned debug APK
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:assembleDebug
+      - run: python -B scripts/test_android_apk.py
 
   deploy:
     needs: [verify, windows-build]
