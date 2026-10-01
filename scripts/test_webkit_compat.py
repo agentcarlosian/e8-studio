@@ -49,6 +49,27 @@ def main() -> None:
                     assert not errors, {"width": width, "errors": errors}
                     print(f"  {width}px: {route}")
                     context.close()
+                context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+                page = context.new_page()
+                page.add_init_script("""
+                  const original = HTMLCanvasElement.prototype.getContext;
+                  HTMLCanvasElement.prototype.getContext = function (kind, ...args) {
+                    if (['webgl', 'webgl2', 'experimental-webgl'].includes(kind)) return null;
+                    return original.call(this, kind, ...args);
+                  };
+                """)
+                page.goto(base + "/dist/web/index.html", wait_until="domcontentloaded")
+                button = page.locator('#render-fallback [data-act="openCanvas2DStudio"]')
+                button.wait_for(timeout=60_000)
+                button.click()
+                page.wait_for_url("**/dist/web/mobile.html")
+                page.wait_for_function(
+                    "() => window.__mobileApp?.getMetrics()?.firstRenderMs != null",
+                    timeout=60_000,
+                )
+                assert page.url.endswith("/dist/web/mobile.html"), page.url
+                print("  forced no-WebGL: Canvas2D fallback")
+                context.close()
                 print("WebKit engine passed: desktop and phone boot with supported route checks.")
             finally:
                 browser.close()
