@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Made ambient camera drift an explicit Motion choice. Static Coxeter scenes now stay still with FX Off; older saved defaults and scene links no longer silently re-enable drift, while deliberate choices persist.
 - Kept accepted E8 quasicrystal points at stable screen coordinates as the window moves, fitted baseline departures in linked comparisons, and preserved mode-specific point sizes. Nearby diffraction changes reuse bounded structure-factor sums; dense Pattern links use an exact short-radius fast path.
 - Loaded only default E8 data at web startup and fetched other view data on selection. Failed view loads now repair saved state. Web builds include the existing Canvas2D mobile Studio as the no-WebGL route; single-file desktop copies give accurate fallback guidance.
 - Isolated Capacitor input under `dist/mobile`, added an asset-inventory gate, and made optional offline PWA caches follow built content with online-first navigation and a two-build update test.

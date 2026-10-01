@@ -132,7 +132,7 @@ const VIEW_MODIFIER_DEFAULTS = Object.freeze({
 function freshCommonDefaults(params = {}) {
   return {
     ...COMMON_MODIFIER_DEFAULTS,
-    showAmbient: !params.reducedMode,
+    showAmbient: false,
     autoSliders: [],
     fxByView: {},
   };
@@ -171,6 +171,7 @@ export function activeViewModifiers(params, view = params.view) {
   if (params.cameraOrbit || (params.cameraPath && params.cameraPath !== 'manual')) labels.push('camera motion');
   if (params.autoZoom) labels.push('auto zoom');
   if (params.autoModel) labels.push('auto model');
+  if (params.showAmbient) labels.push('ambient drift');
   if (params.autoFx) labels.push('FX shift');
   if ((params.autoSliders || []).length) labels.push('auto sliders');
 

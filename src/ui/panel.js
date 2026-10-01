@@ -78,6 +78,7 @@ function renderCameraControls(params, caps) {
   html += '<div class="seg seg-wrap">';
   html += `<button class="${params.autoRotate ? 'on' : ''}" ${pressed(params.autoRotate)} data-act="toggleAutoRotate" title="Rotate the model itself in a continuous circular spin">Spin</button>`;
   html += `<button class="${params.autoZoom ? 'on' : ''}" ${pressed(params.autoZoom)} data-act="toggleAutoZoom" title="Travel through the full useful zoom range">Auto zoom</button>`;
+  html += `<button class="${params.showAmbient ? 'on' : ''}" ${pressed(!!params.showAmbient)} data-act="toggleAmbientMotion" title="Add subtle camera movement while idle">Ambient drift</button>`;
   html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio's visual showcase">Auto model</button>`;
   html += '</div>';
   html += slider('Spin speed', 'rotationSpeed', params.rotationSpeed ?? 0.003, 0.0005, 0.02, 0.0005, v => `${(v / 0.003).toFixed(1)}×`);
@@ -1269,6 +1270,7 @@ const MOTION_STATES = {
   flux:     { label: '↕ flux',    cls: 'is-active' },
   rotate:   { label: '↻ rotate',  cls: 'is-active' },
   bloom:    { label: '▶ bloom',   cls: 'is-active' },
+  ambient:  { label: '≈ drift',    cls: 'is-active' },
   idle:     { label: '● idle',    cls: 'is-idle' },
 };
 export function updateMotionStatus(params) {
@@ -1285,6 +1287,7 @@ export function updateMotionStatus(params) {
   else if ((params.autoSliders || []).includes('e8MorphT')) key = 'flux';
   else if (params.autoRotate || params.e8AutoRotate || params.polyAutoRotate) key = 'rotate';
   else if (params.bloomAuto) key = 'bloom';
+  else if (params.showAmbient) key = 'ambient';
   else key = 'idle';
   // Only touch the DOM when the state actually changes (cheap guard so this
   // can sit in the 60fps animate loop without causing layout work).

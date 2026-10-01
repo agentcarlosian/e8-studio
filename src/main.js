@@ -1503,7 +1503,8 @@ function defaultParams() {
     rootShowSimple: true,
     rootShowOrbit: true,
     rootOrbitSpeed: 0.7,
-    showAmbient: !prefersReducedMotion, // ambient simplex-noise drift on camera
+    showAmbient: false, // idle camera drift is an explicit Motion choice
+    ambientMotionExplicit: false, // distinguishes legacy implicit drift in saved configs
     // Bug fix 2026-06-25 (audit #16): removed fogDensity — declared but
     // never read since FX mode 8 ('fog') uses shader-based depth fade via
     // vWorldPos instead of three.js scene.fog. Dead param.
@@ -1674,6 +1675,8 @@ function normalizeParams(target) {
   if (!E.shape.has(target.compareShape)) target.compareShape = 'dodecahedron';
   if (!E.compare.has(target.compareMode)) target.compareMode = 'off';
   if (!E.shift.has(target.shiftMode)) target.shiftMode = 'static';
+  if (typeof target.showAmbient !== 'boolean') target.showAmbient = false;
+  if (typeof target.ambientMotionExplicit !== 'boolean') target.ambientMotionExplicit = false;
   if (!E.blend.has(target.blendMode)) target.blendMode = 'spectrum';
   if (!E.colorBy.has(target.colorBy)) target.colorBy = 'shell';
   if (!E.fx.has(target.fxMode)) target.fxMode = 'none';
@@ -1825,6 +1828,7 @@ function applyReducedMotionAtStartup(target) {
 function updateParam(k, v, options = {}) {
   const previousValue = params[k];
   params[k] = v;
+  if (k === 'showAmbient') params.ambientMotionExplicit = true;
   normalizeParams(params);
   if (k === 'autoZoom') {
     if (params.autoZoom && !previousValue) beginAutoZoom();
@@ -4018,6 +4022,11 @@ window.__app = {
     refreshPanel();
     showSavedToast(enabled ? 'Auto zoom on' : 'Auto zoom off');
   },
+  toggleAmbientMotion() {
+    updateParam('showAmbient', !params.showAmbient, { refresh: false });
+    refreshPanel();
+    showSavedToast(params.showAmbient ? 'Ambient drift on' : 'Ambient drift off');
+  },
   toggleAutoModel() {
     params.autoModel = !params.autoModel;
     if (params.autoModel) {
@@ -4811,6 +4820,7 @@ async function main() {
   // Try restoring from URL hash first, then localStorage
   const urlConfig = readUrlConfig();
   let restoredConfig = null;
+  let migratedLegacyAmbient = false;
   if (urlConfig) {
     applyConfig(params, urlConfig);
     restoredConfig = urlConfig;
@@ -4819,6 +4829,9 @@ async function main() {
     const saved = loadConfig();
     if (saved) {
       applyConfig(params, saved);
+      // Earlier releases silently saved an enabled ambient camera as a
+      // default. No panel control existed, so this was not a user choice.
+      migratedLegacyAmbient = saved.showAmbient === true && saved.ambientMotionExplicit !== true;
       restoredConfig = saved;
       setStatus('restored saved configuration');
     }
@@ -4826,6 +4839,7 @@ async function main() {
   await loadData();
   normalizeParams(params);
   applyReducedMotionAtStartup(params);
+  if (migratedLegacyAmbient) saveConfig(params, { immediate: true });
   cameraController.restore({
     theta: params.cameraRotation,
     phi: params.cameraPhi,

@@ -127,6 +127,10 @@ for (const preset of GALLERY_PRESETS) {
 const legacyScene = { view: 'dynkin', dynkin: 'E8', palette: 'gold', cameraDistance: 3 };
 assert.deepEqual(applyConfig({}, readHash('#config=' + exportConfig(legacyScene))), legacyScene,
   'original unversioned links still restore');
+assert.deepEqual(applyConfig({}, { showAmbient: true }), { showAmbient: false },
+  'legacy implicit ambient motion does not restore');
+assert.deepEqual(applyConfig({}, { showAmbient: true, ambientMotionExplicit: true }),
+  { showAmbient: true, ambientMotionExplicit: true }, 'an explicit ambient motion choice restores');
 const previousV1Scene = { view: 'tiling', palette: 'aurora' };
 assert.deepEqual(applyConfig({ tilingSystem: 'H2', tilingDensity: 5 },
   readHash('#scene=v1.' + exportConfig(previousV1Scene))),
