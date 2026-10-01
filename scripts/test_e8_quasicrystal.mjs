@@ -160,7 +160,29 @@ try {
     const points = view.group.getObjectByName('QuasicrystalPoints');
     assert.equal(points.material.uniforms.uBaseSize.value, baseSize * params.pointScale,
       `${mode} preserves its mode-specific point size after update`);
-    if (mode === 'window') assert.match(points.userData.tooltipData[0].html, /all six hidden coordinates/);
+    if (mode === 'window') {
+      assert.equal(typeof points.userData.tooltipData, 'function', 'dense point tooltips are generated on demand');
+      assert.match(points.userData.tooltipData(0).html, /all six hidden coordinates/);
+      assert.strictEqual(points.userData.tooltipData(0), points.userData.tooltipData(0),
+        'hovering the same point reuses its formatted tooltip');
+      assert.equal(points.userData.tooltipData(-1), null);
+    }
+    if (mode === 'pattern') {
+      assert.match(points.userData.tooltipData(0).html, /Accepted because its six-dimensional hidden component/);
+      const originalColors = points.geometry.attributes.color.array.slice();
+      params.quasiPhason = 0.02;
+      view.update(0, 0, params);
+      params.quasiPhason = 0;
+      view.update(0, 0, params);
+      assert.deepEqual(view.group.getObjectByName('QuasicrystalPoints').geometry.attributes.color.array,
+        originalColors, 'cached Pattern colors remain identical after a phason round trip');
+      view.onPaletteChange('ice');
+      assert.notDeepEqual(view.group.getObjectByName('QuasicrystalPoints').geometry.attributes.color.array,
+        originalColors, 'a palette change invalidates the Pattern color cache');
+      view.onPaletteChange('gold');
+      assert.deepEqual(view.group.getObjectByName('QuasicrystalPoints').geometry.attributes.color.array,
+        originalColors, 'returning to a palette reproduces its exact Pattern colors');
+    }
     view.dispose();
   }
 } finally {

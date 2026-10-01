@@ -13,6 +13,24 @@ export function createQuasicrystalView({ data, palette, scale: baseScale, contex
   let pointMaterial = null;
   let pointBaseSize = 17;
   let activeSignature = '';
+  const patternColorCache = new Map();
+  let cachedPatternPalette = null;
+
+  function patternColor(paletteName, position) {
+    if (paletteName !== cachedPatternPalette) {
+      patternColorCache.clear();
+      cachedPatternPalette = paletteName;
+    }
+    let color = patternColorCache.get(position);
+    if (!color) {
+      // Repeated phason/window changes retain most projected point positions
+      // and link angles. Reuse their exact palette sample and Three color.
+      color = new THREE.Color(colorAt(paletteName, position));
+      if (patternColorCache.size >= 65536) patternColorCache.clear();
+      patternColorCache.set(position, color);
+    }
+    return color;
+  }
 
   function build(params = runtimeParams()) {
     if (modelGroup) {
@@ -84,13 +102,15 @@ export function createQuasicrystalView({ data, palette, scale: baseScale, contex
       disposeObject(group);
       construction = null;
       pointMaterial = null;
+      patternColorCache.clear();
+      cachedPatternPalette = null;
     },
   };
 
   function buildPattern(parent, patch, radius, relief, paletteName) {
     addPatternGuide(parent, patch, radius, paletteName);
-    addPatternLinks(parent, patch, radius, relief, paletteName);
-    pointMaterial = addPatternPoints(parent, patch, radius, relief, paletteName);
+    addPatternLinks(parent, patch, radius, relief, paletteName, patternColor);
+    pointMaterial = addPatternPoints(parent, patch, radius, relief, paletteName, patternColor);
   }
 
   function buildWindow(parent, patch, radius, relief, paletteName) {
@@ -138,14 +158,14 @@ function addPatternGuide(parent, patch, radius, palette) {
   parent.add(guide);
 }
 
-function addPatternLinks(parent, patch, radius, relief, palette) {
+function addPatternLinks(parent, patch, radius, relief, palette, colorFor) {
   const positions = [];
   const colors = [];
   for (const [aIndex, bIndex] of patch.edges) {
     const a = patch.points[aIndex];
     const b = patch.points[bIndex];
     const phase = positiveTurn((Math.atan2(a.normalized[1] + b.normalized[1], a.normalized[0] + b.normalized[0]) / (Math.PI * 2)) + 0.5);
-    const color = new THREE.Color(colorAt(palette, phase));
+    const color = colorFor(palette, phase);
     for (const point of [a, b]) {
       positions.push(
         point.normalized[0] * radius,
@@ -172,14 +192,14 @@ function addPatternLinks(parent, patch, radius, relief, palette) {
   parent.add(lines);
 }
 
-function addPatternPoints(parent, patch, radius, relief, palette) {
+function addPatternPoints(parent, patch, radius, relief, palette, colorFor) {
   const positions = [];
   const colors = [];
   const sizes = [];
   for (const point of patch.points) {
     const angle = positiveTurn(Math.atan2(point.normalized[1], point.normalized[0]) / (Math.PI * 2));
     const shell = positiveTurn(point.normSq / (patch.maxNormSq + 2));
-    const color = new THREE.Color(colorAt(palette, angle * 0.62 + shell * 0.38));
+    const color = colorFor(palette, angle * 0.62 + shell * 0.38);
     positions.push(
       point.normalized[0] * radius,
       point.normalized[1] * radius,
@@ -191,14 +211,13 @@ function addPatternPoints(parent, patch, radius, relief, palette) {
   return addPointCloud(parent, {
     name: 'QuasicrystalPoints', positions, colors, sizes,
     baseSize: 17,
-    tooltipData: patch.points.map((point, index) => ({
-      html: `<div class="ttip-head">E8 lattice point #${index}</div>
+    tooltipData: lazyTooltipData(patch.points, (point, index) =>
+      `<div class="ttip-head">E8 lattice point #${index}</div>
         <div><b>shell ‖x‖² = ${formatNumber(point.normSq)}</b> · ${point.coset} coset</div>
         <div>visible radius: <b>${formatNumber(point.physicalRadius)}</b></div>
         <div>hidden radius: <b>${formatNumber(point.shiftedInternalRadius)}</b> / ${formatNumber(patch.windowRadius)}</div>
         <div class="ttip-coords">x = (${point.coords.map(formatNumber).join(', ')})</div>
-        <div style="color:var(--muted);margin-top:4px">Accepted because its six-dimensional hidden component lies inside the window.</div>`,
-    })),
+        <div style="color:var(--muted);margin-top:4px">Accepted because its six-dimensional hidden component lies inside the window.</div>`),
   });
 }
 
@@ -248,13 +267,12 @@ function addWindowPoints(parent, patch, radius, relief, palette) {
   return addPointCloud(parent, {
     name: 'QuasicrystalPoints', positions, colors, sizes,
     baseSize: 15,
-    tooltipData: patch.points.map((point, index) => ({
-      html: `<div class="ttip-head">Window sample #${index}</div>
+    tooltipData: lazyTooltipData(patch.points, (point, index) =>
+      `<div class="ttip-head">Window sample #${index}</div>
         <div><b>two coordinates of the hidden 6D component</b></div>
         <div>hidden radius: <b>${formatNumber(point.shiftedInternalRadius)}</b></div>
         <div>window radius: <b>${formatNumber(patch.windowRadius)}</b></div>
-        <div style="color:var(--muted);margin-top:4px">The circle bounds this two-coordinate view. Acceptance checks all six hidden coordinates.</div>`,
-    })),
+        <div style="color:var(--muted);margin-top:4px">The circle bounds this two-coordinate view. Acceptance checks all six hidden coordinates.</div>`),
   });
 }
 
@@ -320,6 +338,19 @@ function addPointCloud(parent, { name, positions, colors, sizes, baseSize, toolt
   points.userData.tooltipData = tooltipData;
   parent.add(points);
   return material;
+}
+
+function lazyTooltipData(items, renderHtml) {
+  const visited = new Map();
+  return index => {
+    if (!Number.isInteger(index) || index < 0 || index >= items.length) return null;
+    let info = visited.get(index);
+    if (!info) {
+      info = { html: renderHtml(items[index], index) };
+      visited.set(index, info);
+    }
+    return info;
+  };
 }
 
 function createPointMaterial(baseSize) {

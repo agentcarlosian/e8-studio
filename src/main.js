@@ -4716,11 +4716,11 @@ function updateTooltip() {
   const hit = intersects[0];
   const idx = hit.index;
   const data = hit.object.userData.tooltipData;
-  if (!data || idx == null || !data[idx]) {
+  const info = idx == null ? null : typeof data === 'function' ? data(idx) : data?.[idx];
+  if (!info) {
     tooltipEl.classList.remove('visible');
     return;
   }
-  const info = data[idx];
 
   // Size the content first, then position it within the canvas viewport.
   tooltipEl.innerHTML = info.html;
