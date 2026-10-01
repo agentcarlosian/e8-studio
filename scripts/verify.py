@@ -480,16 +480,19 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
         fail(f"{label} disabling ambient drift did not restore the base camera pose: {drift}")
 
     exports = page.evaluate(
-        r"""() => {
+        r"""async () => {
           const app = window.__app;
           const keys = ['view', 'shape', 'shapeTwist', 'shapeSpike', 'shapeJitter',
             'poly4d', 'polyProjectionVersion', 'dynkin', 'rootSystem', 'tilingSystem',
             'tilingDensity', 'showPetrie', 'fxMode', 'fxByView'];
           const saved = Object.fromEntries(keys.map(key => [key, structuredClone(app.params[key])]));
           const set = (key, value) => app.setParam(key, value, { save: false });
-          const select = (view, settings = {}) => {
+          const select = async (view, settings = {}) => {
             set('view', view);
             for (const [key, value] of Object.entries(settings)) set(key, value);
+            // HTTP builds load view-specific JSON on first selection. Await
+            // that boundary before asking the export facade for its geometry.
+            await app.switchView(view);
             return app.getGeometryJSON();
           };
           const lines = (text, prefix) => text?.split('\n').filter(line => line.startsWith(prefix)).length;
@@ -503,9 +506,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
             };
           };
           try {
-            // These synchronous selections exercise the exported facade against
-            // live scene params and restore them before the next render frame.
-            const cube = select('platonic', { shape: 'cube', shapeTwist: 0, shapeSpike: 0, shapeJitter: 0 });
+            const cube = await select('platonic', { shape: 'cube', shapeTwist: 0, shapeSpike: 0, shapeJitter: 0 });
             const cubeObj = app.getCurrentOBJ();
             const result = {
               cube: { kind: cube.kind, dimension: cube.dimension, vertices: cube.verts.length,
@@ -513,30 +514,33 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                 namedObjMatches: app.getOBJ('cube') === cubeObj, svg: svgInfo(app.getCurrentSVG()) },
             };
             for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
-              const geometry = select(view);
+              const geometry = await select(view);
               result[view] = { kind: geometry.kind, dimension: geometry.dimension,
                 count: geometry.roots8d.length, objVertices: lines(app.getCurrentOBJ(), 'v ') };
             }
-            select('e8coxeter', { showPetrie: true });
+            await select('e8coxeter', { showPetrie: true });
             result.e8Svg = svgInfo(app.getCurrentSVG());
             result.legacyE8Svg = svgInfo(app.getE8Svg());
-            const dynkin = select('dynkin', { dynkin: 'E8' });
+            const dynkin = await select('dynkin', { dynkin: 'E8' });
             result.dynkin = { kind: dynkin.kind, rank: dynkin.rank, nodes: dynkin.nodes.length,
               edges: dynkin.edges.length, objVertices: lines(app.getCurrentOBJ(), 'v '),
               objEdges: lines(app.getCurrentOBJ(), 'l '), svg: svgInfo(app.getCurrentSVG()) };
-            const polytope = select('polytope', { poly4d: '600cell', polyProjectionVersion: 2 });
+            const polytope = await select('polytope', { poly4d: '600cell', polyProjectionVersion: 2 });
+            const polytopeObj = app.getCurrentOBJ();
             result.polytope = { kind: polytope.kind, dimension: polytope.dimension,
               vertices: polytope.verts.length, edges: polytope.edges.length,
-              obj: app.getCurrentOBJ(), svg: app.getCurrentSVG() };
-            const roots = select('rootlab', { rootSystem: 'G2' });
+              objVertices: lines(polytopeObj, 'v '), objHasFaces: lines(polytopeObj, 'f ') > 0,
+              svgValid: svgInfo(app.getCurrentSVG()).valid };
+            const roots = await select('rootlab', { rootSystem: 'G2' });
             result.rootlab = { kind: roots.kind, rank: roots.rank,
               count: roots.roots.length, coxeterNumber: roots.coxeterNumber };
-            const tiling = select('tiling', { tilingSystem: 'H2', tilingDensity: 5 });
+            const tiling = await select('tiling', { tilingSystem: 'H2', tilingDensity: 5 });
             result.tiling = { kind: tiling.kind, name: tiling.name, families: tiling.familyCount,
               tiles: tiling.tiles.length, edges: tiling.edges.length };
             return result;
           } finally {
             for (const [key, value] of Object.entries(saved)) set(key, value);
+            await app.switchView(saved.view);
           }
         }"""
     )
@@ -550,7 +554,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                    "objVertices": 8, "objEdges": 7,
                    "svg": {"valid": True, "roots": 0, "circles": 8, "petrie": 0}},
         "polytope": {"kind": "4d-polytope", "dimension": 4, "vertices": 120,
-                     "edges": 720, "obj": None, "svg": None},
+                     "edges": 720, "objVertices": 120, "objHasFaces": True, "svgValid": True},
         "rootlab": {"kind": "rank-2-root-system", "rank": 2, "count": 12, "coxeterNumber": 6},
         "tiling": {"kind": "coxeter-multigrid-tiling", "name": "H2", "families": 5,
                    "tiles": 702, "edges": 1459},
@@ -558,7 +562,12 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
     for view in ["bloom", "e8coxeter", "raymarched"]:
         expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "objVertices": 240}
     if exports != expected:
-        fail(f"{label} geometry export integration diverged: {exports}")
+        differences = {
+            view: {"expected": expected.get(view), "actual": exports.get(view)}
+            for view in expected.keys() | exports.keys()
+            if expected.get(view) != exports.get(view)
+        }
+        fail(f"{label} geometry export integration diverged: {differences}")
     assert_clean_browser_errors(page_errors, console_errors, label)
 
 
