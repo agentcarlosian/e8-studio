@@ -11,6 +11,21 @@
 
 import chroma from 'chroma-js';
 
+// Palette endpoints are fixed for the built-in presets. Reusing their Chroma
+// scales avoids constructing one for every point and link in dense views.
+// Key by endpoint values so edits to an exported preset cannot reuse a stale
+// scale for a different pair of colors.
+const pairScales = new Map();
+function scaleBetween(first, last) {
+  const key = `${first}\0${last}`;
+  let scale = pairScales.get(key);
+  if (!scale) {
+    scale = chroma.scale([first, last]);
+    pairScales.set(key, scale);
+  }
+  return scale;
+}
+
 // 24 multi-color palette presets — each has 2-4 colors that get blended.
 // "bgDarken" is how strongly to darken the brightest color toward black for the background.
 export const PALETTE_PRESETS = {
@@ -195,7 +210,7 @@ export function colorAt(name, t, blendMode = 'spectrum') {
       const segs = colors.length - 1;
       const idx = Math.min(Math.floor(tt * segs), segs - 1);
       const local = (tt * segs) - idx;
-      return chroma.scale([colors[idx], colors[idx + 1]])(local).hex();
+      return scaleBetween(colors[idx], colors[idx + 1])(local).hex();
     }
     case 'sector': {
       // Round-robin assignment by fractional position
@@ -205,7 +220,7 @@ export function colorAt(name, t, blendMode = 'spectrum') {
     case 'radial': {
       // Bicolor fade (inner → outer uses first→last color)
       const tt = Math.max(0, Math.min(1, t));
-      return chroma.scale([colors[0], colors[colors.length - 1]])(tt).hex();
+      return scaleBetween(colors[0], colors[colors.length - 1])(tt).hex();
     }
     case 'random': {
       // Deterministic-ish: hash t to pick a color
@@ -216,7 +231,7 @@ export function colorAt(name, t, blendMode = 'spectrum') {
       // Reflect: 0..0.5 fades from colors[0] to last, 0.5..1 fades back
       const tt = Math.max(0, Math.min(1, t));
       const phase = tt < 0.5 ? tt * 2 : (1 - tt) * 2;
-      return chroma.scale([colors[0], colors[colors.length - 1]])(phase).hex();
+      return scaleBetween(colors[0], colors[colors.length - 1])(phase).hex();
     }
     default:
       return colors[Math.floor(t * colors.length) % colors.length];
