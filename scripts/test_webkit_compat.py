@@ -51,6 +51,8 @@ def main() -> None:
                     context.close()
                 context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
                 page = context.new_page()
+                fallback_errors: list[str] = []
+                page.on("pageerror", lambda error: fallback_errors.append(str(error)))
                 page.add_init_script("""
                   const original = HTMLCanvasElement.prototype.getContext;
                   HTMLCanvasElement.prototype.getContext = function (kind, ...args) {
@@ -68,6 +70,7 @@ def main() -> None:
                     timeout=60_000,
                 )
                 assert page.url.endswith("/dist/web/mobile.html"), page.url
+                assert not fallback_errors, fallback_errors
                 print("  forced no-WebGL: Canvas2D fallback")
                 context.close()
                 print("WebKit engine passed: desktop and phone boot with supported route checks.")

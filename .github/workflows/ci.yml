@@ -120,6 +120,27 @@ jobs:
         run: bash ./gradlew --no-daemon :app:assembleDebug
       - run: python -B scripts/test_android_apk.py
 
+  electron-package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: node scripts/test_electron_package.mjs --self-test
+      - run: npm run electron:dist
+      - run: node scripts/test_electron_package.mjs
+
   deploy:
     needs: [verify, windows-build]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
