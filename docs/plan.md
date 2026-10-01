@@ -48,3 +48,38 @@ Electron, and mobile build contracts where shared code is involved.
 - Full verification, 67/67 robustness checks, the 30-scene background sweep,
   and the dedicated mobile smoke passed. The review and remaining limits are in
   `docs/reviews/2026-09-studio-improvement-review.md`.
+
+## September 30 audit remediation
+
+The owner authorized implementation in the audit's recommended order. This is
+a new phase on the same local branch; the preceding plan and checks remain the
+baseline, not evidence that the issues below are already fixed.
+
+- [x] Keep a retained quasicrystal point at a stable screen coordinate as the
+      window or phason changes. Use a consistent comparison scale, preserve
+      mode-specific point sizes, and test clipping on reach changes.
+- [x] Let E8 start when an unopened view's dataset fails. Give no-WebGL users
+      an effective recovery path, and persist the successful fallback when a
+      deferred view module fails.
+- [x] Stage only mobile assets for Capacitor; verify the copied inventory.
+- [x] Derive mobile lesson order from prerequisite-respecting curriculum data.
+      Preserve contextual entry and test Next/Previous ordering.
+- [x] Measure and improve worst-case comparison slider latency without changing
+      the finite-patch math or overstating sampled diffraction.
+- [x] Make offline PWA revisions follow built content and test an upgrade over
+      two builds.
+- [x] Preserve Learning Center search/scroll state, coach focus, and mobile
+      per-step experiment access; tighten the two identified math labels.
+- [ ] Simplify the legacy standalone build path only after output parity is
+      demonstrated; add native packaging and browser/device gates as feasible.
+- [ ] Run focused tests after each slice, then full source, web, standalone,
+      mobile, rendering, and release checks on a clean local commit. Record
+      limits and do not push or deploy without a separate decision.
+
+Focused checks passed for the completed items, including local source and built
+fault injection, four-size Studio/Learning Center journeys, mobile smoke,
+standalone file:// boot/fallback, exact native staging, and a two-build PWA
+upgrade. A dense Pattern patch still takes about 86 ms per nearby change in a
+local Node sample, above a 16 ms frame budget; first Diffraction computation
+also remains full work. Legacy build migration, physical-device/browser matrix,
+and installer packages remain separate follow-up work.

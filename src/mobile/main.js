@@ -607,10 +607,6 @@ let LEARN_TOPIC_CYCLE = [];
 let curriculumPaths = [];
 let curriculumLessons = [];
 let learningProgress = loadLearningProgress();
-const MOBILE_LEARN_LESSON_ORDER = [
-  'meet-e8', 'coxeter-plane', 'roots-reflections', 'rank-two-reflections', 'coxeter-multigrids', 'e8-cut-project', 'six-hundred-cell',
-  'why-five-solids', 'into-four-dimensions', 'reading-dynkin', 'mckay-bridge', 'designed-bloom', 'distance-fields',
-];
 const LEGACY_LEARN_TOPIC_MAP = {
   e8: 'coxeter-plane', solids: 'why-five-solids', mckay: 'mckay-bridge',
   poly4d: 'into-four-dimensions', dynkin: 'reading-dynkin',
@@ -619,11 +615,8 @@ const LEGACY_LEARN_TOPIC_MAP = {
 function installMobileCurriculum(curriculum) {
   curriculumPaths = Array.isArray(curriculum?.paths) ? curriculum.paths : [];
   curriculumLessons = Array.isArray(curriculum?.lessons) ? [...curriculum.lessons] : [];
-  curriculumLessons.sort((a, b) => {
-    const ai = MOBILE_LEARN_LESSON_ORDER.indexOf(a.id);
-    const bi = MOBILE_LEARN_LESSON_ORDER.indexOf(b.id);
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-  });
+  // The generated curriculum order respects prerequisite edges. Keep one
+  // sequence for library, lesson numbering, and Next/Previous on both shells.
   LEARN_TOPICS = [
     { id: 'auto', label: 'Auto', name: 'Scene match' },
     ...curriculumLessons.map(lesson => ({
@@ -1768,6 +1761,11 @@ function bindEvents() {
     const learnPath = event.target.closest('[data-learn-path]')?.dataset.learnPath;
     if (learnPath) {
       toggleLearnPath(learnPath);
+      return;
+    }
+    const learnStepIndex = event.target.closest('[data-learn-step-index]')?.dataset.learnStepIndex;
+    if (learnStepIndex !== undefined) {
+      openLearnExperiment(Number(learnStepIndex));
       return;
     }
     const infoAction = event.target.closest('[data-info-action]')?.dataset.infoAction;
@@ -5077,12 +5075,7 @@ function activeLearnTopicId() {
 
 function renderLearnTopics() {
   if (!els.learnTopicGrid) return false;
-  const preferredPathOrder = ['coxeter-geometry', 'solid-foundations', 'exceptional-bridges', 'rendering-mathematics'];
-  const orderedPaths = [...curriculumPaths].sort((a, b) => {
-    const ai = preferredPathOrder.indexOf(a.id);
-    const bi = preferredPathOrder.indexOf(b.id);
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-  });
+  const orderedPaths = curriculumPaths;
   if (learnSelectedPathId == null) {
     learnSelectedPathId = curriculumLessons.find(lesson => lesson.id === sceneLearnTopicId())?.pathId || orderedPaths[0]?.id || null;
   }
@@ -5192,6 +5185,7 @@ function syncLearnPanel() {
       <p>${escapeHtml(step.instruction)}</p>
       <div class="mobile-learn-question"><span>Question</span><p>${escapeHtml(step.question)}</p></div>
       <div class="mobile-learn-takeaway"><span>Explanation</span><p>${escapeHtml(step.takeaway)}</p></div>
+      <button type="button" class="mobile-learn-step-action" data-learn-step-index="${stepIndex}" aria-label="Run activity ${stepIndex + 1}: ${escapeHtml(step.title)}">Run this step in Studio →</button>
     </article>`;
   }).join('');
   const index = Math.max(0, curriculumLessons.findIndex(lesson => lesson.id === activeId));
@@ -5315,13 +5309,18 @@ function dismissLearnCoach() {
   return visible;
 }
 
-function openLearnExperiment() {
+function openLearnExperiment(stepIndex = learnExperimentStepIndex) {
   const lessonId = activeLearnTopicId();
   const record = learnTopicRecord(lessonId);
-  const step = record.lesson?.experiment?.steps?.[learnExperimentStepIndex];
+  const steps = record.lesson?.experiment?.steps || [];
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= steps.length) return false;
+  learnExperimentStepIndex = stepIndex;
+  const step = steps[stepIndex];
   if (!step) return false;
   applyMobileExperimentStep(lessonId, step.id);
-  showLearnCoach(lessonId, learnExperimentStepIndex);
+  // Applying a completed step can refresh the reader and advance its default
+  // next-step pointer. Keep this explicitly selected step in the coach.
+  showLearnCoach(lessonId, stepIndex);
   closeSettings('learn-open-experiment');
   return true;
 }

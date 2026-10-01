@@ -1761,6 +1761,8 @@ input[type="checkbox"] {
 .mobile-learn-activity.complete > header b { color: var(--accent-2); }
 .mobile-learn-activity > h5 { margin: 0; color: var(--ink); font-size: 18px; line-height: 1.35; }
 .mobile-learn-activity > p { margin: 0; color: var(--ink); font-size: 16px; line-height: 1.55; }
+.mobile-learn-step-action { min-height: 44px; padding: 9px 12px; border: 1px solid var(--accent); border-radius: 7px; background: rgba(244, 210, 122, .08); color: var(--accent); font-weight: 700; text-align: left; }
+.mobile-learn-step-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .mobile-learn-question,
 .mobile-learn-takeaway { display: grid; gap: 6px; padding: 12px; border-left: 3px solid var(--accent); background: rgba(0, 0, 0, .2); }
 .mobile-learn-takeaway { border-left-color: var(--accent-2); }

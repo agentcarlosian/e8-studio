@@ -480,7 +480,7 @@ export const QUIZ_MODULES = [
         explanation: 'The higher-dimensional lattice stays fixed while the window is displaced in hidden space, changing which points are accepted.',
       },
       {
-        prompt: 'Why can the Diffraction reading show sharp peaks without a repeating 2D translation?',
+        prompt: 'Why can a regular cut-and-project set have concentrated diffraction without a repeating 2D translation?',
         choices: ['cut-and-project order creates coherent Fourier amplitudes', 'the dots are secretly a square lattice', 'the shader invents unrelated stars'],
         answer: 0,
         explanation: 'Regular cut-and-project sets have long-range quasiperiodic order, so coherent phases reinforce on a discrete Fourier module.',

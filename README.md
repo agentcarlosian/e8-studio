@@ -135,9 +135,9 @@ Vite prints the local development URL. Development source should be opened throu
 ## Build targets
 
 ```bash
-npm run build:web          # Production GitHub Pages site → dist/web
+npm run build:web          # Desktop site and Canvas2D fallback → dist/web
 npm run build:single       # Self-contained desktop HTML
-npm run build:mobile       # Mobile/Capacitor build
+npm run build:mobile       # Mobile smoke HTML + clean dist/mobile Capacitor input
 npm run build:share        # Desktop and mobile standalone files
 npm run electron:dist      # Desktop installers/packages
 npm run release:artifacts  # Versioned bundle and checksums
@@ -163,6 +163,8 @@ python scripts/test_math.py
 npm run smoke:mobile-v2
 npm run test:deferred-view
 npm run test:quasicrystal-comparison
+python scripts/test_startup_recovery.py --built
+python -B scripts/test_packaging_assets.py
 ```
 
 GitHub Actions runs release checks on Linux and core build/test contracts on Windows. Dependency updates are monitored by Dependabot.
@@ -190,7 +192,8 @@ The hosted application is bundled with Vite. Standalone, Electron, and mobile ta
 
 ## Platform support
 
-- Modern desktop browsers with WebGL2
+- Modern desktop browsers with WebGL2 for the full visual Studio
+- A Canvas2D Studio route in hosted web builds when WebGL cannot start
 - Responsive touch-oriented desktop shell
 - Dedicated hybrid mobile interface with Canvas 2D scenes and ray-marched WebGL SDF
 - Electron on desktop platforms

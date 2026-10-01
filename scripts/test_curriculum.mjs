@@ -10,6 +10,13 @@ const lessonIds = LEARNING_LESSONS.map(lesson => lesson.id);
 assert.equal(new Set(pathIds).size, pathIds.length);
 assert.equal(new Set(lessonIds).size, lessonIds.length);
 assert.ok(LEARNING_PATHS.every(path => path.title && path.description && path.lessons.length));
+const priorLessons = new Set();
+for (const lesson of LEARNING_LESSONS) {
+  for (const prerequisite of lesson.prerequisites) {
+    assert.ok(priorLessons.has(prerequisite), `${lesson.id} must follow prerequisite ${prerequisite}`);
+  }
+  priorLessons.add(lesson.id);
+}
 
 const quizIds = new Set(QUIZ_MODULES.map(quiz => quiz.id));
 const claimTypes = new Set(['established-mathematics', 'interpretation', 'app-designed-visualization', 'rendering-technique']);

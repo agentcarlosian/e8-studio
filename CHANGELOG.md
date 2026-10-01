@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Kept accepted E8 quasicrystal points at stable screen coordinates as the window moves, fitted baseline departures in linked comparisons, and preserved mode-specific point sizes. Nearby diffraction changes reuse bounded structure-factor sums; dense Pattern links use an exact short-radius fast path.
+- Loaded only default E8 data at web startup and fetched other view data on selection. Failed view loads now repair saved state. Web builds include the existing Canvas2D mobile Studio as the no-WebGL route; single-file desktop copies give accurate fallback guidance.
+- Isolated Capacitor input under `dist/mobile`, added an asset-inventory gate, and made optional offline PWA caches follow built content with online-first navigation and a two-build update test.
+- Aligned mobile lesson navigation with the shared prerequisite order, allowed each mobile experiment step to reopen, preserved desktop Learning Center search and disclosure state, moved focus into the guided coach, and qualified finite diffraction wording.
 - Added first-visit routes for geometry, beginner learning, and curated visual work; active-view labels now name the relevant selection and qualify McKay-inspired highlighting.
 - Added a linked E8 quasicrystal comparison that shows Pattern, Window, and finite-patch Diffraction together, with point-entry and peak-change summaries and a mobile-safe comparison panel.
 - Split nondefault web renderers into on-demand modules, kept the E8 default ready at first render, and preserved direct factories in self-contained desktop artifacts. View loading and lifecycle ownership now have explicit modules and tests.

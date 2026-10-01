@@ -1027,7 +1027,7 @@
       "prerequisites": [
         "coxeter-multigrids"
       ],
-      "shortAnswer": "Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch, and a finite structure-factor calculation reveals its sharp diffraction peaks.",
+      "shortAnswer": "Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch. The Studio samples finite-patch structure-factor intensity at selected reciprocal candidates; this does not measure diffraction peak sharpness.",
       "keyIdeas": [
         "The six hidden coordinates decide which projected lattice points enter the pattern.",
         "Moving the window changes local arrangements without turning the construction into random motion."
@@ -1139,9 +1139,9 @@
           {
             "id": "diffraction",
             "title": "Look for long-range order",
-            "instruction": "Switch to Diffraction and compare the strongest computed peaks with the thirtyfold guide.",
-            "question": "Why can a non-periodic pattern still produce sharp peaks?",
-            "takeaway": "Coherent phases reinforce at a discrete Fourier module, so quasiperiodic order need not repeat by translation.",
+            "instruction": "Switch to Diffraction and compare the strongest sampled intensities with the thirtyfold guide.",
+            "question": "What can strong sampled intensities suggest about a non-periodic pattern?",
+            "takeaway": "Coherent phases can reinforce at selected reciprocal candidates, suggesting long-range order without a repeating translation. This finite sample does not establish peak width.",
             "action": {
               "view": "quasicrystal",
               "params": {
