@@ -33,12 +33,19 @@ class QuietHandler(SimpleHTTPRequestHandler):
 def check_copied_file(browser, temp_root: Path) -> None:
     copied = temp_root / "copied-studio.html"
     shutil.copyfile(CANDIDATE / "e8-studio.html", copied)
-    page, page_errors, console_errors = verify.open_checked_page(
-        browser, copied.as_uri(), label="copied-vite-share"
-    )
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page.add_init_script("window.__forceSdfSafeMode = true")
+    page_errors: list[str] = []
+    console_errors: list[str] = []
     requests: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    page.on("console", lambda message: console_errors.append(message.text)
+            if message.type == "error" and not verify.should_ignore_console(message.text) else None)
     page.on("request", lambda request: requests.append(request.url))
     try:
+        page.goto(copied.as_uri(), wait_until="commit", timeout=30_000)
+        page.wait_for_function("() => window.__app?.startupMetrics?.firstFrameMs != null", timeout=30_000)
+        verify.assert_canvas_nonblank(page)
         assert page.url == copied.as_uri(), "copied HTML redirected to a nonexistent dist/ sibling"
         verify.exercise_build_parity(page, page_errors, console_errors, "copied-vite-share")
         page.evaluate("window.__app.switchView('polytope')")
