@@ -140,6 +140,7 @@ jobs:
       - run: node scripts/test_electron_package.mjs --self-test
       - run: npm run electron:dist
       - run: node scripts/test_electron_package.mjs
+      - run: node scripts/test_electron_runtime.mjs
 
   deploy:
     needs: [verify, windows-build]

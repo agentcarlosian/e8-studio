@@ -15,7 +15,17 @@ correctly from an app that has been exercised on a real device.
   mismatched embedded HTML file and a leaked release manifest. The staged
   `dist/mobile/index.html` inventory check passed locally.
 - The Electron ASAR inventory verifier passed a synthetic archive and rejected
-  a bundled `dist/vendor` sidecar.
+  a bundled `dist/vendor` sidecar. A real local Windows package also passed:
+  the NSIS installer and portable executable were built, the unpacked ASAR
+  contained the exact offline HTML, and the app opened E8, switched to a 4D
+  view while offline, and opened the beginner lesson without renderer errors.
+  The installer was not installed or signed.
+
+The ordinary `npm run electron:dist` extraction failed twice on this host with
+`EPERM` while renaming `win-unpacked.tmp`. A one-off ignored config using
+[Electron Builder's `electronDist` option](https://www.electron.build/docs/api/electron-builder.interface.configuration/#electrondist) and the already extracted pinned
+runtime completed the package build. The checked-in package command was not
+changed; CI will exercise that ordinary path on its Windows runner.
 
 ## CI package gates added
 
@@ -26,12 +36,13 @@ correctly from an app that has been exercised on a real device.
   calls for JDK 17 and SDK Build Tools 35.0.0. CI installs API 36, matching
   `android/variables.gradle`.
 - `windows-build` now runs a WebKit engine smoke after the web build.
-- `electron-package` builds the Windows Electron installer and verifies that
-  the unpacked ASAR contains the exact offline HTML and no vendor sidecars.
+- `electron-package` builds the Windows Electron installer, verifies that the
+  unpacked ASAR contains the exact offline HTML and no vendor sidecars, then
+  boots the packaged app and checks an offline 4D view or its no-WebGL fallback.
 
 These new CI jobs need a remote run before their results can be reported as
-passed. This Windows host currently has no JDK, Android SDK, adb, or Electron
-executable, so it cannot run a local Gradle APK, installer, or physical Android
-journey. The new code has not been checked in Safari or on a physical iOS
-device. A packaged binary check also does not substitute for installing and
-using that binary on a target machine.
+passed. This Windows host currently has no JDK, Android SDK, or adb, so it
+cannot run a local Gradle APK or physical Android journey. The new code has not
+been checked in Safari or on a physical iOS device. Building an installer and
+launching the unpacked app do not prove installation behavior on a target
+machine.
