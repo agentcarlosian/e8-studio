@@ -17,9 +17,26 @@ def main():
             page.goto(base + '/dist/web/index.html'); page.wait_for_function('()=>!!window.__app?.currentView')
             page.evaluate("()=>{window.__app.setParam('adaptivePixelRatio',false);window.__app.renderer.setPixelRatio(0.5);}")
             for view, names in [('platonic', ['tetrahedron','cube','octahedron','dodecahedron','icosahedron']), ('polytope', ['5cell','tesseract','16cell','24cell','120cell','600cell'])]:
-                page.evaluate("view=>{const a=window.__app;a.switchView(view);a.setPanelMode('scene');a.setParam('autoRotate',false);a.setParam('polyAutoRotate',false);a.setParam('polyRotXY',0.4);a.setParam('polyRotZW',0.3);a.setBgMode('void');}", view)
+                page.evaluate("""async view => {
+                  const a=window.__app;
+                  if (!(await a.switchView(view))) throw new Error(`${view} did not load`);
+                  a.setPanelMode('scene');a.setParam('autoRotate',false);
+                  a.setParam('polyAutoRotate',false);a.setParam('polyRotXY',0.4);
+                  a.setParam('polyRotZW',0.3);a.setBgMode('void');
+                }""", view)
                 for name in names:
-                    page.evaluate("o=>window.__app[o.view==='platonic'?'setShape':'setPoly4d'](o.name)", {'view':view,'name':name})
+                    if view == 'polytope':
+                        # The hosted build caches parameter enums before its 4D
+                        # data arrives; exercise the real button after that load.
+                        button = page.locator(f'[data-act="setPoly4d"][data-arg="{name}"]')
+                        button.click()
+                        page.wait_for_function('name => window.__app.params.poly4d === name', arg=name)
+                        assert button.get_attribute('aria-pressed') == 'true', name
+                        if name == '120cell':
+                            geometry = page.evaluate('() => window.__app.getGeometryJSON()')
+                            assert len(geometry['verts']) == 600 and len(geometry['edges']) == 1200, '120-cell geometry was not selected'
+                    else:
+                        page.evaluate("name=>window.__app.setShape(name)", name)
                     page.wait_for_timeout(120)
                     page.evaluate('window.__app.openModelExport()')
                     button = page.locator('[data-file-format="obj"]')
@@ -41,8 +58,14 @@ def main():
                     visibility = page.evaluate("window.__app.currentView.group.children.filter(o=>o.name.endsWith('-faces')).map(o=>o.visible)")
                     assert visibility and all(v == enabled for v in visibility), (view, visibility)
                     page.screenshot(path=str(out / f'{view}-faces-{enabled}.png'))
+                if view == 'polytope':
+                    page.locator('[data-act="setPoly4d"][data-arg="120cell"]').click()
+                    page.wait_for_function("() => window.__app.params.poly4d === '120cell'")
+                    page.wait_for_function("() => JSON.parse(localStorage.getItem('e8_studio_config_v1') || '{}').poly4d === '120cell'")
                 page.reload(); page.wait_for_function('()=>!!window.__app?.currentView')
                 assert page.evaluate('window.__app.params.showFaces') is False
+                if view == 'polytope':
+                    page.wait_for_function("() => window.__app.currentView?.name === 'polytope4d' && window.__app.params.poly4d === '120cell'")
             page.evaluate('window.__app.openModelExport()')
             with page.expect_download() as event: page.locator('[data-file-format="data"]').click()
             event.value.save_as(out/'polytope.json')

@@ -1626,8 +1626,8 @@ function clampNumber(v, min, max, fallback) {
 
 // Enum allow-lists for normalizeParams, built once and cached. This used to be
 // rebuilt on EVERY param change — including ~60/s during a slider drag — which
-// meant constructing 14 Sets per call for nothing. Lazy-built on first call (by
-// then DATA is loaded, so polyIds resolves correctly).
+// meant constructing 14 Sets per call for nothing. The web build loads 4D data
+// after startup, so its known polytope IDs must be valid before that fetch.
 let _paramEnums = null;
 function paramEnums() {
   if (_paramEnums) return _paramEnums;
@@ -1636,7 +1636,7 @@ function paramEnums() {
     shape: new Set(['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron',
       // Round 9: Kepler–Poinsot star polyhedra (see math/stellations.js).
       'stellated_dodecahedron', 'great_dodecahedron', 'great_icosahedron', 'great_stellated_dodecahedron']),
-    poly: new Set(DATA.polytopes4d ? Object.keys(DATA.polytopes4d) : ['5cell', 'tesseract', '16cell', '24cell', '600cell']),
+    poly: new Set(DATA.polytopes4d ? Object.keys(DATA.polytopes4d) : ['5cell', 'tesseract', '16cell', '24cell', '120cell', '600cell']),
     palette: new Set(Object.keys(PALETTE_PRESETS)),
     shift: new Set(Object.keys(SHIFT_PRESETS)),
     blend: new Set(Object.keys(BLEND_MODES)),
