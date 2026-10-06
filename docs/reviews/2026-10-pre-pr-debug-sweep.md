@@ -31,7 +31,7 @@ deployed site or run remote CI.
 
 ## Validation
 
-The clean `npm run release:check` passed on code commit `7c7a1d6`, including
+The clean `npm run release:check` passed on code commit `5db43ec`, including
 the expanded 14-stage verifier, 67 robustness checks, 24 gallery scenes, 30
 backgrounds, copied-file/PWA parity, standalone fallback, and 45 export
 downloads. `python scripts/test_math.py` and `npm run smoke:mobile-v2` also
@@ -40,9 +40,9 @@ was raised from 20 to 30 minutes to allow for setup plus the expanded checks.
 
 ## Remaining limits
 
-- The new Android and Electron package jobs have not run remotely; a PR will
-  provide their first CI results. Physical Android, Safari/iOS, and installed
-  Electron behavior still require those target environments.
+- The Android and Electron package jobs passed remotely on draft PR #45.
+  Physical Android, Safari/iOS, and installed Electron behavior still require
+  those target environments.
 - Old unscoped PWA cache names may remain in CacheStorage after an update.
   Their names do not identify which install on a shared origin owns them, so
   deleting them automatically could evict another installation. New caches
