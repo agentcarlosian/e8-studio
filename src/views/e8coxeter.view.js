@@ -752,6 +752,8 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
   let lastSpin = -1;
   let lastTilt = -1;
   let lastRoll = -1;
+  let lastEdgeMorphT = NaN;
+  let lastEdgesShown = false;
   let lastMcKayShape = '';
   let lastCompareShape = '';
   let lastCompareMode = '';
@@ -862,13 +864,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     }
     pointsGeo.attributes.position.needsUpdate = true;
 
-    // Rebuild edges ONCE per applyBasis3D call (was being called multiple
-    // times per frame before, causing perf issues). Only sync if edges
-    // are actually shown (skip when hidden to avoid wasted work).
-    // Get showEdges via sharedParams() (this function is module-scope, not
-    // in update()'s scope, so it can't access the local `params`).
-    const sharedP = sharedParams();
-    if (sharedP && sharedP.showEdges) syncEdgePositions();
+    // Edges are synchronized after auto-fit and extrusion in update().
   }
 
   function applyCoxeterBasis() {
@@ -880,7 +876,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       verts[i*3 + 2] = 0;
     }
     pointsGeo.attributes.position.needsUpdate = true;
-    syncEdgePositions();  // re-set edges to 2D Coxeter positions (in place)
+    // Edges are synchronized after the final point positions in update().
   }
 
   // --- McKay highlight ---
@@ -1083,18 +1079,21 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
           const basis = computeBasis3D(spin, tilt, roll);
           applyBasis3D(basis);
         }
-        // Scale positions to fit the visible area (auto-fit to baseScale)
-        // After basis transformation, positions may be larger — normalize.
-        const verts = pointsGeo.attributes.position.array;
-        let maxAbs = 0;
-        for (let i = 0; i < verts.length; i++) {
-          const a = Math.abs(verts[i]);
-          if (a > maxAbs) maxAbs = a;
-        }
-        if (maxAbs > 0) {
-          const fit = baseScale / maxAbs * 0.85;
-          for (let i = 0; i < verts.length; i++) verts[i] *= fit;
-          pointsGeo.attributes.position.needsUpdate = true;
+        // Only alternate 3D bases need auto-fit. The canonical Coxeter
+        // projection already uses scaleK and shares that scale with its ring
+        // guides; fitting it again shrank roots by 15% after a mode round trip.
+        if (viewMode !== 'coxeter') {
+          const verts = pointsGeo.attributes.position.array;
+          let maxAbs = 0;
+          for (let i = 0; i < verts.length; i++) {
+            const a = Math.abs(verts[i]);
+            if (a > maxAbs) maxAbs = a;
+          }
+          if (maxAbs > 0) {
+            const fit = baseScale / maxAbs * 0.85;
+            for (let i = 0; i < verts.length; i++) verts[i] *= fit;
+            pointsGeo.attributes.position.needsUpdate = true;
+          }
         }
         captureProjectionBase();
       }
@@ -1111,6 +1110,15 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
         }
         pointsGeo.attributes.position.needsUpdate = true;
       }
+      // Chord endpoints must follow the FINAL root buffer. Synchronizing in
+      // applyBasis3D/applyCoxeterBasis happened before auto-fit or extrusion,
+      // leaving lines detached from their roots after mode and depth changes.
+      const edgesShown = !!shared.showEdges;
+      if (edgesShown && (projChanged || morphT !== lastEdgeMorphT || !lastEdgesShown)) {
+        syncEdgePositions();
+      }
+      lastEdgeMorphT = morphT;
+      lastEdgesShown = edgesShown;
 
       // --- Weyl orbit trail --
       // Walk random simple reflections on the seed root and draw the trail.
