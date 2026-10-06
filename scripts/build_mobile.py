@@ -66,7 +66,9 @@ def inline_mobile_data() -> str:
         "mckay": json.loads((ROOT / "data" / "mckay.json").read_text(encoding="utf-8")),
         "curriculum": json.loads((ROOT / "data" / "curriculum.json").read_text(encoding="utf-8")),
     }
-    return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n"
+    # JSON is embedded inside an HTML script element. A lesson containing a
+    # literal closing tag must not end that element before the bundle runs.
+    return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + ";\n"
 
 
 def path_contains(parent: Path, child: Path) -> bool:

@@ -46,6 +46,22 @@ def test_android_inventory(temp_root: Path) -> None:
     print("  Android webDir contains only index.html; sibling artifacts remain outside")
 
 
+def test_mobile_inline_json_escaping(temp_root: Path) -> None:
+    data_dir = temp_root / "data"
+    data_dir.mkdir(parents=True)
+    marker = "</ScRiPt><script>window.__unexpected=true</script>"
+    names = ("e8", "e8_math", "mckay_subsets", "platonic", "stellations",
+             "polytopes4d", "dynkin", "mckay", "curriculum")
+    for name in names:
+        (data_dir / f"{name}.json").write_text(json.dumps({"lesson": marker}), encoding="utf-8")
+    with patch.object(build_mobile, "ROOT", temp_root):
+        script = build_mobile.inline_mobile_data()
+    assert "</" not in script, "inline JSON contains an HTML script-closing sequence"
+    payload = json.loads(script.removeprefix("window.MOBILE_DATA = ").removesuffix(";\n"))
+    assert all(payload[name]["lesson"] == marker for name in names), "escaped content did not round-trip"
+    print("  Mobile inline JSON keeps mixed-case script-closing text inside its data")
+
+
 def test_built_native_inventory() -> None:
     """Check the exact directory that the next Capacitor sync will copy."""
     config = json.loads((ROOT / "capacitor.config.json").read_text(encoding="utf-8"))
@@ -248,6 +264,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native-only", action="store_true", help="check the real dist/mobile build without launching a browser")
     args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="e8-mobile-json-") as temporary:
+        test_mobile_inline_json_escaping(Path(temporary))
     if args.native_only:
         test_built_native_inventory()
         print("Native asset inventory passed.")
