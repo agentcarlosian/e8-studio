@@ -1757,6 +1757,7 @@ def check_studio_ui() -> None:
     run([sys.executable, "scripts/test_quick_start.py"])
     run([sys.executable, "scripts/test_studio_ui.py"])
     run([sys.executable, "scripts/test_learning_center.py"])
+    run([sys.executable, "scripts/test_gallery_presets.py"])
 
 
 def check_backgrounds() -> None:
