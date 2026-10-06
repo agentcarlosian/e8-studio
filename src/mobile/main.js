@@ -5283,8 +5283,14 @@ function closeLearnReader() {
 
 function toggleLearnPath(pathId) {
   if (!curriculumPaths.some(path => path.id === pathId)) return false;
+  const hadFocus = document.activeElement?.closest?.('[data-learn-path]')?.dataset.learnPath === pathId;
   learnSelectedPathId = learnSelectedPathId === pathId ? '' : pathId;
   renderLearnTopics();
+  // The path list is rebuilt above. Keep keyboard focus on the replacement
+  // disclosure button so Enter/Space and subsequent Tab navigation stay local.
+  if (hadFocus) {
+    els.learnTopicGrid?.querySelector(`[data-learn-path="${CSS.escape(pathId)}"]`)?.focus({ preventScroll: true });
+  }
   markInteraction(`learn-path-${pathId}`);
   return true;
 }

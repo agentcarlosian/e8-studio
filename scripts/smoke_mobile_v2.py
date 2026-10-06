@@ -570,7 +570,16 @@ def main() -> int:
             canonical_order = [lesson["id"] for lesson in json.loads((ROOT / "data" / "curriculum.json").read_text(encoding="utf-8"))["lessons"]]
             check("Mobile lessons follow the prerequisite-respecting curriculum order", learn_library["lessonOrder"] == canonical_order, str(learn_library["lessonOrder"]))
             check("Learn library uses readable touch targets", learn_library["done"]["height"] >= 44 and all(path["box"]["height"] >= 64 for path in learn_library["paths"]), str(learn_library))
-            page.locator('[data-learn-path="solid-foundations"]').click()
+            page.locator('[data-learn-path="solid-foundations"]').focus()
+            page.keyboard.press('Enter')
+            learn_path_focus = page.evaluate("""() => ({
+                expanded: document.querySelector('[data-learn-path="solid-foundations"]')?.getAttribute('aria-expanded'),
+                focusedPath: document.activeElement?.dataset.learnPath || null,
+                focusedTag: document.activeElement?.tagName || null,
+            })""")
+            check("Learn path keyboard expansion keeps focus on the disclosure", learn_path_focus == {
+                "expanded": "true", "focusedPath": "solid-foundations", "focusedTag": "BUTTON",
+            }, str(learn_path_focus))
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             mobile_lesson_select_ms = page.evaluate("""() => {
                 const started = performance.now();
