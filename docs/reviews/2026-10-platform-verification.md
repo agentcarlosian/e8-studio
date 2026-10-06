@@ -33,8 +33,9 @@ changed; CI will exercise that ordinary path on its Windows runner.
   unsigned debug APK, and checks that `assets/public/index.html` exactly
   matches both the staged and synced HTML. It rejects unrelated public assets.
   The project pins Android Gradle Plugin 8.13; [Google's compatibility table](https://developer.android.com/build/releases/agp-8-13-0-release-notes)
-  calls for JDK 17 and SDK Build Tools 35.0.0. CI installs API 36, matching
-  `android/variables.gradle`.
+  lists JDK 17 as its minimum and SDK Build Tools 35.0.0. The pinned Capacitor
+  Android module targets Java 21, so CI uses JDK 21 and installs API 36,
+  matching `android/variables.gradle`.
 - `windows-build` now runs a WebKit engine smoke after the web build.
 - `electron-package` builds the Windows Electron installer, verifies that the
   unpacked ASAR contains the exact offline HTML and no vendor sidecars, then

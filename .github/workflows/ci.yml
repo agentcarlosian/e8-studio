@@ -103,12 +103,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      # AGP 8.13 requires JDK 17; install exactly the API/build tools named by
-      # android/variables.gradle and the plugin's compatibility table.
+      # Capacitor Android 8.5 compiles its Java sources at release 21. AGP's
+      # JDK 17 minimum is insufficient for this pinned module.
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: gradle
       - uses: android-actions/setup-android@v4
         with:
