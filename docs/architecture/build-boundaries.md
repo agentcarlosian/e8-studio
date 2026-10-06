@@ -30,8 +30,8 @@ packages `dist/index.html` without a `dist/vendor` dependency. The share file
 can be copied outside the repository
 and opened directly through `file://` without redirecting to `dist/`.
 When changing `assets/pwa-icon.svg`, regenerate both `assets/pwa-icon-*.png`
-from it with `scripts/gen_pwa_icons.py` after an offline build; the regular
-build copies the committed icons without starting a browser.
+from it with `scripts/gen_pwa_icons.py` and check them with `--check`; the
+regular build copies the committed icons without starting a browser.
 
 `npm run mobile:build` syncs only `dist/mobile/` into Capacitor. The mobile
 builder replaces that directory with one inlined `index.html`; unrelated
