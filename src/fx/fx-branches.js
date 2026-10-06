@@ -144,7 +144,6 @@ export const FRAGMENT_FX_BRANCHES = /* glsl */`
     float band = 0.5 + 0.5 * sin(dot(vWorldPos, vec3(3.2, 2.1, 1.3)) - uTime * 3.2);
     float amount = clamp(uFXIntensity, 0.0, 1.0);
     col *= mix(1.0, 0.68 + 0.5 * band, amount);
-    a *= mix(1.0, 0.75 + 0.25 * band, amount);
   }
   if (uFXMode == 11) {
     float rim = pow(length(c), 2.0);

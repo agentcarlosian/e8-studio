@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 import re
 from playwright.sync_api import sync_playwright
-from verify import start_server, find_chromium_executable, chromium_webgl_args, open_checked_page
+from verify import start_server, find_chromium_executable, chromium_webgl_args, open_checked_page, assert_canvas_nonblank
 
 
 def main():
@@ -23,6 +23,7 @@ def main():
                     page = context.new_page()
                     errors=[]
                     page.on('pageerror', lambda error: errors.append(str(error)))
+                    page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
                     page.add_init_script('window.__forceSdfSafeMode = true')
                     page.goto(base + '/' + os.environ.get('STUDIO_UI_ENTRY', 'dist/web/index.html'), wait_until='domcontentloaded')
                     page.wait_for_function('() => !!window.__app?.currentView')
@@ -102,6 +103,14 @@ def main():
                     if width <= 390:
                         page.get_by_role('button', name='Open controls', exact=True).click()
                     if width == 1440:
+                        page.evaluate("() => window.__app.switchView('rootlab')")
+                        page.wait_for_function("() => window.__app.currentView?.name === 'rootlab'")
+                        page.evaluate("() => window.__app.setFX('trail')")
+                        page.wait_for_timeout(250)
+                        assert page.evaluate("() => window.__app.params.fxMode === 'trail'")
+                        assert_canvas_nonblank(page)
+                        assert not errors, f'Root Lab Trail shader failed: {errors}'
+                        page.evaluate("() => window.__app.setFX('none')")
                         page.evaluate("window.__app.switchView('raymarched')")
                         assert page.evaluate("!!window.__app.currentView.object3d.material?.userData?.sdfQuality")
                         page.evaluate("window.__app.setMobileQuality('low')")
