@@ -97,13 +97,8 @@ export class FXRuntime {
   // (glow pulse, ripple, spiral, chromatic shift, …) read uTime in-shader, so
   // this single uniform push animates them all.
   //
-  // Note on 'trail': trail decay is intentionally NOT done here. Each view
-  // decays its own colour attribute in its update() loop (it knows which
-  // BufferGeometry attribute holds the per-vertex colours — pointsGeo for
-  // e8coxeter, vGeo for sixhundred/polytope, etc.). Centralising it here would
-  // require every view to expose its colour array under a common name; the
-  // per-view approach keeps each view self-contained. See e.g.
-  // e8coxeter.view.js (~line 1303), platonic.view.js (~line 499).
+  // Trail bands are shader-only. Source color attributes remain unchanged, so
+  // changing effects or palettes cannot leave a view permanently dimmed.
   update(time) {
     for (const m of this.fxMaterials) {
       if (m.uniforms.uTime) m.uniforms.uTime.value = time;

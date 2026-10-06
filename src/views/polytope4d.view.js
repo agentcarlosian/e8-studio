@@ -214,7 +214,6 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     group.userData.vPoints = vPoints;
     // Expose material so update() can set FX uniforms
     group.userData.materials = [vMat];
-    group.userData.trailGeo = vGeo;
   };
 
   const initial = runtimeParams().poly4d || '24cell';
@@ -325,7 +324,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       group.userData.vPoints.visible = !!params.showVertices;
       group.userData.vPoints.material.uniforms.uBaseSize.value = 0.06 * baseScale * (params.pointScale || 1);
 
-      // FX uniform updates + trail decay.
+      // FX uniform updates; Trail animates in the shared point and line shaders.
       // Use canonical 11-mode FX map (was hardcoded 6-mode map that silently
       // failed for fog/heat/edge-glow/pulse/chromatic).
       const fxModeId = FX_MODE_MAP[params.fxMode] ?? 0;
@@ -335,12 +334,6 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
           if (m.uniforms.uFXIntensity) m.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
           if (m.uniforms.uTime) m.uniforms.uTime.value = time;
         }
-      }
-      // Trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
     },
 

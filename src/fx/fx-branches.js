@@ -137,6 +137,15 @@ export const FRAGMENT_FX_BRANCHES = /* glsl */`
   // fxA defaults to 1.0; vertex branches (12, 19) may write to it via fxAlpha.
   // Declaring it here so callers that only inject fragment branches still compile.
   float fxA = 1.0;
+  if (uFXMode == 2) {
+    // Trail's moving brightness band lives in the shader. Mutating the source
+    // color attribute every frame made points permanently fade to black after
+    // leaving Trail, and dynamic views could overwrite that decay unpredictably.
+    float band = 0.5 + 0.5 * sin(dot(vWorldPos, vec3(3.2, 2.1, 1.3)) - uTime * 3.2);
+    float amount = clamp(uFXIntensity, 0.0, 1.0);
+    col *= mix(1.0, 0.68 + 0.5 * band, amount);
+    a *= mix(1.0, 0.75 + 0.25 * band, amount);
+  }
   if (uFXMode == 11) {
     float rim = pow(length(c), 2.0);
     col += vec3(0.9, 0.85, 1.0) * rim * uFXIntensity * 1.6;

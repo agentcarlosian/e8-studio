@@ -300,7 +300,7 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
         group.rotation.y += dt * rs;
         group.rotation.x += dt * rs * 0.4;
       }
-      // FX uniform updates + trail decay. Use the canonical name→id map from
+      // FX uniform updates. Use the canonical name→id map from
       // fx-shader.js so every FX mode (0–23) is reachable — the old local map
       // only covered 0–5, silently disabling modes 6–23 in this view.
       if (group.userData.materials) {
@@ -318,12 +318,6 @@ export function createPlatonicView({ data, palette, scale: baseScale, context = 
       }
       for (const child of group.children) {
         if (child.name === 'platonic-faces' || child.name === 'star-polyhedron-faces') child.visible = params.showFaces !== false;
-      }
-      // Trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
     },
 

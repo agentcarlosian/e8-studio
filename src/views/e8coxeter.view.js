@@ -1313,15 +1313,6 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       pointsMat.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
       pointsMat.uniforms.uRootDiffusion.value = params.rootDiffusion && picked != null ? 1 : 0;
       pointsMat.uniforms.uDiffusionTime.value = ((time - diffusionStartedAt) * (params.rootDiffusionSpeed || 1.25)) % (haloDepth + 1.75);
-      // FX trail: leave ghost positions behind by storing previous frame
-      if (params.fxMode === 'trail') {
-        // Decay all colors slightly so previous frames fade out
-        // (visual hack: a simple alpha reduction via color intensity)
-        const c = pointsGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        pointsGeo.attributes.color.needsUpdate = true;
-      }
-
       // Highlight updates on shape or comparison-shape change
       const compareShape = params.compareShape || 'dodecahedron';
       const compareMode = params.compareMode || 'off';

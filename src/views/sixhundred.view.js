@@ -254,7 +254,6 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
   group.userData.vPoints = vPoints;
   // Expose material so update() can set FX uniforms
   group.userData.materials = [edgeMat, vMat];
-  group.userData.trailGeo = vGeo;
 
   let angleXY = 0, angleZW = 0;
 
@@ -344,12 +343,6 @@ export function createSixHundredView({ data, palette, scale: baseScale, context 
       // Use canonical 11-mode FX map (was hardcoded 6-mode map)
       vMat.uniforms.uFXMode.value = FX_MODE_MAP[params.fxMode] ?? 0;
       vMat.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
-      // FX trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
-      }
     },
 
     dispose() {
