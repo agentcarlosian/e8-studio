@@ -516,6 +516,22 @@ def main() -> int:
             check("settings button keeps compact canvas footprint", bool(settings_button) and 44 <= settings_button["width"] <= 56 and 44 <= settings_button["height"] <= 56 and settings_button_text == "", str({"box": settings_button, "text": settings_button_text}))
             page.get_by_role("button", name="Settings").click()
             check("settings button opens sheet", page.locator("#settings-sheet:not(.hidden)").count() == 1)
+            check("Settings dialog takes focus on open", page.evaluate("document.activeElement?.id === 'settings-close'"))
+            page.keyboard.press("Shift+Tab")
+            trapped_focus = page.evaluate("""() => ({
+                inside: document.getElementById('settings-sheet').contains(document.activeElement),
+                target: document.activeElement?.id || document.activeElement?.tagName,
+            })""")
+            check("Shift+Tab wraps inside Settings dialog", trapped_focus["inside"] and trapped_focus["target"] != "settings-close", str(trapped_focus))
+            page.keyboard.press("Tab")
+            check("Tab wraps back to Settings close button", page.evaluate("document.activeElement?.id === 'settings-close'"))
+            page.keyboard.press("Escape")
+            closed_focus = page.evaluate("""() => ({
+                hidden: document.getElementById('settings-sheet').classList.contains('hidden'),
+                focused: document.activeElement?.id,
+            })""")
+            check("Settings Escape closes and returns focus to opener", closed_focus == {"hidden": True, "focused": "settings-button"}, str(closed_focus))
+            page.get_by_role("button", name="Settings").click()
             section_nav_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             for name in ["View", "Visuals", "Motion", "Learn"]:
                 page.get_by_role("button", name=name, exact=True).click()

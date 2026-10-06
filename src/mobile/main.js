@@ -1174,6 +1174,7 @@ let learnLibraryScrollTop = 0;
 let learnSelectedPathId = null;
 let learnExperimentStepIndex = 0;
 let learnCoachState = null;
+let settingsReturnFocus = null;
 let settingsCanvasResizeDeferred = false;
 let lastTap = null;
 let nativeBackHandlerInstalled = false;
@@ -1625,6 +1626,28 @@ function bindEvents() {
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && isSettingsOpen()) {
+      const higherModal = [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
+        .find(element => element !== els.sheet && element.getClientRects().length > 0);
+      if (higherModal) return;
+      const focusable = [...els.sheet.querySelectorAll('button:not(:disabled), a[href], summary, input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+        .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!els.sheet.contains(document.activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus({ preventScroll: true });
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      }
+      return;
+    }
     if (event.key === 'Escape' && handleBackNavigation()) event.preventDefault();
   });
 
@@ -5620,6 +5643,9 @@ function openSettings(section = null) {
     ? (activeSettingsSection() || 'view')
     : (SETTINGS_SECTIONS.has(section) ? section : 'view');
   const wasOpen = isSettingsOpen();
+  if (!wasOpen) {
+    settingsReturnFocus = document.activeElement === document.body ? els.settingsButton : document.activeElement;
+  }
   closeQualityPopover();
   cancelQueuedRenderForSettings('settings-open');
   if (wasOpen) {
@@ -5635,6 +5661,7 @@ function openSettings(section = null) {
   applySettingsSection(target);
   pauseMobileTourForSettings('settings-open');
   syncMotionLoop();
+  if (!wasOpen) els.close.focus({ preventScroll: true });
 }
 
 function activeSettingsSection() {
@@ -5677,6 +5704,14 @@ function closeSettings(interactionType = null) {
   flushDeferredSettingsRender();
   resumeMobileTourAfterSettings(interactionType || 'settings-close');
   syncMotionLoop();
+  if (wasOpen) {
+    const target = interactionType === 'learn-open-experiment'
+      ? els.learnCoach?.querySelector('[data-learn-coach-action="return"]')
+      : settingsReturnFocus;
+    settingsReturnFocus = null;
+    (target?.isConnected && target.getClientRects().length ? target : els.settingsButton)
+      ?.focus({ preventScroll: true });
+  }
   return wasOpen;
 }
 
