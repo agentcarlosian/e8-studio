@@ -110,6 +110,8 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_coxeter_tilings.mjs"])
     run(["node", "scripts/test_e8_quasicrystal.mjs"])
     run(["node", "scripts/test_quasicrystal_comparison.mjs"])
+    run(["node", "scripts/test_coxeter_projection_alignment.mjs"])
+    run(["node", "scripts/test_fx_trail.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
     run(["node", "scripts/test_deferred_view.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
