@@ -5,10 +5,9 @@
   - icon assets exist
   - the app loads + the service worker registers (over http, where SW works)
 
-Note: a true offline test requires simulating network failure, which headless
-Chromium doesn't expose cleanly. This test confirms the PWA *plumbing* is
-correct; the actual offline behavior is guaranteed by the cache-first SW
-strategy + the self-contained dist (verified separately by the offline load).
+This checks the generated application's PWA plumbing. The isolated
+test_packaging_assets.py exercises a two-build upgrade and an offline reload
+in Chromium without changing this shared dist directory.
 """
 import json
 import sys
@@ -22,22 +21,25 @@ from verify import start_server, find_chromium_executable  # noqa: E402
 def main() -> int:
     # Static asset checks (no browser needed)
     dist = ROOT / "dist"
-    # Required for an installable, offline-capable PWA. The SVG icon is a valid
-    # manifest icon on its own; the raster icon-192/512 PNGs are optional
-    # fallbacks produced by scripts/gen_pwa_icons.py (needs a headless browser).
-    required = ["manifest.webmanifest", "sw.js", "icon.svg"]
-    optional = ["icon-192.png", "icon-512.png"]
+    # Every manifest icon is emitted by the normal build and available offline.
+    required = ["manifest.webmanifest", "sw.js", "icon.svg", "icon-192.png", "icon-512.png"]
     missing = [f for f in required if not (dist / f).exists()]
     if missing:
         print(f"FAIL: missing PWA assets: {missing}")
         return 1
-    have_png = [f for f in optional if (dist / f).exists()]
-    if have_png:
-        print(f"  raster icons present: {have_png}")
+    for size in (192, 512):
+        data = (dist / f"icon-{size}.png").read_bytes()
+        assert data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR", f"invalid {size}px PNG"
+        assert (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")) == (size, size), f"wrong {size}px PNG size"
     manifest = json.loads((dist / "manifest.webmanifest").read_text(encoding="utf-8"))
     assert manifest["short_name"], "manifest missing short_name"
     assert manifest["start_url"], "manifest missing start_url"
     assert len(manifest["icons"]) >= 2, "manifest needs at least 2 icons"
+    for icon in manifest["icons"]:
+        src = icon["src"]
+        assert src.startswith("./"), f"manifest icon must be a local relative path: {src}"
+        asset = (dist / src[2:]).resolve()
+        assert asset.is_relative_to(dist.resolve()) and asset.is_file(), f"manifest icon is missing: {src}"
     print(f"  manifest OK ({manifest['short_name']}, {len(manifest['icons'])} icons)")
     print(f"  all {len(required)} PWA assets present")
 

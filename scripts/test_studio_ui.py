@@ -1,8 +1,9 @@
 """User journeys for the studio shell and integrated opt-in introduction."""
 from pathlib import Path
 import os
+import re
 from playwright.sync_api import sync_playwright
-from verify import start_server, find_chromium_executable, chromium_webgl_args, open_checked_page
+from verify import start_server, find_chromium_executable, chromium_webgl_args, open_checked_page, assert_canvas_nonblank
 
 
 def main():
@@ -22,6 +23,7 @@ def main():
                     page = context.new_page()
                     errors=[]
                     page.on('pageerror', lambda error: errors.append(str(error)))
+                    page.on('console', lambda message: errors.append(message.text) if message.type == 'error' else None)
                     page.add_init_script('window.__forceSdfSafeMode = true')
                     page.goto(base + '/' + os.environ.get('STUDIO_UI_ENTRY', 'dist/web/index.html'), wait_until='domcontentloaded')
                     page.wait_for_function('() => !!window.__app?.currentView')
@@ -29,6 +31,14 @@ def main():
                     assert page.locator('#quick-start-coach').count() == 0, 'guide must be opt-in'
                     if width <= 390:
                         page.get_by_role('button', name='Open controls', exact=True).click()
+                    assert page.locator('.exploration-routes button').count() == 3
+                    page.screenshot(path=str(output/f'start-here-{width}.png'))
+                    page.locator('.exploration-routes [data-act="openLearningCenter"]').click()
+                    assert page.locator('#learning-lesson-title').inner_text() == 'Why exactly five regular solids?'
+                    page.locator('[data-modal-close]').click()
+                    page.locator('.exploration-routes [data-act="openPresets"]').click()
+                    assert page.locator('.preset-card').count() == 24
+                    page.locator('[data-modal-close]').click()
                     assert page.locator('.view-card').count() == 9
                     metrics=page.evaluate('''() => ({ overflow:document.body.scrollWidth > innerWidth+1, cards:[...document.querySelectorAll('.view-card')].map(el=>{const r=el.getBoundingClientRect();return {width:r.width,height:r.height,x:r.x,y:r.y}}) })''')
                     assert not metrics['overflow'], metrics
@@ -74,6 +84,39 @@ def main():
                     page.locator('[data-act="switchView"][data-arg="e8coxeter"]').click()
                     page.wait_for_timeout(400)
                     assert page.locator('#ps-motion').inner_text().strip(), 'motion status must survive rerenders'
+                    page.evaluate("window.__app.switchView('quasicrystal')")
+                    status = page.locator('#ps-status').inner_text().lower()
+                    assert 'pattern' in status and 'icosahedron' not in status, status
+                    page.locator('.quasi-compare-launch').click()
+                    page.wait_for_function("() => document.querySelector('.quasi-comparison-stats')?.textContent.includes('accepted')")
+                    assert page.locator('[data-quasi-canvas]').count() == 3
+                    page.evaluate("window.__app.setParam('quasiWindow', 1.50)")
+                    page.wait_for_function(r"() => /\+[1-9][0-9]* entered/.test(document.querySelector('.quasi-comparison-stats')?.textContent || '')")
+                    comparison = page.locator('.quasi-comparison-stats').inner_text()
+                    assert re.search(r'\+[1-9][0-9]* entered', comparison), comparison
+                    if width > 390:
+                        page.screenshot(path=str(output/f'quasicrystal-comparison-{width}.png'))
+                    page.locator('[data-act="resetQuasiComparisonBaseline"]').click()
+                    assert '+0 entered' in page.locator('.quasi-comparison-stats').inner_text()
+                    page.locator('.quasi-comparison-head [data-act="toggleQuasiComparison"]').click()
+                    assert page.locator('.quasi-comparison').is_hidden()
+                    if width <= 390:
+                        page.get_by_role('button', name='Open controls', exact=True).click()
+                    if width == 1440:
+                        page.evaluate("() => window.__app.switchView('rootlab')")
+                        page.wait_for_function("() => window.__app.currentView?.name === 'rootlab'")
+                        page.evaluate("() => window.__app.setFX('trail')")
+                        page.wait_for_timeout(250)
+                        assert page.evaluate("() => window.__app.params.fxMode === 'trail'")
+                        assert_canvas_nonblank(page)
+                        assert not errors, f'Root Lab Trail shader failed: {errors}'
+                        page.evaluate("() => window.__app.setFX('none')")
+                        page.evaluate("window.__app.switchView('raymarched')")
+                        assert page.evaluate("!!window.__app.currentView.object3d.material?.userData?.sdfQuality")
+                        page.evaluate("window.__app.setMobileQuality('low')")
+                        assert page.evaluate("!!window.__app.currentView.object3d.material?.userData?.sdfQuality"), 'loaded SDF view rebuilds synchronously'
+                        page.evaluate("window.__app.setMobileQuality('high')")
+                    page.evaluate("window.__app.switchView('e8coxeter')")
                     page.screenshot(path=str(output/f'studio-{width}.png'))
                     if width<=390:
                         page.get_by_role('button', name='Close controls', exact=True).first.click()

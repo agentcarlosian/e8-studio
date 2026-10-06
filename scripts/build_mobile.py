@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build dist/ for the Android-first Mobile V2 shell.
+"""Build the Android-first Mobile V2 shell.
 
 The desktop Studio keeps using index.html/src/main.js. Native Android ships a
 small hybrid mobile entrypoint: Canvas 2D handles the lightweight scenes and a
-raw WebGL raymarcher handles E8 SDF. This build inlines Mobile V2 CSS/JS plus the E8 data it needs into
-dist/index.html and removes stale browser/PWA artifacts from previous builds.
-Shareable standalone files in dist/ are preserved so Android/mobile builds do
-not erase files intended for manual sharing.
+raw WebGL raymarcher handles E8 SDF. This build inlines Mobile V2 CSS/JS and
+data into dist/index.html for browser smoke tests and dist/mobile/index.html
+for Capacitor. The native directory is recreated with only that one file, so
+other dist artifacts cannot enter the Android package.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from build import harden_csp
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST_INDEX = ROOT / "dist" / "index.html"
+CAPACITOR_WEB_DIR = ROOT / "dist" / "mobile"
 MOBILE_HTML = ROOT / "mobile.html"
 MOBILE_CSS = ROOT / "src" / "mobile" / "style.css"
 PROTECTED_DIST_ARTIFACTS = [
@@ -65,7 +66,9 @@ def inline_mobile_data() -> str:
         "mckay": json.loads((ROOT / "data" / "mckay.json").read_text(encoding="utf-8")),
         "curriculum": json.loads((ROOT / "data" / "curriculum.json").read_text(encoding="utf-8")),
     }
-    return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n"
+    # JSON is embedded inside an HTML script element. A lesson containing a
+    # literal closing tag must not end that element before the bundle runs.
+    return "window.MOBILE_DATA = " + json.dumps(payload, separators=(",", ":")).replace("</", "<\\/") + ";\n"
 
 
 def path_contains(parent: Path, child: Path) -> bool:
@@ -104,6 +107,24 @@ def remove_stale_artifacts() -> None:
             print(f"Removed stale mobile directory: {path.relative_to(ROOT)}")
 
 
+def stage_capacitor_html(html: str, output_dir: Path = CAPACITOR_WEB_DIR) -> Path:
+    """Replace the native web directory with the single intended HTML file."""
+    workspace = ROOT.resolve()
+    resolved = output_dir.resolve()
+    try:
+        relative = resolved.relative_to(workspace)
+    except ValueError as exc:
+        raise SystemExit(f"ERROR: Capacitor output escapes workspace: {resolved}") from exc
+    if relative != Path("dist") / "mobile" or output_dir.is_symlink():
+        raise SystemExit(f"ERROR: refusing to replace unexpected Capacitor output: {resolved}")
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
+    target = output_dir / "index.html"
+    target.write_text(html, encoding="utf-8", newline="\n")
+    return target
+
+
 def main() -> int:
     DIST_INDEX.parent.mkdir(exist_ok=True)
     remove_stale_artifacts()
@@ -123,7 +144,9 @@ def main() -> int:
     html = remove_cdn_csp_allowance(harden_csp(html))
     html = re.sub(r"\s*frame-ancestors[^;]*;", "", html)
     DIST_INDEX.write_text(html, encoding="utf-8", newline="\n")
+    native_index = stage_capacitor_html(html)
     print(f"Mobile V2 dist written: {DIST_INDEX.relative_to(ROOT)} ({DIST_INDEX.stat().st_size:,} bytes)")
+    print(f"Capacitor input written: {native_index.relative_to(ROOT)} ({native_index.stat().st_size:,} bytes)")
     print("Mobile bundle uses Canvas 2D + raw WebGL E8 chords/Quasicrystal/SDF, inlined E8 data, and no PWA service worker.")
     return 0
 

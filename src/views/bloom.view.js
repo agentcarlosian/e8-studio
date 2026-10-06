@@ -478,11 +478,10 @@ export function createBloomView({ data, palette, scale: baseScale, context = {} 
       const trailOpacity = 0.22 * Math.sin(phaseMorph * Math.PI);
       edgesMat.opacity = Math.max(sourceEdgeOpacity, trailOpacity);
 
-      // FX uniform updates + trail decay
+      // FX uniform updates; Trail animates in the shared point and line shaders.
       // Use the canonical 11-mode map from fx-shader.js (previously was a
       // 6-mode local map that silently broke when panel exposed more modes).
       group.userData.materials = [mat];
-      group.userData.trailGeo = geo;
       mat.uniforms.uSize.value = 18 * baseScale * (params.pointScale || 1);
       if (group.userData.materials) {
         for (const m of group.userData.materials) {
@@ -497,12 +496,6 @@ export function createBloomView({ data, palette, scale: baseScale, context = {} 
             if (m.uniforms.uMandelboxMix)    m.uniforms.uMandelboxMix.value    = params.bloomMandelboxMix ?? MANDELBOX_DEFAULTS.mix;
           }
         }
-      }
-      // Trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
     },
 

@@ -52,6 +52,9 @@ def main() -> int:
         DIST / "index.html",
         DIST / "manifest.webmanifest",
         DIST / "sw.js",
+        DIST / "icon.svg",
+        DIST / "icon-192.png",
+        DIST / "icon-512.png",
     ]
     for path in artifacts:
         if not path.is_file() or path.stat().st_size == 0:

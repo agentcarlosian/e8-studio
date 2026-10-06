@@ -22,7 +22,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "python scripts/build.py",
+    "build": "python scripts/build_offline.py",
     "build:legacy": "python scripts/build.py",
     "build:web": "vite build",
     "build:offline": "python scripts/build_offline.py",
@@ -33,6 +33,7 @@
     "release:artifacts": "python scripts/build_release_artifacts.py",
     "verify": "python scripts/verify.py",
     "test:lifecycle": "node scripts/test_resource_scope.mjs",
+    "test:deferred-view": "node scripts/test_deferred_view.mjs",
     "test:animation": "node scripts/test_frame_health.mjs",
     "test:recording": "node scripts/test_recording_recovery.mjs",
     "test:exports": "node scripts/test_export_delivery.mjs",
@@ -43,6 +44,7 @@
     "test:rank2-roots": "node scripts/test_rank2_roots.mjs",
     "test:coxeter-tilings": "node scripts/test_coxeter_tilings.mjs",
     "test:e8-quasicrystal": "node scripts/test_e8_quasicrystal.mjs",
+    "test:quasicrystal-comparison": "node scripts/test_quasicrystal_comparison.mjs",
     "test:curriculum": "node scripts/test_curriculum.mjs",
     "test:progress": "node scripts/test_progress.mjs",
     "test:content": "node scripts/test_content_integrity.mjs",
@@ -71,6 +73,7 @@
     "@capacitor/cli": "8.5.0",
     "electron": "^44.1.1",
     "electron-builder": "^26.15.3",
+    "playwright-core": "1.58.2",
     "vite": "8.2.2"
   },
   "dependencies": {

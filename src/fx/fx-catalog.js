@@ -36,7 +36,7 @@ export const FX_EFFECTS = Object.freeze([
   effect('none', 'Off', 'Use the renderer’s clean, unmodified shading.', { sdf: true }),
   effect('glow', 'Glow', 'Adds a luminous rim and brighter highlights.', { sdf: true }),
   effect('pulse', 'Pulse', 'Breathes the form gently over time.', { target: 'geometry', sdf: true }),
-  effect('trail', 'Trail', 'Adds animated afterimage bands behind moving geometry.', { cost: 'medium', target: 'motion', sdf: true }),
+  effect('trail', 'Trail', 'Moves an echo-like brightness band across the geometry.', { cost: 'medium', target: 'motion', sdf: true }),
   effect('chromatic', 'Chrom', 'Separates color channels across the form.', { sdf: true }),
   effect('kaleidoscope', 'Kaleid', 'Mirrors the form into a kaleidoscopic pattern.', { cost: 'medium', target: 'geometry', sdf: true }),
   effect('ripple', 'Ripple', 'Sends a radial wave through the form.', { target: 'geometry', sdf: true }),

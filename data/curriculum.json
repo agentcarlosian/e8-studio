@@ -59,6 +59,7 @@
       ],
       "guide": {
         "level": "Start here",
+        "whyItMatters": "A simple corner rule explains the whole list. You can test it before memorizing any solid names.",
         "terms": [
           [
             "Regular",
@@ -270,6 +271,7 @@
       ],
       "guide": {
         "level": "Build intuition",
+        "whyItMatters": "A projection gives us evidence about a 4D object while reminding us what the screen cannot show.",
         "terms": [
           [
             "Cell",
@@ -408,6 +410,7 @@
       ],
       "guide": {
         "level": "Start here",
+        "whyItMatters": "Learn to separate each eight-dimensional root from the dot that represents it on screen.",
         "terms": [
           [
             "Root vector",
@@ -584,13 +587,14 @@
       "prerequisites": [
         "into-four-dimensions"
       ],
-      "shortAnswer": "The 600-cell is the regular 4D polytope {3,3,5}: 600 tetrahedral cells meet around 120 vertices. Its vertex coordinates can also be read as the 120 unit quaternions of the binary icosahedral group, which is why it repeatedly appears near exceptional symmetry.",
+      "shortAnswer": "The name counts its 600 tetrahedral cells, not its vertices. There are 120 vertices and 720 edges in the complete four-dimensional figure. A screen projection may overlap them, but rotation does not change those counts. Its vertex coordinates also have a deeper description as 120 unit quaternions of the binary icosahedral group.",
       "keyIdeas": [
         "Its 120 vertices and 720 edges are intrinsic even when a projection overlaps them.",
         "It is dual to the 120-cell and carries strong icosahedral symmetry."
       ],
       "guide": {
         "level": "Build intuition",
+        "whyItMatters": "Track the counts that stay fixed while the crowded projection rotates and changes shape.",
         "terms": [
           [
             "Tetrahedral cell",
@@ -733,6 +737,7 @@
       ],
       "guide": {
         "level": "Build intuition",
+        "whyItMatters": "Two reflection rules can generate a pattern that looks far more complicated than its starting instructions.",
         "terms": [
           [
             "Reflection mirror",
@@ -872,6 +877,7 @@
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "A pattern can have a reliable construction and recurring local shapes without repeating under a translation.",
         "terms": [
           [
             "Multigrid",
@@ -1021,13 +1027,14 @@
       "prerequisites": [
         "coxeter-multigrids"
       ],
-      "shortAnswer": "Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch, and a finite structure-factor calculation reveals its sharp diffraction peaks.",
+      "shortAnswer": "Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch. The Studio samples finite-patch structure-factor intensity at selected reciprocal candidates; this does not measure diffraction peak sharpness.",
       "keyIdeas": [
         "The six hidden coordinates decide which projected lattice points enter the pattern.",
         "Moving the window changes local arrangements without turning the construction into random motion."
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "The hidden coordinates decide which lattice points appear in the visible two-dimensional pattern.",
         "terms": [
           [
             "Acceptance window",
@@ -1132,9 +1139,9 @@
           {
             "id": "diffraction",
             "title": "Look for long-range order",
-            "instruction": "Switch to Diffraction and compare the strongest computed peaks with the thirtyfold guide.",
-            "question": "Why can a non-periodic pattern still produce sharp peaks?",
-            "takeaway": "Coherent phases reinforce at a discrete Fourier module, so quasiperiodic order need not repeat by translation.",
+            "instruction": "Switch to Diffraction and compare the strongest sampled intensities with the thirtyfold guide.",
+            "question": "What can strong sampled intensities suggest about a non-periodic pattern?",
+            "takeaway": "Coherent phases can reinforce at selected reciprocal candidates, suggesting long-range order without a repeating translation. This finite sample does not establish peak width.",
             "action": {
               "view": "quasicrystal",
               "params": {
@@ -1228,6 +1235,7 @@
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "One symmetry operation explains the thirty-point rhythm on each projected E8 ring.",
         "terms": [
           [
             "Coxeter element",
@@ -1375,6 +1383,7 @@
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "Coordinates and inner products preserve structure that a flat picture can hide.",
         "terms": [
           [
             "Simple roots",
@@ -1519,6 +1528,7 @@
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "Eight connected nodes summarize generating relationships behind all 240 E8 roots.",
         "terms": [
           [
             "Node",
@@ -1654,6 +1664,7 @@
       ],
       "guide": {
         "level": "Go deeper",
+        "whyItMatters": "The group-to-diagram correspondence is precise; the Studio’s glowing shape-to-root highlight is illustrative.",
         "terms": [
           [
             "Representation",
@@ -1797,6 +1808,7 @@
       ],
       "guide": {
         "level": "Build intuition",
+        "whyItMatters": "A beautiful transition can suggest a connection without proving that two mathematical objects are the same.",
         "terms": [
           [
             "Interpolation",
@@ -1937,6 +1949,7 @@
       ],
       "guide": {
         "level": "Build intuition",
+        "whyItMatters": "A short distance rule can turn fixed mathematical source points into a surface you can light and explore.",
         "terms": [
           [
             "Signed distance",

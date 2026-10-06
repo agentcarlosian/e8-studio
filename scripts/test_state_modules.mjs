@@ -37,6 +37,7 @@ const baselineA = createGalleryBaseline();
 const baselineB = createGalleryBaseline();
 assert.notEqual(baselineA.autoSliders, baselineB.autoSliders);
 assert.equal(baselineA.bgMode, 'void');
+assert.equal(baselineA.showAmbient, false, 'gallery baseline must stay still');
 assert.equal(baselineA.poly4d, '24cell');
 assert.equal(baselineA.tilingShowRoots, false);
 assert.equal(galleryPresetById('penrose-aurora')?.settings.tilingShowRoots, false);
@@ -75,9 +76,12 @@ const stackedToPlatonic = planViewTransition({
 }, 'bloom', 'platonic').patch;
 assert.deepEqual(stackedToPlatonic, freshToPlatonic);
 assert.notEqual(createViewModifierReset('e8coxeter').autoSliders, createViewModifierReset('e8coxeter').autoSliders);
+assert.equal(createViewModifierReset('e8coxeter').showAmbient, false, 'view reset must not revive hidden camera drift');
 assert.deepEqual(activeViewModifiers({
   view: 'e8coxeter', fxMode: 'glow', shiftMode: 'static', rootDiffusion: true,
 }), ['FX: glow', 'diffusion']);
+assert.deepEqual(activeViewModifiers({view: 'e8coxeter', fxMode: 'none', shiftMode: 'static', showAmbient: true}),
+  ['ambient drift']);
 
 const presetA = PRESETS.find(item => item.id === 'rainbow-flow');
 const presetB = PRESETS.find(item => item.id === 'classic-e8');
@@ -98,6 +102,19 @@ camera.restore(snapshot, null, null, null);
 assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
+camera.thetaTarget = 1.2;
+camera.phiTarget = 0.8;
+camera.distanceTarget = 4.5;
+camera.thetaVelocity = 3;
+camera.phiVelocity = -2;
+camera.settleAtTarget(null, null, null);
+assert.equal(camera.theta, 1.2);
+assert.equal(camera.phi, 0.8);
+assert.equal(camera.distance, 4.5);
+assert.equal(camera.thetaVelocity, 0);
+assert.equal(camera.phiVelocity, 0);
+camera.applyDamping(1 / 60, null, null, null);
+assert.equal(camera.theta, 1.2, 'settled camera does not drift on the next frame');
 
 for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'quasicrystal', 'rootlab', 'tiling', 'dynkin']) {
   const { near, far } = autoZoomBounds(view);

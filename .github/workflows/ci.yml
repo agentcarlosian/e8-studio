@@ -19,7 +19,9 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Local release:check now includes scoped PWA, gallery, and graphics sweeps;
+    # allow room for cold npm, Python, and Chromium setup on hosted runners.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -41,6 +43,7 @@ jobs:
       - run: npm run release:check
       - run: python scripts/test_math.py
       - run: npm run smoke:mobile-v2
+      - run: python -B scripts/test_packaging_assets.py --native-only
       # Publish the exact dist/web checked by release:check. No later step
       # rebuilds it, and PR runs never create a deployment artifact.
       - name: Upload verified Pages artifact
@@ -52,7 +55,7 @@ jobs:
 
   windows-build:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -69,9 +72,12 @@ jobs:
       - run: npm ci
       - run: python -m pip install -r requirements-dev.txt
       - run: npm run build:web
+      - run: npm run build:mobile
+      - run: python -B scripts/test_packaging_assets.py --native-only
       - run: python scripts/test_math.py
       - run: node scripts/test_state_modules.mjs
       - run: npm run test:lifecycle
+      - run: npm run test:deferred-view
       - run: npm run test:animation
       - run: npm run test:recording
       - run: npm run test:exports
@@ -79,6 +85,64 @@ jobs:
       - run: npm run test:visual-system
       - run: npm run test:curriculum
       - run: npm run test:e8-quasicrystal
+      - run: npm run test:quasicrystal-comparison
+      - run: python -m playwright install webkit
+      - run: python -B scripts/test_webkit_compat.py
+
+  android-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # Capacitor Android 8.5 compiles its Java sources at release 21. AGP's
+      # JDK 17 minimum is insufficient for this pinned module.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;35.0.0"
+      - run: npm ci
+      - run: npm run build:mobile
+      - run: python -B scripts/test_packaging_assets.py --native-only
+      - run: npx cap sync android
+      - name: Assemble unsigned debug APK
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:assembleDebug
+      - run: python -B scripts/test_android_apk.py
+
+  electron-package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: node scripts/test_electron_package.mjs --self-test
+      - run: npm run electron:dist
+      - run: node scripts/test_electron_package.mjs
+      - run: node scripts/test_electron_runtime.mjs
 
   deploy:
     needs: [verify, windows-build]

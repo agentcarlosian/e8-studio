@@ -1,7 +1,7 @@
 name: Deploy GitHub Pages
 
 on:
-  # CI owns push/manual triggers and calls this only after every check passes.
+  # CI owns push/manual triggers and calls this after the web verification jobs pass.
   workflow_call:
 
 permissions:

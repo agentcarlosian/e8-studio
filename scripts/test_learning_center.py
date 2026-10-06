@@ -1,7 +1,7 @@
 """Learning journeys: search, reading, experiments, quiz recovery, and focus."""
 from pathlib import Path
 import os
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 from verify import start_server, find_chromium_executable, chromium_webgl_args
 
 
@@ -24,13 +24,38 @@ def main():
                     page.on('pageerror', lambda error: errors.append(str(error)))
                     page.add_init_script('window.__forceSdfSafeMode = true')
                     page.goto(os.environ.get('LEARNING_UI_URL', base + '/dist/web/index.html'), wait_until='domcontentloaded')
-                    page.wait_for_function('() => !!window.__app?.currentView')
+                    try:
+                        page.wait_for_function('() => !!window.__app?.currentView', timeout=60000)
+                    except PlaywrightTimeoutError as exc:
+                        state = {'href': page.url}
+                        try:
+                            state = page.evaluate('''() => ({
+                              href: location.href,
+                              app: !!window.__app,
+                              view: window.__app?.params?.view,
+                              currentView: window.__app?.currentView?.name,
+                              text: document.body.innerText.slice(0, 400),
+                            })''')
+                        except PlaywrightTimeoutError:
+                            state['pageUnresponsive'] = True
+                        raise AssertionError(f'Learning Center startup failed at {width}px: {state}; page errors: {errors}') from exc
+                    page.evaluate('window.__app.openLearningCenter()')
+                    assert page.locator('.learning-home-question-grid button').count() == 3
+                    assert page.locator('.learning-home-path').count() == 4
+                    assert page.locator('.learning-home-hero').is_visible()
+                    page.screenshot(path=str(shots / f'home-{width}.png'))
+                    page.locator('.learning-home-question-grid [data-learning-lesson="meet-e8"]').click()
+                    assert page.locator('#learning-lesson-title').inner_text() == 'What am I looking at?'
+                    page.locator('[data-learning-home]').click()
+                    assert page.locator('.learning-home-hero').is_visible()
                     page.evaluate("window.__app.openLearningCenter('meet-e8')")
                     page.wait_for_selector('.learning-center-dialog')
                     page.wait_for_timeout(120)
                     assert page.locator('.learning-concepts dt').count() == 2
+                    assert page.locator('.learning-lesson-purpose').is_visible()
                     assert page.locator('#learning-lesson-title').is_visible(), 'phone shell must not hide lesson headers'
                     assert page.locator('.learning-evidence tbody tr').count() == 4
+                    assert not page.locator('.learning-source-card').first.is_visible(), 'resources stay collapsed until requested'
                     assert page.locator('.learning-library').evaluate('(el) => el.open') == (width > 760)
                     bounds = page.locator('.learning-center-dialog').bounding_box()
                     assert bounds['x'] >= 0 and bounds['y'] >= 0 and bounds['x'] + bounds['width'] <= width + 1
@@ -51,6 +76,9 @@ def main():
                     search.fill('five regular')
                     page.locator('.learning-lesson-link[data-learning-lesson="why-five-solids"]').click()
                     assert page.locator('#learning-lesson-title').inner_text() == 'Why exactly five regular solids?'
+                    assert search.input_value() == 'five regular', 'lesson navigation preserves the library search'
+                    if width < 761:
+                        assert page.locator('.learning-library').evaluate('(el) => el.open'), 'phone library stays open after selection'
                     assert page.locator('.learning-evidence tbody tr').count() == 6
                     if width < 761:
                         corners = page.locator('.learning-corner select').all()
@@ -74,6 +102,8 @@ def main():
                     page.locator('[data-learning-complete]').click()
                     page.wait_for_timeout(80)
                     assert page.locator('[data-learning-complete]').get_attribute('aria-pressed') == 'true'
+                    assert page.locator('.learning-recall details').evaluate('(el) => el.open'), 'self-check disclosure survives a lesson refresh'
+                    assert search.input_value() == 'five regular', 'progress updates preserve the library search'
                     assert page.locator('[data-learning-complete]').evaluate('(el) => el === document.activeElement')
                     assert page.locator('.learning-center-content').evaluate('(el) => el.scrollTop > 100')
                     page.locator('[data-learning-quiz]').click()
@@ -87,6 +117,7 @@ def main():
                     assert page.locator('.quiz-result li').count() == 3
                     page.locator('[data-quiz-back]').click()
                     assert page.locator('#learning-lesson-title').inner_text() == 'Why exactly five regular solids?'
+                    assert search.input_value() == 'five regular', 'quiz return preserves the library search'
                     page.wait_for_timeout(100)
                     page.screenshot(path=str(shots / f'quiz-return-{width}.png'))
                     page.locator('.learning-hero-action [data-learning-run-step]').click()
@@ -108,7 +139,7 @@ def main():
                     page.keyboard.press('Escape')
                     assert page.locator('#learning-modal').evaluate('(el) => el.classList.contains("hidden")')
                     page.reload(wait_until='domcontentloaded')
-                    page.wait_for_function('() => !!window.__app?.currentView')
+                    page.wait_for_function('() => !!window.__app?.currentView', timeout=60000)
                     assert page.evaluate("!!window.__app.progress.lessons?.['why-five-solids']")
                     assert not errors, errors
                     context.close()

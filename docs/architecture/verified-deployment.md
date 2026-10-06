@@ -18,6 +18,10 @@ After the Linux checks succeed, a push or manual run on `main` uploads that same
 workflow. That workflow configures Pages and deploys the artifact from the current
 run; it does not check out or rebuild the site.
 
+The Android and Electron package jobs are separate CI checks. They do not gate
+the Pages job because its artifact contains only the verified web build; review
+their results before shipping native packages.
+
 Pull request jobs have a read-only repository token, do not persist Git credentials,
 and cannot upload a Pages artifact or enter the deployment job. Only the deployment
 job receives Pages and OIDC write permissions. Main runs finish in sequence;

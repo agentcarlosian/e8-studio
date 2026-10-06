@@ -36,7 +36,12 @@ def main(mobile_path="/dist/index.html", desktop_path="/dist/web/index.html"):
             page=browser.new_page(viewport={'width':1440,'height':1000},reduced_motion='reduce',accept_downloads=True)
             errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(base+desktop_path);page.wait_for_function('()=>!!window.__app?.currentView')
-            page.evaluate("()=>{const a=window.__app;a.switchView('platonic');a.setShape('cube');a.setPanelMode('scene');a.setParam('autoRotate',false);a.setParam('polyAutoRotate',false);}")
+            page.evaluate("""async () => {
+              const a=window.__app;
+              if (!(await a.switchView('platonic'))) throw new Error('Platonic view did not load');
+              a.setShape('cube');a.setPanelMode('scene');
+              a.setParam('autoRotate',false);a.setParam('polyAutoRotate',false);
+            }""")
             page.locator('.panel-tools-menu summary').click()
             left=page.locator('[data-act="openCheatsheet"]').bounding_box();right=page.locator('[data-act="openModelExport"]').bounding_box()
             assert abs(left['y']-right['y'])<2 and right['x']>left['x']
@@ -47,10 +52,17 @@ def main(mobile_path="/dist/index.html", desktop_path="/dist/web/index.html"):
             download(page,'3mf','cube.3mf');download(page,'stl','cube.stl')
             page.keyboard.press('Escape');assert page.locator('#learning-modal').is_hidden()
             for view in ['bloom','platonic','e8coxeter','quasicrystal','polytope','raymarched','rootlab','tiling','dynkin']:
-                page.evaluate("v=>{window.__app.switchView(v);window.__app.openModelExport();}",view)
+                page.evaluate("""async v => {
+                  if (!(await window.__app.switchView(v))) throw new Error(`${v} view did not load`);
+                  window.__app.openModelExport();
+                }""",view)
                 for fmt in ['obj','ply','csv','svg','data']: download(page,fmt,f'{view}.{fmt}')
                 page.locator('[data-modal-close]').click()
-            page.evaluate("()=>{const a=window.__app;a.switchView('polytope');a.setPoly4d('tesseract');a.openModelExport();}")
+            page.evaluate("""async () => {
+              const a=window.__app;
+              if (!(await a.switchView('polytope'))) throw new Error('4D view did not load');
+              a.setPoly4d('tesseract');a.openModelExport();
+            }""")
             download(page,'stl','tesseract.stl')
             # Closing while the asynchronous surface is being built cancels delivery.
             downloads=[];page.on('download',lambda d:downloads.append(d.suggested_filename))

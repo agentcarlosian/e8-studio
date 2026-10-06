@@ -26,7 +26,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 def main() -> int:
     print("Building dist...")
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "build.py")], check=True,
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "build_offline.py")], check=True,
                    stdout=subprocess.DEVNULL)
 
     from playwright.sync_api import sync_playwright

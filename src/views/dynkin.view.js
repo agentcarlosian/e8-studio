@@ -194,7 +194,6 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
     group.add(new THREE.Points(nodeGeo, nodeMat));
     // Expose material so update() can set FX uniforms
     group.userData.materials = [nodeMat, edgeMat];
-    group.userData.trailGeo = nodeGeo;
 
     // Node labels: α₁, α₂, ... αₙ — drawn as canvas sprites
     for (let i = 0; i < d.nodes.length; i++) {
@@ -368,7 +367,7 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
         }
       }
 
-      // FX uniform updates + trail decay. Canonical FX map (0–23) so all modes
+      // FX uniform updates. Canonical FX map (0–23) so all modes
       // work — the old local map only reached modes 0–5.
       if (group.userData.materials) {
         for (const m of group.userData.materials) {
@@ -381,12 +380,6 @@ export function createDynkinView({ data, palette, scale: baseScale, context = {}
       }
       if (group.userData.materials?.[0]?.uniforms?.uBaseSize) {
         group.userData.materials[0].uniforms.uBaseSize.value = 0.18 * baseScale * (params.pointScale || 1);
-      }
-      // Trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
     },
 

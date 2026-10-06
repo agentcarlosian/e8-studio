@@ -1,10 +1,9 @@
 // electron/main.js — Main process for the E8 ⇄ Platonics Studio desktop app.
 //
 // Launches a BrowserWindow pointing at the built dist/index.html. The dist is
-// fully self-contained (all JS/CSS/data inlined) except for the three CDN
-// imports (three.js, lil-gui, chroma, simplex-noise). To run offline, run
-// `npm run build:offline` first, which vendors those deps and rewrites the
-// dist to reference them locally.
+// fully self-contained: the Vite-backed offline builder inlines JS, CSS,
+// geometry data, and npm-pinned dependencies. Run `npm run build:offline`
+// before launching or packaging the desktop app.
 //
 // Run (dev):  npm run electron:dev   — launches against the current dist build
 // Run (pkg):  npm run electron:dist  — packages a standalone .exe/.app/.AppImage
@@ -18,8 +17,7 @@ const path = require('path');
 const fs = require('fs');
 const { fileURLToPath } = require('url');
 
-// Point at the built dist. The dev flow is: `python scripts/build.py` then
-// `npm run electron:dev`. The dist is regenerated on every build.
+// Point at the built dist. `npm run electron:dev` regenerates it first.
 const DIST_INDEX = path.resolve(__dirname, '..', 'dist', 'index.html');
 const MAX_SAVE_BYTES = 256 * 1024 * 1024;
 
@@ -99,9 +97,7 @@ function createWindow() {
     openExternalHttp(url);
   });
 
-  // Load the self-contained dist. file:// is fine because build.py inlines all
-  // local modules + JSON data. The only external requests are the CDN imports,
-  // which work online; for offline use run build:offline to vendor them.
+  // Load the self-contained dist. file:// works without any sibling assets.
   mainWindow.loadFile(DIST_INDEX);
 
   mainWindow.on('closed', () => { mainWindow = null; });

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import chroma from 'chroma-js';
 import * as THREE from 'three';
 import { BGRuntime } from '../src/fx/bg-runtime.js';
 import { THEMES, THEME_LABELS, DEFAULT_THEME } from '../src/ui/theme.js';
-import { PALETTE_GROUPS, PALETTE_NAMES, PALETTE_PRESETS, paletteFamily, palettePreviewCSS } from '../src/ui/palettes.js';
+import { PALETTE_GROUPS, PALETTE_NAMES, PALETTE_PRESETS, colorAt, paletteFamily, palettePreviewCSS } from '../src/ui/palettes.js';
 import { BACKGROUND_PRESETS, BG_MODES, backgroundModesForQuality, coerceBackgroundForQuality, normalizeBackgroundMode } from '../src/ui/backgrounds.js';
 import { shouldWritePlatonicFaceDepth } from '../src/views/platonic.view.js';
 import { SurfaceFXMaterial, makeTriangleBarycentrics } from '../src/fx/fx-surface-material.js';
@@ -89,6 +90,24 @@ for (const name of PALETTE_NAMES) {
   assert.ok(palette.description?.trim(), `${name} description`);
   assert.match(palettePreviewCSS(name, 'spectrum'), /gradient\(/, `${name} preview`);
   assert.ok(PALETTE_GROUPS.some(group => group.id === paletteFamily(name)), `${name} family`);
+}
+// Independent uncached Chroma calls pin every built-in palette's color output
+// across segment boundaries and outside the clamped 0..1 input range.
+for (const name of PALETTE_NAMES) {
+  const colors = PALETTE_PRESETS[name].colors;
+  for (const t of [-0.25, ...Array.from({ length: 65 }, (_, i) => i / 64), 1.25]) {
+    const tt = Math.max(0, Math.min(1, t));
+    const segments = colors.length - 1;
+    const index = Math.min(Math.floor(tt * segments), segments - 1);
+    const local = tt * segments - index;
+    assert.equal(colorAt(name, t, 'spectrum'), chroma.scale([colors[index], colors[index + 1]])(local).hex(),
+      `${name} spectrum at ${t}`);
+    assert.equal(colorAt(name, t, 'radial'), chroma.scale([colors[0], colors.at(-1)])(tt).hex(),
+      `${name} radial at ${t}`);
+    const phase = tt < 0.5 ? tt * 2 : (1 - tt) * 2;
+    assert.equal(colorAt(name, t, 'mirror'), chroma.scale([colors[0], colors.at(-1)])(phase).hex(),
+      `${name} mirror at ${t}`);
+  }
 }
 
 assert.deepEqual(BG_MODES, Object.keys(BACKGROUND_PRESETS));

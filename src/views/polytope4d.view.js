@@ -47,11 +47,17 @@ function apply4(M, v) {
   ];
 }
 
-// Perspective projection from 4D to 3D.
-// vOffset shifts the "camera" along the 4th axis (slider-controlled depth).
-function project4to3(v4, vOffset) {
-  const w = v4[3];
-  const denom = 1 - 0.4 * vOffset * w;
+// Perspective projection from 4D to 3D. The slider controls a camera strength
+// that approaches the 4D vertex sphere without crossing it. Every rotated W
+// coordinate is bounded by that sphere's radius, so the denominator stays at
+// least 0.1 even at the extreme depth and rotation settings.
+function perspectiveStrength(depth, maxVertexRadius) {
+  if (!(maxVertexRadius > 0)) return 0;
+  return 0.9 * Math.tanh(0.4 * depth * maxVertexRadius / 0.9) / maxVertexRadius;
+}
+
+function project4to3(v4, strength) {
+  const denom = 1 - strength * v4[3];
   return [v4[0] / denom, v4[1] / denom, v4[2] / denom];
 }
 
@@ -74,6 +80,9 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     const R = polyName === 'tesseract' ? baseScale * 0.6 : baseScale;
     const verts4 = p.verts;
     const edges = p.edges;
+    // A 4D rotation can move any part of a vertex onto the W axis. Its full
+    // 4D radius, rather than its original W coordinate, bounds that motion.
+    const maxVertexRadius = Math.max(0, ...verts4.map(v => Math.hypot(...v)));
 
     // Center 4D verts (they may already be centered; safety normalize)
     // For polytopes from precompute, they're already centered. We scale to baseScale.
@@ -102,6 +111,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     group.userData.edgeLines = edgeLines;
     group.userData.R = R;
     group.userData.nVerts = verts4.length;
+    group.userData.maxVertexRadius = maxVertexRadius;
     const triangles = triangulatePolytopeFaces(polytopeFaces(polyName, p));
     const faceGeo = new THREE.BufferGeometry();
     faceGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(triangles.length * 9), 3));
@@ -204,7 +214,6 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
     group.userData.vPoints = vPoints;
     // Expose material so update() can set FX uniforms
     group.userData.materials = [vMat];
-    group.userData.trailGeo = vGeo;
   };
 
   const initial = runtimeParams().poly4d || '24cell';
@@ -264,6 +273,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       const M = computeRotation(angleXY, angleZW, angleXZ, angleYW, angleXW, angleYZ);
       // The shared Extrude control joins the native W-depth projection.
       const wOffset = (params.morph4d || 0) + (params.e8MorphT || 0) * 1.25;
+      const perspective = perspectiveStrength(wOffset, group.userData.maxVertexRadius);
 
       const verts4 = group.userData.verts4;
       const R = group.userData.R;
@@ -276,8 +286,8 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
         const [a, b] = edges[i];
         const va = apply4(M, verts4[a]);
         const vb = apply4(M, verts4[b]);
-        const pa = project4to3(va, wOffset);
-        const pb = project4to3(vb, wOffset);
+        const pa = project4to3(va, perspective);
+        const pb = project4to3(vb, perspective);
         edgePositions[i*6]     = pa[0] * R;
         edgePositions[i*6 + 1] = pa[1] * R;
         edgePositions[i*6 + 2] = pa[2] * R;
@@ -291,7 +301,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       const vPositions = group.userData.vPoints.geometry.attributes.position.array;
       for (let i = 0; i < nVerts; i++) {
         const v4 = apply4(M, verts4[i]);
-        const p3 = project4to3(v4, wOffset);
+        const p3 = project4to3(v4, perspective);
         vPositions[i*3]     = p3[0] * R;
         vPositions[i*3 + 1] = p3[1] * R;
         vPositions[i*3 + 2] = p3[2] * R;
@@ -314,7 +324,7 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       group.userData.vPoints.visible = !!params.showVertices;
       group.userData.vPoints.material.uniforms.uBaseSize.value = 0.06 * baseScale * (params.pointScale || 1);
 
-      // FX uniform updates + trail decay.
+      // FX uniform updates; Trail animates in the shared point and line shaders.
       // Use canonical 11-mode FX map (was hardcoded 6-mode map that silently
       // failed for fog/heat/edge-glow/pulse/chromatic).
       const fxModeId = FX_MODE_MAP[params.fxMode] ?? 0;
@@ -324,12 +334,6 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
           if (m.uniforms.uFXIntensity) m.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
           if (m.uniforms.uTime) m.uniforms.uTime.value = time;
         }
-      }
-      // Trail: decay color intensities each frame
-      if (params.fxMode === 'trail' && group.userData.trailGeo) {
-        const c = group.userData.trailGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        group.userData.trailGeo.attributes.color.needsUpdate = true;
       }
     },
 
@@ -343,7 +347,9 @@ export function createPolytope4DView({ data, palette, scale: baseScale, context 
       const matrix = computeRotation(...angles);
       const depth = (params.morph4d || 0) + (params.e8MorphT || 0) * 1.25;
       const radius = name === 'tesseract' ? baseScale * 0.6 : baseScale;
-      return poly.verts.map(v => project4to3(apply4(matrix,v),depth).map(x => Math.fround(x*radius)));
+      const maxVertexRadius = Math.max(0, ...poly.verts.map(v => Math.hypot(...v)));
+      const perspective = perspectiveStrength(depth, maxVertexRadius);
+      return poly.verts.map(v => project4to3(apply4(matrix,v),perspective).map(x => Math.fround(x*radius)));
     },
 
     dispose() {

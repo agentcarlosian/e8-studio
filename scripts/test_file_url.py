@@ -1,36 +1,45 @@
-"""Test the dist file:// version works."""
-import time
-from playwright.sync_api import sync_playwright
+"""Boot the self-contained desktop HTML from file:// and switch a deferred view."""
+from pathlib import Path
 
-chrome_path = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True, executable_path=chrome_path, args=['--no-sandbox', '--disable-gpu'])
-    page = browser.new_page(viewport={'width': 1400, 'height': 900})
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from verify import find_chromium_executable, chromium_webgl_args, assert_canvas_nonblank
 
-    page_errors = []
-    console_logs = []
-    page.on('pageerror', lambda e: page_errors.append(str(e)))
-    page.on('console', lambda m: console_logs.append(f'[{m.type}] {m.text[:300]}'))
 
-    # Use file:// URL
-    url = 'file:///C:/Users/Ian/e8_studio/dist/index.html'
-    page.goto(url, timeout=20000, wait_until='commit')
-    time.sleep(8)
-    page.evaluate("document.getElementById('welcome-card')?.classList.add('hidden')")
-    time.sleep(1)
-    page.screenshot(path=r'C:\Users\Ian\e8_studio\smoke_shots\file_url_test.png')
+ROOT = Path(__file__).resolve().parent.parent
+ARTIFACT = ROOT / 'dist' / 'e8-studio.html'
 
-    state = page.evaluate("""() => ({
-        appExists: !!window.__app,
-        canvasOk: !!document.querySelector('canvas'),
-        view: window.__app?.params?.view,
-    })""")
-    print(f'State: {state}')
-    print(f'Errors: {len(page_errors)}')
-    for e in page_errors[:5]: print(f'  PAGEERR: {e[:200]}')
-    print(f'Console: {len(console_logs)}')
-    for c in console_logs[:10]: print(f'  {c}')
-    browser.close()
-    console_errors = [c for c in console_logs if c.startswith('[error]')]
-    if page_errors or console_errors:
-        raise SystemExit(1)
+
+def main():
+    if not ARTIFACT.is_file():
+        raise SystemExit('Build the desktop artifact first: npm run build:single')
+    with sync_playwright() as playwright:
+        launch = {'headless': True, 'args': chromium_webgl_args()}
+        executable = find_chromium_executable()
+        if executable:
+            launch['executable_path'] = executable
+        browser = playwright.chromium.launch(**launch)
+        try:
+            page = browser.new_page(viewport={'width': 1400, 'height': 900})
+            errors = []
+            console_errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.on('console', lambda message: console_errors.append(message.text) if message.type == 'error' else None)
+            page.goto(ARTIFACT.as_uri(), wait_until='commit', timeout=30_000)
+            page.wait_for_function('() => window.__app?.startupMetrics?.firstFrameMs != null', timeout=30_000)
+            assert_canvas_nonblank(page)
+            page.evaluate("window.__app.switchView('polytope')")
+            try:
+                page.wait_for_function("() => window.__app?.currentView?.name === 'polytope4d' && window.__app.currentView.object3d.children.length > 0", timeout=8_000)
+            except PlaywrightTimeoutError as error:
+                state = page.evaluate("() => ({ view: window.__app?.currentView?.name, status: document.querySelector('#status')?.textContent, modules: !!window.__modules?.createPolytope4DView })")
+                raise AssertionError(f'Standalone deferred view failed: {state}; page={errors[:3]}; console={console_errors[:3]}') from error
+            assert_canvas_nonblank(page)
+            if errors or console_errors:
+                raise AssertionError(f'file:// runtime errors: page={errors[:5]}, console={console_errors[:5]}')
+            print('Standalone file boot and deferred 4D view passed.')
+        finally:
+            browser.close()
+
+
+if __name__ == '__main__':
+    main()

@@ -43,13 +43,15 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
+      input: {
+        main: resolve(ROOT, 'index.html'),
+        mobile: resolve(ROOT, 'mobile.html'),
+      },
       output: {
         manualChunks(id) {
           const normalized = id.replaceAll('\\', '/');
-          if (normalized.includes('/node_modules/three/')) return 'vendor-three';
-          if (normalized.includes('/node_modules/chroma-js/')) return 'vendor-color';
+          if (normalized.includes('/node_modules/three/') || normalized.includes('/src/views/e8coxeter.view.js')) return 'visual-core';
           if (normalized.includes('/node_modules/simplex-noise/')) return 'vendor-noise';
-          if (normalized.includes('/src/views/')) return 'desktop-views';
           if (normalized.includes('/src/content/')) return 'learning-content';
           return undefined;
         },

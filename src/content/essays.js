@@ -363,7 +363,7 @@ The Studio uses a spherical window because its radius and displacement are easy 
     title: 'Why ordered patterns make sharp peaks',
     body: `A periodic crystal repeats by translation, so its diffraction is concentrated on a reciprocal lattice. A regular cut-and-project set can also produce sharp, discrete diffraction even though no nonzero translation repeats the complete pattern.
 
-For each reciprocal candidate, the Studio adds a complex phase from every accepted point. When many phases align, their amplitudes reinforce one another and the corresponding peak becomes bright. When they disagree, they cancel. This finite structure-factor calculation is why the Diffraction view contains organized rings and peaks rather than a decorative blur.
+For each selected reciprocal candidate, the Studio adds a complex phase from every accepted point. When many phases align, their amplitudes reinforce one another and the sampled intensity becomes bright. When they disagree, they cancel. The finite calculation illustrates coherent order at those candidates; it does not scan reciprocal space or measure peak sharpness.
 
 The finite patch, displayed peak threshold, palette, and glow affect the picture. The underlying lesson is structural: quasiperiodicity can preserve long-range order without translational periodicity.`,
   },

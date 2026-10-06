@@ -3,9 +3,9 @@
 # Run: npm run electron:dist
 # Output: dist-app/<E8 Studio-Setup-...> (installer) + dist-app/win-unpacked/
 #
-# What gets packaged: electron/main.js + electron/preload.js + the offline dist
-# (dist/index.html + dist/vendor/). The standard dist build is regenerated
-# (offline variant) before packaging so no CDN calls remain.
+# What gets packaged: electron/main.js + electron/preload.js + the Vite-backed
+# offline dist/index.html. Code, CSS, and data are in that one file; the build
+# does not depend on vendored sidecar modules or CDN calls.
 #
 # This scaffolding is enough to produce a real installer; the actual build step
 # (downloading Electron binaries for the target platform) is left to whoever
@@ -20,13 +20,11 @@ directories:
   output: dist-app
   buildResources: electron
 
-# The app's runtime files. dist/ is the offline build (self-contained), and
-# electron/ holds the main + preload scripts.
+# The app's runtime files. The offline desktop page is self-contained.
 files:
   - electron/main.js
   - electron/preload.js
   - dist/index.html
-  - dist/vendor/**
   - package.json
   - "!**/*.map"
 

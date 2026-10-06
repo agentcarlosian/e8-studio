@@ -1,7 +1,7 @@
 {
   "appId": "com.e8studio.app",
   "appName": "E8 Studio",
-  "webDir": "dist",
+  "webDir": "dist/mobile",
   "server": {
     "androidScheme": "https"
   },

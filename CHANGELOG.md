@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Made ambient camera drift an explicit Motion choice. Static Coxeter scenes now stay still with FX Off; older saved defaults and scene links no longer silently re-enable drift, while deliberate choices persist. Manual Coxeter/Petrie drags now stop at pointer release instead of adding several seconds of hidden flick momentum.
+- Kept accepted E8 quasicrystal points at stable screen coordinates as the window moves, fitted baseline departures in linked comparisons, and preserved mode-specific point sizes. Nearby diffraction changes reuse bounded structure-factor sums; dense Pattern links use an exact short-radius fast path.
+- Loaded only default E8 data at web startup and fetched other view data on selection. Failed view loads now repair saved state. Web builds include the existing Canvas2D mobile Studio as the no-WebGL route; single-file desktop copies give accurate fallback guidance.
+- Isolated Capacitor input under `dist/mobile`, added an asset-inventory gate, and made optional offline PWA caches follow built content with online-first navigation and a two-build update test.
+- Aligned mobile lesson navigation with the shared prerequisite order, allowed each mobile experiment step to reopen, preserved desktop Learning Center search and disclosure state, moved focus into the guided coach, and qualified finite diffraction wording.
+- Added first-visit routes for geometry, beginner learning, and curated visual work; active-view labels now name the relevant selection and qualify McKay-inspired highlighting.
+- Added a linked E8 quasicrystal comparison that shows Pattern, Window, and finite-patch Diffraction together, with point-entry and peak-change summaries and a mobile-safe comparison panel.
+- Split nondefault web renderers into on-demand modules, kept the E8 default ready at first render, and preserved direct factories in self-contained desktop artifacts. View loading and lifecycle ownership now have explicit modules and tests.
+- Redesigned the Learning Center around a question-led home, clearer lesson hierarchy, worked-example-first reading, collapsible sources, and beginner-facing purpose statements across all 13 lessons; the shared mobile reader also shows the new purpose and example order.
+- Fixed a stale hardcoded file-URL smoke test, redundant experiment view construction, comparison visibility behind the phone drawer, and resource-disclosure visibility.
 - Added a ninth interactive view, the Coxeter Tiling Lab, which dualizes A₂, B₂, G₂, and H₂ root directions into periodic and quasiperiodic rhombus fields.
 - Added multigrid, root-star, edge, tile, vertex, relief, density, and animated-flow controls across desktop and mobile, with full palette and effect support.
 - Added portable JSON and OBJ tiling exports, a sourced lesson, two readings, a guided three-stage comparison, a quiz, contextual explanations, and deterministic geometry tests.

@@ -517,6 +517,12 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     if (actions && typeof actions.refreshPanel === 'function') actions.refreshPanel();
   }
 
+  function copyRootToLine(target, offset, rootIdx, zLift) {
+    target[offset] = positions[rootIdx * 3];
+    target[offset + 1] = positions[rootIdx * 3 + 1];
+    target[offset + 2] = positions[rootIdx * 3 + 2] + zLift;
+  }
+
   function rebuildPetrieLine() {
     const sharedP = sharedParams();
     if (petrieLine) {
@@ -532,10 +538,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     const n = cycle.length;
     const pts = new Float32Array((n + 1) * 3);
     for (let i = 0; i < n; i++) {
-      const idx = cycle[i];
-      pts[i*3]     = positions[idx*3];
-      pts[i*3 + 1] = positions[idx*3 + 1];
-      pts[i*3 + 2] = positions[idx*3 + 2] + 0.005;  // sit slightly in front of points
+      copyRootToLine(pts, i * 3, cycle[i], 0.005); // slightly in front of points
     }
     // Close the cycle
     pts[n*3]     = pts[0];
@@ -551,10 +554,24 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     group.add(petrieLine);
   }
 
+  function syncPetrieLinePositions() {
+    if (!petrieLine) return;
+    const cycle = data.e8_math?.petrie_cycle_30 || [];
+    const attribute = petrieLine.geometry.attributes.position;
+    if (attribute.count !== cycle.length + 1) { rebuildPetrieLine(); return; }
+    const pts = attribute.array;
+    for (let i = 0; i < cycle.length; i++) copyRootToLine(pts, i * 3, cycle[i], 0.005);
+    pts[cycle.length * 3] = pts[0];
+    pts[cycle.length * 3 + 1] = pts[1];
+    pts[cycle.length * 3 + 2] = pts[2];
+    attribute.needsUpdate = true;
+  }
+
   // --- Cartan neighbor highlight (8 simple roots, 56 neighbors each) ---
   // When params.cartanHighlight is on AND a simple root is selected via
   // params.cartanSelection[0], light up its 56 Cartan neighbors.
   let cartanHighlightLines = null;
+  let lastCartanSelectionKey = '';
   const simpleRootIndices = (data.e8_math && data.e8_math.simple_root_indices) || [];
   const mirrorGroup = new THREE.Group();
   mirrorGroup.name = 'weyl-mirror-chamber';
@@ -599,6 +616,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
 
   function rebuildCartanHighlight() {
     const sharedP = sharedParams();
+    lastCartanSelectionKey = (sharedP?.cartanSelection || []).join(',');
     if (cartanHighlightLines) {
       group.remove(cartanHighlightLines);
       cartanHighlightLines.geometry.dispose();
@@ -613,15 +631,9 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     const neighbors = (data.e8_math?.cartan_neighbors?.[`alpha${sel[0]+1}`]?.neighbors) || [];
     if (neighbors.length === 0) return;
     const pts = new Float32Array(neighbors.length * 2 * 3);
-    const sx = positions[simpleIdx*3], sy = positions[simpleIdx*3+1], sz = positions[simpleIdx*3+2];
     for (let i = 0; i < neighbors.length; i++) {
-      const nIdx = neighbors[i];
-      pts[i*6]     = sx;
-      pts[i*6 + 1] = sy;
-      pts[i*6 + 2] = sz + 0.01;
-      pts[i*6 + 3] = positions[nIdx*3];
-      pts[i*6 + 4] = positions[nIdx*3 + 1];
-      pts[i*6 + 5] = positions[nIdx*3 + 2] + 0.01;
+      copyRootToLine(pts, i * 6, simpleIdx, 0.01);
+      copyRootToLine(pts, i * 6 + 3, neighbors[i], 0.01);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
@@ -634,6 +646,24 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     // Also bump up the size of the simple root + its neighbors via a marker
     // — handled in update() via params._cartanHighlight set
     if (sharedP) sharedP._cartanHighlight = { simpleIdx, neighborCount: neighbors.length };
+  }
+
+  function syncCartanHighlightPositions() {
+    if (!cartanHighlightLines) return;
+    const sel = sharedParams()?.cartanSelection || [];
+    const simpleIdx = simpleRootIndices[sel[0]];
+    const neighbors = data.e8_math?.cartan_neighbors?.[`alpha${sel[0] + 1}`]?.neighbors || [];
+    const attribute = cartanHighlightLines.geometry.attributes.position;
+    if (simpleIdx == null || attribute.count !== neighbors.length * 2) {
+      rebuildCartanHighlight();
+      return;
+    }
+    const pts = attribute.array;
+    for (let i = 0; i < neighbors.length; i++) {
+      copyRootToLine(pts, i * 6, simpleIdx, 0.01);
+      copyRootToLine(pts, i * 6 + 3, neighbors[i], 0.01);
+    }
+    attribute.needsUpdate = true;
   }
 
   // Rebuild helpers for both — called on demand.
@@ -724,15 +754,9 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     const nbrs = neighborsOf(picked);
     if (nbrs.length === 0) return;
     const pts = new Float32Array(nbrs.length * 2 * 3);
-    const sx = positions[picked*3], sy = positions[picked*3+1], sz = positions[picked*3+2];
     for (let i = 0; i < nbrs.length; i++) {
-      const nIdx = nbrs[i];
-      pts[i*6]     = sx;
-      pts[i*6 + 1] = sy;
-      pts[i*6 + 2] = sz + 0.015;
-      pts[i*6 + 3] = positions[nIdx*3];
-      pts[i*6 + 4] = positions[nIdx*3 + 1];
-      pts[i*6 + 5] = positions[nIdx*3 + 2] + 0.015;
+      copyRootToLine(pts, i * 6, picked, 0.015);
+      copyRootToLine(pts, i * 6 + 3, nbrs[i], 0.015);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
@@ -744,6 +768,21 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     group.add(pickedNeighborLines);
   }
 
+  function syncPickedNeighborPositions() {
+    if (!pickedNeighborLines) return;
+    const picked = sharedParams()?.pickedRoot;
+    if (picked == null) { rebuildPickedNeighbors(); return; }
+    const nbrs = neighborsOf(picked);
+    const attribute = pickedNeighborLines.geometry.attributes.position;
+    if (attribute.count !== nbrs.length * 2) { rebuildPickedNeighbors(); return; }
+    const pts = attribute.array;
+    for (let i = 0; i < nbrs.length; i++) {
+      copyRootToLine(pts, i * 6, picked, 0.015);
+      copyRootToLine(pts, i * 6 + 3, nbrs[i], 0.015);
+    }
+    attribute.needsUpdate = true;
+  }
+
   // --- 3D projection state ---
   // We allow the user to override the default 2D Coxeter projection with a 3D rotation
   // of the entire 8D root cloud. The rotation is applied to the pointsGeo.positions.
@@ -752,6 +791,8 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
   let lastSpin = -1;
   let lastTilt = -1;
   let lastRoll = -1;
+  let lastEdgeMorphT = NaN;
+  let lastEdgesShown = false;
   let lastMcKayShape = '';
   let lastCompareShape = '';
   let lastCompareMode = '';
@@ -862,13 +903,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
     }
     pointsGeo.attributes.position.needsUpdate = true;
 
-    // Rebuild edges ONCE per applyBasis3D call (was being called multiple
-    // times per frame before, causing perf issues). Only sync if edges
-    // are actually shown (skip when hidden to avoid wasted work).
-    // Get showEdges via sharedParams() (this function is module-scope, not
-    // in update()'s scope, so it can't access the local `params`).
-    const sharedP = sharedParams();
-    if (sharedP && sharedP.showEdges) syncEdgePositions();
+    // Edges are synchronized after auto-fit and extrusion in update().
   }
 
   function applyCoxeterBasis() {
@@ -880,7 +915,7 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       verts[i*3 + 2] = 0;
     }
     pointsGeo.attributes.position.needsUpdate = true;
-    syncEdgePositions();  // re-set edges to 2D Coxeter positions (in place)
+    // Edges are synchronized after the final point positions in update().
   }
 
   // --- McKay highlight ---
@@ -1083,18 +1118,21 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
           const basis = computeBasis3D(spin, tilt, roll);
           applyBasis3D(basis);
         }
-        // Scale positions to fit the visible area (auto-fit to baseScale)
-        // After basis transformation, positions may be larger — normalize.
-        const verts = pointsGeo.attributes.position.array;
-        let maxAbs = 0;
-        for (let i = 0; i < verts.length; i++) {
-          const a = Math.abs(verts[i]);
-          if (a > maxAbs) maxAbs = a;
-        }
-        if (maxAbs > 0) {
-          const fit = baseScale / maxAbs * 0.85;
-          for (let i = 0; i < verts.length; i++) verts[i] *= fit;
-          pointsGeo.attributes.position.needsUpdate = true;
+        // Only alternate 3D bases need auto-fit. The canonical Coxeter
+        // projection already uses scaleK and shares that scale with its ring
+        // guides; fitting it again shrank roots by 15% after a mode round trip.
+        if (viewMode !== 'coxeter') {
+          const verts = pointsGeo.attributes.position.array;
+          let maxAbs = 0;
+          for (let i = 0; i < verts.length; i++) {
+            const a = Math.abs(verts[i]);
+            if (a > maxAbs) maxAbs = a;
+          }
+          if (maxAbs > 0) {
+            const fit = baseScale / maxAbs * 0.85;
+            for (let i = 0; i < verts.length; i++) verts[i] *= fit;
+            pointsGeo.attributes.position.needsUpdate = true;
+          }
         }
         captureProjectionBase();
       }
@@ -1111,6 +1149,16 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
         }
         pointsGeo.attributes.position.needsUpdate = true;
       }
+      // Chord endpoints must follow the FINAL root buffer. Synchronizing in
+      // applyBasis3D/applyCoxeterBasis happened before auto-fit or extrusion,
+      // leaving lines detached from their roots after mode and depth changes.
+      const positionsChanged = projChanged || morphT !== lastEdgeMorphT;
+      const edgesShown = !!shared.showEdges;
+      if (edgesShown && (positionsChanged || !lastEdgesShown)) {
+        syncEdgePositions();
+      }
+      lastEdgeMorphT = morphT;
+      lastEdgesShown = edgesShown;
 
       // --- Weyl orbit trail --
       // Walk random simple reflections on the seed root and draw the trail.
@@ -1313,15 +1361,6 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       pointsMat.uniforms.uFXIntensity.value = params.fxIntensity ?? 0.5;
       pointsMat.uniforms.uRootDiffusion.value = params.rootDiffusion && picked != null ? 1 : 0;
       pointsMat.uniforms.uDiffusionTime.value = ((time - diffusionStartedAt) * (params.rootDiffusionSpeed || 1.25)) % (haloDepth + 1.75);
-      // FX trail: leave ghost positions behind by storing previous frame
-      if (params.fxMode === 'trail') {
-        // Decay all colors slightly so previous frames fade out
-        // (visual hack: a simple alpha reduction via color intensity)
-        const c = pointsGeo.attributes.color.array;
-        for (let i = 0; i < c.length; i++) c[i] *= 0.97;
-        pointsGeo.attributes.color.needsUpdate = true;
-      }
-
       // Highlight updates on shape or comparison-shape change
       const compareShape = params.compareShape || 'dodecahedron';
       const compareMode = params.compareMode || 'off';
@@ -1340,13 +1379,18 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
         points.userData.tooltipData = buildTipData(currentHighlight);
       }
 
-      // --- Petrie + Cartan highlight: rebuild when projection changes ---
+      // --- Petrie + Cartan highlight: follow the final projected root buffer ---
       // Both features are 2D-only (Coxeter plane). In 3D modes the cycle
       // vertices get scattered to scrambled positions, so we hide them.
       if (projChanged) {
-        // Positions changed → redraw Petrie + Cartan lines to match
+        // The basis changed: redraw the optional line topology once.
         if (petrieLine) rebuildPetrieLine();
         if (cartanHighlightLines) rebuildCartanHighlight();
+      } else if (positionsChanged) {
+        // Extrude changes vertex positions without changing topology. Update
+        // existing GPU attributes instead of allocating new lines per frame.
+        syncPetrieLinePositions();
+        syncCartanHighlightPositions();
       }
       // Detect toggles + selection changes (cheap comparison)
       const wantPetrie = !!params.showPetrie && is2D;
@@ -1355,10 +1399,9 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       const haveCartan = !!(cartanHighlightLines && cartanHighlightLines.visible);
       if (wantPetrie !== havePetrie || wantCartan !== haveCartan) {
         maybeRebuildPetrieAndCartan();
-      } else if (wantCartan && params._cartanSelectionVersion !== params.cartanSelection?.length) {
-        // Selection length changed (user clicked a different root) — rebuild
+      } else if (wantCartan && (params.cartanSelection || []).join(',') !== lastCartanSelectionKey) {
+        // The selected simple root changed, even if the array length did not.
         rebuildCartanHighlight();
-        params._cartanSelectionVersion = params.cartanSelection?.length;
       }
 
       // --- Picked root: pulse + size boost the sphere ---
@@ -1411,10 +1454,14 @@ export function createE8CoxeterView({ data, palette, scale: baseScale, context =
       const wantPickedNeighbors = picked != null && is2D;
       const havePickedNeighbors = !!(pickedNeighborLines && pickedNeighborLines.visible);
       if (wantPickedNeighbors !== havePickedNeighbors) {
-        if (wantPickedNeighbors) rebuildPickedNeighbors();
+        if (wantPickedNeighbors) {
+          rebuildPickedNeighbors();
+          lastPickedForNeighbors = picked;
+        }
         if (pickedNeighborLines) pickedNeighborLines.visible = wantPickedNeighbors;
-      } else if (wantPickedNeighbors && picked !== lastPickedForNeighbors) {
-        rebuildPickedNeighbors();
+      } else if (wantPickedNeighbors && (picked !== lastPickedForNeighbors || positionsChanged)) {
+        if (picked !== lastPickedForNeighbors) rebuildPickedNeighbors();
+        else syncPickedNeighborPositions();
         lastPickedForNeighbors = picked;
       }
     },

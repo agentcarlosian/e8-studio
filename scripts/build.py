@@ -56,6 +56,7 @@ JS_FILES    = [
     ROOT / 'src' / 'content' / 'lesson-guides.js',
     ROOT / 'src' / 'content' / 'curriculum.js',
     ROOT / 'src' / 'ui' / 'learning-center.js',
+    ROOT / 'src' / 'ui' / 'quasicrystal-comparison.js',
     ROOT / 'src' / 'state' / 'learning-service.js',
     ROOT / 'src' / 'services' / 'export-recording.js',
     ROOT / 'src' / 'math' / 'rotations.js',
@@ -84,6 +85,8 @@ JS_FILES    = [
     ROOT / 'src' / 'views' / 'rootlab.view.js',
     ROOT / 'src' / 'views' / 'tiling.view.js',
     ROOT / 'src' / 'views' / 'quasicrystal.view.js',
+    ROOT / 'src' / 'platform' / 'deferred-view.js',
+    ROOT / 'src' / 'platform' / 'view-factories.js',
     ROOT / 'src' / 'main.js',
 ]
 
@@ -158,7 +161,7 @@ def main():
     html = HTML_FILE.read_text(encoding='utf-8')
 
     # Inline ALL CSS files so the dist build is fully standalone
-    for css_name in ['style.css', 'panel-extra.css', 'panel-v2.css', 'studio.css', 'quick-start.css', 'learning-center.css']:
+    for css_name in ['style.css', 'panel-extra.css', 'panel-v2.css', 'studio.css', 'quick-start.css', 'learning-center.css', 'quasicrystal-comparison.css']:
         css_file = ROOT / 'src' / 'assets' / css_name
         if css_file.exists():
             css_text = css_file.read_text(encoding='utf-8')
@@ -173,6 +176,16 @@ def main():
     js_inlined = []
     for f in JS_FILES:
         body = f.read_text(encoding='utf-8')
+        if f.name == 'view-factories.js':
+            # Standalone builds already inline every view above. Resolve the
+            # web's on-demand loaders as synchronous factories so file://
+            # artifacts retain the established view-switching contract.
+            body, replacements = re.subn(
+                r"load: \(\) => import\(['\"]\.\./views/[^'\"]+['\"]\)\.then\(m => m\.(create[A-Za-z0-9_]+)\)",
+                r'factory: window.__modules.\1', body,
+            )
+            if replacements != 8:
+                sys.exit(f'ERROR: expected eight deferred view imports, found {replacements}')
         # Find imported names from non-CDN paths — rewrite them to window.__modules lookups.
         # CDN imports (three, chroma-js, simplex-noise) will be replaced by top-level ESM imports.
         # Skip names that are already prefixed with `window.` (those are intentional globals).
@@ -271,9 +284,8 @@ def main():
 # ── CSP: hash every inline <script> so script-src can drop 'unsafe-inline' ──
 # The dist embeds inline scripts (importmap, error handler, the concatenated
 # module). Rather than allow ALL inline scripts ('unsafe-inline', which defeats
-# CSP's XSS protection), we pin each by its SHA-256 hash. build_offline.py calls
-# harden_csp() again after its rewrites (the module hash changes when CDN URLs
-# are vendored, and it injects a SW-registration script).
+# CSP's XSS protection), we pin each by its SHA-256 hash. The Vite-backed inline
+# builder also uses this helper after composing its offline and share scripts.
 INLINE_SCRIPT_RE = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S)
 _HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.S)
 

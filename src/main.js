@@ -13,7 +13,8 @@ import { exportModelRecord } from './services/model-files.js';
 import { renderModelExport, bindModelExport } from './ui/model-export.js';
 import { createGeometryExporters } from './services/geometry-export.js';
 import { createQuickStart } from './ui/quick-start.js';
-import { renderLearningCenter, bindLearningCenterNavigation } from './ui/learning-center.js';
+import { renderLearningCenter, renderLearningHome, bindLearningCenterNavigation, captureLearningCenterUiState } from './ui/learning-center.js';
+import { createQuasicrystalComparison } from './ui/quasicrystal-comparison.js';
 
 import { PALETTE_NAMES, SHIFT_PRESETS, BLEND_MODES, COLORING_NAMES, PALETTE_PRESETS, buildPalette, colorAt, palettePreviewCSS } from './ui/palettes.js';
 if (typeof window !== 'undefined') {
@@ -47,6 +48,8 @@ import {
 } from './state/camera.js';
 import { ExportRecordingService, isCapacitorNative } from './services/export-recording.js';
 import { createResourceScope } from './platform/resource-scope.js';
+import { createDeferredView } from './platform/deferred-view.js';
+import { VIEW_DEFINITIONS } from './platform/view-factories.js';
 import { FrameHealthController } from './platform/frame-health.js';
 import { EssayPanel } from './ui/essays.js';
 import { ESSAYS, CODE_ART_SHADERS } from './content/essays.js';
@@ -56,15 +59,6 @@ import { FACT_SOURCES } from './content/sources.js';
 import { GLOSSARY, GLOSSARY_GROUPS, getGlossaryMatches, getGlossaryEntry } from './content/glossary.js';
 import { findWeylWord, formatWeylWord, weylWordSteps } from './math/weyl.js';
 import { applyTheme, applyLayout, THEMES, LAYOUTS, DEFAULT_LAYOUT } from './ui/theme.js';
-import { createE8CoxeterView } from './views/e8coxeter.view.js';
-import { createPlatonicView } from './views/platonic.view.js';
-import { createDynkinView } from './views/dynkin.view.js';
-import { createPolytope4DView } from './views/polytope4d.view.js';
-import { createBloomView } from './views/bloom.view.js';
-import { createRaymarchedView } from './views/raymarched-e8.view.js';
-import { createRootLabView } from './views/rootlab.view.js';
-import { createTilingView } from './views/tiling.view.js';
-import { createQuasicrystalView } from './views/quasicrystal.view.js';
 import { generateRank2RootSystem, RANK2_ROOT_SYSTEMS } from './math/rank2-roots.js';
 import { COXETER_TILINGS, generateCoxeterTiling } from './math/coxeter-tilings.js';
 import { QUASICRYSTAL_REACHES } from './math/e8-quasicrystal.js';
@@ -106,32 +100,43 @@ if (typeof window !== 'undefined') {
 const noise2D = simplexNoise.createNoise2D();
 
 // ---------- Data ----------
-const DATA = {};
+// Standalone builds inline the complete ESM graph and the JSON data, so hydrate
+// data before any view is constructed.
+// HTTP builds have no INLINE_DATA and fetch only the default E8 files at launch.
+const DATA = typeof window !== 'undefined' && window.INLINE_DATA
+  ? { ...window.INLINE_DATA } : {};
+const pendingDataLoads = new Map();
+function loadDataFile(name) {
+  if (DATA[name]) return Promise.resolve(DATA[name]);
+  if (pendingDataLoads.has(name)) return pendingDataLoads.get(name);
+  const pending = (async () => {
+    // Standalone file:// builds inline the same canonical JSON files.
+    const inline = typeof window !== 'undefined' ? window.INLINE_DATA?.[name] : null;
+    if (inline) return inline;
+    const response = await fetch(`./data/${name}.json`);
+    if (!response.ok) throw new Error(`${name}.json returned HTTP ${response.status}`);
+    return response.json();
+  })().then(data => {
+    if (!data || typeof data !== 'object') throw new Error(`${name}.json has no usable data`);
+    DATA[name] = data;
+    pendingDataLoads.delete(name);
+    return data;
+  }).catch(error => {
+    pendingDataLoads.delete(name); // A later selection may retry a transient failure.
+    throw error;
+  });
+  pendingDataLoads.set(name, pending);
+  return pending;
+}
+
 async function loadData() {
-  // Try inlined data first (for file:// use), fall back to fetch (for http://)
-  const trySources = async (name) => {
-    if (typeof window !== 'undefined' && window.INLINE_DATA && window.INLINE_DATA[name]) {
-      return window.INLINE_DATA[name];
-    }
-    return fetch('./data/' + name + '.json').then(r => r.json());
-  };
-  const [e8, e8math, platonic, polytopes4d, dynkin, mckay, mckaySubsets] = await Promise.all([
-    trySources('e8'),
-    trySources('e8_math'),
-    trySources('platonic'),
-    trySources('polytopes4d'),
-    trySources('dynkin'),
-    trySources('mckay'),
-    trySources('mckay_subsets'),
-  ]);
-  DATA.e8 = e8;
-  DATA.e8_math = e8math;
-  DATA.platonic = platonic;
-  DATA.polytopes4d = polytopes4d;
-  DATA.dynkin = dynkin;
-  DATA.mckay = mckay;
-  DATA.mckay_subsets = mckaySubsets;
-  setStatus('loaded · 240 roots · 120 600-cell verts');
+  // Only data needed by the default E8 renderer belongs on the launch path.
+  await Promise.all([loadDataFile('e8'), loadDataFile('e8_math')]);
+  setStatus('loaded · 240 E8 roots');
+}
+
+function loadViewData(definition) {
+  return Promise.all((definition.data || []).map(loadDataFile));
 }
 
 // ---------- Status ----------
@@ -140,20 +145,44 @@ function setStatus(msg) {
 }
 
 // ---------- View registry ----------
-const VIEWS = [
-  // Primary tabs — the most visually rich views, by user preference
-  { id: 'bloom',       label: 'Bloom',       factory: createBloomView,     primary: true },
-  { id: 'platonic',    label: 'Platonic',    factory: createPlatonicView,  primary: true },
-  { id: 'e8coxeter',   label: 'E₈ Coxeter',  factory: createE8CoxeterView, primary: true },
-  { id: 'quasicrystal', label: 'Quasicrystal', factory: createQuasicrystalView, primary: true },
-  { id: 'polytope',    label: '4D Polytope', factory: createPolytope4DView, primary: true },
-  { id: 'raymarched',  label: 'E₈ SDF',      factory: createRaymarchedView, primary: true },
-  // Secondary view: visible in the More menu and View workspace without
-  // displacing the six visual-first primary tabs.
-  { id: 'rootlab',     label: 'Root Lab',    factory: createRootLabView,   primary: false },
-  { id: 'tiling',      label: 'Tiling Lab',  factory: createTilingView,    primary: false },
-  { id: 'dynkin',      label: 'Dynkin',      factory: createDynkinView,    primary: false },
-];
+const VIEWS = VIEW_DEFINITIONS.map(def => ({
+  ...def,
+  factory: def.factory || (options => createDeferredView({
+    name: def.name,
+    load: async () => {
+      const [factory] = await Promise.all([def.load(), loadViewData(def)]);
+      return factory;
+    },
+    options,
+    onReady(view) {
+      if (currentView !== view) return;
+      const realView = view.realView;
+      // Keep the proxy active until data-dependent UI has rendered. If a
+      // malformed dataset trips either path, onError can still recover it.
+      refreshPanel();
+      updateOverlays(def.id);
+      scene.remove(view.object3d);
+      scene.add(realView.object3d);
+      currentView = realView;
+      const activeDefinition = VIEWS.find(item => item.id === def.id);
+      if (activeDefinition) activeDefinition.factory = view.resolvedFactory;
+      fxRuntime?.rescan();
+      syncRenderPixelRatioUniforms();
+      setStatus(`${def.label} ready`);
+    },
+    onError(error, view) {
+      console.error(`[view-load] ${def.id}:`, error);
+      if (currentView === view) {
+        showSavedToast(`${def.label} could not load; returned to E8`);
+        switchView('e8coxeter', { save: false });
+        // Replace any debounced snapshot of the failed view, including a
+        // restored view that failed during startup.
+        saveConfig(params, { immediate: true });
+        setStatus(`${def.label} unavailable: ${error?.message || String(error)}`);
+      }
+    },
+  })),
+}));
 
 const AUTO_MODEL_SEQUENCE = Object.freeze([
   { view: 'e8coxeter' },
@@ -220,6 +249,7 @@ const COMMAND_ITEMS = [
 
 // ---------- Three.js ----------
 let scene, camera, renderer, currentView, gui, params;
+let quasiComparison = null;
 let camTarget = null;
 const cameraController = new CameraController();
 let fxRuntime = null; // FXRuntime instance, created in initThree()
@@ -490,7 +520,30 @@ function hideRenderFallback() {
   if (el) el.classList.add('hidden');
 }
 
-function showRenderFallback(title, detail) {
+function canvas2DStudioUrl() {
+  // Vite emits mobile.html beside index.html; the source server does too.
+  // Standalone file:// and Electron packages may omit the separate mobile
+  // artifact, so never offer an unverified sibling link there.
+  return /^https?:$/.test(location.protocol) ? new URL('./mobile.html', location.href) : null;
+}
+
+async function openCanvas2DStudio() {
+  const url = canvas2DStudioUrl();
+  if (!url) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok || !(await response.text()).includes('id="mobile-canvas"')) {
+      throw new Error('2D Studio is absent from this build');
+    }
+    location.assign(url.href);
+  } catch (error) {
+    console.warn('[render-fallback] 2D Studio unavailable:', error);
+    setStatus('2D Studio unavailable in this copy');
+    showRenderFallback('2D Studio unavailable', 'This copy does not contain the Canvas2D Studio. Please use a full web build or the separate mobile file.', { webglUnavailable: true });
+  }
+}
+
+function showRenderFallback(title, detail, { webglUnavailable = false } = {}) {
   webglFallbackUsed = true;
   renderFailureShown = true;
   let el = document.getElementById('render-fallback');
@@ -508,11 +561,14 @@ function showRenderFallback(title, detail) {
       </div>
       <div class="fallback-copy">
         <strong>${svgEsc(title || 'Live render unavailable')}</strong>
-        <p>${svgEsc(detail || 'E8 Studio can keep exploring in reduced mode on this device.')}</p>
+        <p>${svgEsc(detail || 'The live render is unavailable on this device.')}</p>
+        ${webglUnavailable && !canvas2DStudioUrl() ? '<p>The standalone 2D mobile file can be opened separately if it was supplied with this copy.</p>' : ''}
       </div>
       <div class="fallback-actions">
         <button data-act="retryWebGL">Retry</button>
-        <button data-act="enableReducedMode">Reduced mode</button>
+        ${webglUnavailable
+          ? (canvas2DStudioUrl() ? '<button data-act="openCanvas2DStudio">Open 2D Studio</button>' : '')
+          : '<button data-act="enableReducedMode">Reduced quality</button>'}
       </div>
     </div>
   `;
@@ -537,7 +593,7 @@ function installWebGLContextHandlers(canvas) {
       params.mobileQuality = 'low';
       saveConfig(params);
     }
-    showRenderFallback('The live render paused', 'Android reclaimed the graphics context. Reduced mode is ready, or retry after a reload.');
+    showRenderFallback('The live render paused', 'The graphics context was lost. Open the 2D Studio, or retry after it returns.', { webglUnavailable: true });
   });
   canvas.addEventListener('webglcontextrestored', () => {
     showSavedToast('Graphics context restored');
@@ -937,6 +993,14 @@ function initThree() {
     saveConfig(params);
   };
 
+  const settleCoxeterDrag = () => {
+    const planar = params.view === 'e8coxeter'
+      && ['coxeter', 'petrie'].includes(params.e8ViewMode || 'coxeter');
+    const manual = (params.cameraPath || 'manual') === 'manual'
+      && !params.cameraOrbit && !params.autoZoom;
+    if (planar && manual) cameraController.settleAtTarget(camera, camTarget, params);
+  };
+
   // Multi-touch support: track active pointers and compute pinch distance
   const activePointers = new Map(); // pointerId -> {x, y}
   // Track the down position so a quick tap (no drag) can be detected as a
@@ -997,11 +1061,12 @@ function initThree() {
   canvas.addEventListener('pointerup', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    activePointers.delete(e.pointerId);
+    const endedPointer = activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
     if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
       canvas.releasePointerCapture(e.pointerId);
     }
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
     // Click detection: if the pointer barely moved and was held briefly,
     // treat as a click on the 3D scene (not a drag). Single-pointer only.
@@ -1026,15 +1091,17 @@ function initThree() {
   canvas.addEventListener('pointerleave', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    if (e && e.pointerId != null) activePointers.delete(e.pointerId);
+    const endedPointer = e?.pointerId != null && activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
   });
   canvas.addEventListener('pointercancel', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    if (e && e.pointerId != null) activePointers.delete(e.pointerId);
+    const endedPointer = e?.pointerId != null && activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
   });
   canvas.addEventListener('pointermove', (e) => {
@@ -1140,15 +1207,13 @@ function switchView(id, options = {}) {
   // so 1.6 leaves comfortable margin.
   const baseScale = 1.6;
 
-  // Different views need different data + scale
-  // Spread DATA so all fields are visible to views that reach for DATA.X directly
-  const data = { ...DATA, e8: DATA.e8, e8_math: DATA.e8_math, platonic: DATA.platonic, polytopes4d: DATA.polytopes4d, dynkin: DATA.dynkin, mckay: DATA.mckay, mckay_subsets: DATA.mckay_subsets };
-
   activeViewScope = createResourceScope({
     onDisposeError: error => console.warn('[resource-scope] dispose error:', error),
   });
   currentView = def.factory({
-    data,
+    // Keep the shared reference: deferred factories see their JSON after it
+    // arrives, while the panel can refresh against the same object.
+    data: DATA,
     palette: params.palette,
     scale: baseScale,
     context: buildRuntimeContext(),
@@ -1167,8 +1232,10 @@ function switchView(id, options = {}) {
   }
   refreshPanel();
   updateOverlays(id);
+  quasiComparison?.setView(id, params);
   if (window.essayPanel) window.essayPanel.setView(id);
   if (options.save !== false) saveConfig(params);
+  return currentView.ready || Promise.resolve(true);
 }
 
 function formatOverlayNumber(value) {
@@ -1184,6 +1251,14 @@ function updateOverlays(viewId) {
   // Count only visible views so the "view N / M" badge matches the model grid.
   const visibleViews = VIEWS.filter(v => !v.hidden);
   const idx = visibleViews.findIndex(v => v.id === viewId);
+  const definition = VIEWS.find(view => view.id === viewId);
+  if (definition?.data?.some(name => !DATA[name])) {
+    tl.innerHTML = `<b>${definition.label.toUpperCase()}</b><br>Loading view data…`;
+    tr.textContent = '';
+    bl.textContent = '';
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}`;
+    return;
+  }
 
   if (viewId === 'platonic') {
     // Round 9: stellations aren't in DATA.platonic / DATA.mckay, so guard for
@@ -1439,7 +1514,8 @@ function defaultParams() {
     rootShowSimple: true,
     rootShowOrbit: true,
     rootOrbitSpeed: 0.7,
-    showAmbient: !prefersReducedMotion, // ambient simplex-noise drift on camera
+    showAmbient: false, // idle camera drift is an explicit Motion choice
+    ambientMotionExplicit: false, // distinguishes legacy implicit drift in saved configs
     // Bug fix 2026-06-25 (audit #16): removed fogDensity — declared but
     // never read since FX mode 8 ('fog') uses shader-based depth fade via
     // vWorldPos instead of three.js scene.fog. Dead param.
@@ -1562,8 +1638,8 @@ function clampNumber(v, min, max, fallback) {
 
 // Enum allow-lists for normalizeParams, built once and cached. This used to be
 // rebuilt on EVERY param change — including ~60/s during a slider drag — which
-// meant constructing 14 Sets per call for nothing. Lazy-built on first call (by
-// then DATA is loaded, so polyIds resolves correctly).
+// meant constructing 14 Sets per call for nothing. The web build loads 4D data
+// after startup, so its known polytope IDs must be valid before that fetch.
 let _paramEnums = null;
 function paramEnums() {
   if (_paramEnums) return _paramEnums;
@@ -1572,7 +1648,7 @@ function paramEnums() {
     shape: new Set(['tetrahedron', 'cube', 'octahedron', 'dodecahedron', 'icosahedron',
       // Round 9: Kepler–Poinsot star polyhedra (see math/stellations.js).
       'stellated_dodecahedron', 'great_dodecahedron', 'great_icosahedron', 'great_stellated_dodecahedron']),
-    poly: new Set(DATA.polytopes4d ? Object.keys(DATA.polytopes4d) : ['5cell', 'tesseract', '16cell', '24cell', '600cell']),
+    poly: new Set(DATA.polytopes4d ? Object.keys(DATA.polytopes4d) : ['5cell', 'tesseract', '16cell', '24cell', '120cell', '600cell']),
     palette: new Set(Object.keys(PALETTE_PRESETS)),
     shift: new Set(Object.keys(SHIFT_PRESETS)),
     blend: new Set(Object.keys(BLEND_MODES)),
@@ -1610,6 +1686,8 @@ function normalizeParams(target) {
   if (!E.shape.has(target.compareShape)) target.compareShape = 'dodecahedron';
   if (!E.compare.has(target.compareMode)) target.compareMode = 'off';
   if (!E.shift.has(target.shiftMode)) target.shiftMode = 'static';
+  if (typeof target.showAmbient !== 'boolean') target.showAmbient = false;
+  if (typeof target.ambientMotionExplicit !== 'boolean') target.ambientMotionExplicit = false;
   if (!E.blend.has(target.blendMode)) target.blendMode = 'spectrum';
   if (!E.colorBy.has(target.colorBy)) target.colorBy = 'shell';
   if (!E.fx.has(target.fxMode)) target.fxMode = 'none';
@@ -1761,6 +1839,7 @@ function applyReducedMotionAtStartup(target) {
 function updateParam(k, v, options = {}) {
   const previousValue = params[k];
   params[k] = v;
+  if (k === 'showAmbient') params.ambientMotionExplicit = true;
   normalizeParams(params);
   if (k === 'autoZoom') {
     if (params.autoZoom && !previousValue) beginAutoZoom();
@@ -1803,6 +1882,9 @@ function updateParam(k, v, options = {}) {
   if (options.rebuild && currentView) switchView(params.view);
   if (options.overlay || k === 'bloomAmount' || k === 'morph4d' || k === 'e8MorphT') {
     updateOverlays(params.view);
+  }
+  if (params.view === 'quasicrystal' && ['quasiMode', 'quasiReach', 'quasiWindow', 'quasiPhason'].includes(k)) {
+    quasiComparison?.update(params);
   }
   if (options.refresh !== false) refreshPanel();
 }
@@ -2164,17 +2246,25 @@ function learningState() {
 
 let learningModalReturnFocus = null;
 let learningCenterCleanup = null;
+let learningCenterLibraryState = null;
+let experimentCoachReturnFocus = null;
 
-function closeLearningModal() {
+function rememberLearningCenterUiState(host) {
+  const state = captureLearningCenterUiState(host);
+  if (state) learningCenterLibraryState = state;
+}
+
+function closeLearningModal({ restoreFocus = true } = {}) {
   const host = document.getElementById('learning-modal');
   if (!host || host.classList.contains('hidden')) return false;
+  rememberLearningCenterUiState(host);
   learningCenterCleanup?.();
   learningCenterCleanup = null;
   host.classList.add('hidden');
   setStudioChromeInert(false);
   const target = learningModalReturnFocus;
   learningModalReturnFocus = null;
-  requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
+  if (restoreFocus) requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
   return true;
 }
 
@@ -2212,6 +2302,7 @@ function showLearningModal(html) {
   learningCenterCleanup?.();
   learningCenterCleanup = null;
   const host = ensureLearningModal();
+  rememberLearningCenterUiState(host);
   if (host.classList.contains('hidden')) learningModalReturnFocus = document.activeElement;
   host.innerHTML = `<div class="learning-dialog" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
   const dialog = host.querySelector('.learning-dialog');
@@ -2228,10 +2319,13 @@ function showLearningModal(html) {
   return host;
 }
 
-function closeExperimentCoach() {
+function closeExperimentCoach({ restoreFocus = true } = {}) {
   const coach = document.getElementById('learning-experiment-coach');
   if (!coach) return false;
   coach.remove();
+  const target = experimentCoachReturnFocus;
+  experimentCoachReturnFocus = null;
+  if (restoreFocus) requestAnimationFrame(() => resolveReturnFocus(target)?.focus?.({ preventScroll: true }));
   return true;
 }
 
@@ -2256,12 +2350,13 @@ function showExperimentCoach(lessonId, stepId) {
     coach = document.createElement('aside');
     coach.id = 'learning-experiment-coach';
     coach.className = 'learning-experiment-coach';
-    coach.setAttribute('aria-label', 'Guided experiment');
+    coach.setAttribute('role', 'region');
+    coach.setAttribute('aria-labelledby', 'learning-experiment-coach-title');
     document.body.appendChild(coach);
   }
   coach.innerHTML = `
     <div class="experiment-coach-head">
-      <div><span>Guided experiment · ${stepIndex + 1}/${steps.length}</span><strong>${svgEsc(lesson.experiment.title)}</strong></div>
+      <div><span>Guided experiment · ${stepIndex + 1}/${steps.length}</span><strong id="learning-experiment-coach-title" role="heading" aria-level="2" tabindex="-1">${svgEsc(lesson.experiment.title)}: ${svgEsc(entry.title)}</strong></div>
       <button data-experiment-coach-close aria-label="Close guided experiment">×</button>
     </div>
     <div class="experiment-coach-body">
@@ -2275,7 +2370,7 @@ function showExperimentCoach(lessonId, stepId) {
       <button class="${observed ? 'complete' : ''}" data-experiment-coach-observed>${observed ? '✓ Observed' : 'Mark observed'}</button>
       ${next ? `<button data-experiment-coach-next>Next step →</button>` : ''}<button data-experiment-coach-review>Back to lesson</button>
     </div>`;
-  coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', closeExperimentCoach);
+  coach.querySelector('[data-experiment-coach-close]')?.addEventListener('click', () => closeExperimentCoach());
   coach.querySelector('[data-experiment-coach-apply]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, entry.id));
   coach.querySelector('[data-experiment-coach-observed]')?.addEventListener('click', () => {
     learningProgress.setExperimentStepComplete(lesson.id, entry.id, !observed);
@@ -2284,8 +2379,13 @@ function showExperimentCoach(lessonId, stepId) {
   });
   coach.querySelector('[data-experiment-coach-next]')?.addEventListener('click', () => applyLearningExperimentStep(lesson.id, next.id));
   coach.querySelector('[data-experiment-coach-review]')?.addEventListener('click', () => {
-    closeExperimentCoach();
+    const target = experimentCoachReturnFocus;
+    closeExperimentCoach({ restoreFocus: false });
     openLearningCenter(lesson.id);
+    learningModalReturnFocus = target;
+  });
+  requestAnimationFrame(() => {
+    if (coach.isConnected) coach.querySelector('#learning-experiment-coach-title')?.focus({ preventScroll: true });
   });
   return true;
 }
@@ -2294,12 +2394,15 @@ function applyLearningExperimentStep(lessonId, stepId) {
   const lesson = learningLessonById(lessonId);
   const entry = lesson?.experiment?.steps?.find(step => step.id === stepId);
   if (!lesson || !entry?.action) return false;
-  closeLearningModal();
+  if (!document.getElementById('learning-modal')?.classList.contains('hidden') && !experimentCoachReturnFocus) {
+    experimentCoachReturnFocus = learningModalReturnFocus || document.getElementById('canvas');
+  }
+  closeLearningModal({ restoreFocus: false });
   const targetView = entry.action.view || lesson.view;
-  if (params.view !== targetView) switchView(targetView, { resetSelection: false });
   Object.assign(params, entry.action.params || {}, { autoModel: false, intro: false });
   normalizeParams(params);
-  // Rebuild after applying the setup so shape/diagram changes are immediate.
+  // Configure before constructing the view. A first switch here used to start
+  // a throwaway renderer when the target module loaded on demand.
   switchView(targetView, { resetSelection: false });
   saveConfig(params);
   refreshPanel();
@@ -2310,6 +2413,14 @@ function applyLearningExperimentStep(lessonId, stepId) {
 }
 
 function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = null } = {}) {
+  if (!lessonId) {
+    const host = showLearningModal(renderLearningHome(learningProgress, params?.view || 'e8coxeter'));
+    host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog', 'learning-home-dialog');
+    host.querySelectorAll('[data-learning-lesson]').forEach(button => {
+      button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
+    });
+    return;
+  }
   const lesson = learningLessonById(lessonId)
     || learningProgress.recommendedLesson(params?.view || 'e8coxeter')
     || LEARNING_LESSONS[0];
@@ -2318,7 +2429,7 @@ function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = nu
   const experimentState = learningProgress.experimentState(lesson.id);
   const host = showLearningModal(renderLearningCenter(lesson, learningProgress));
   host.querySelector('.learning-dialog')?.classList.add('learning-center-dialog');
-  learningCenterCleanup = bindLearningCenterNavigation(host);
+  learningCenterCleanup = bindLearningCenterNavigation(host, learningCenterLibraryState);
   requestAnimationFrame(() => {
     host.querySelector('.learning-center-content').scrollTop = scrollTop;
     if (focusSelector) host.querySelector(focusSelector)?.focus({ preventScroll: true });
@@ -2326,6 +2437,7 @@ function openLearningCenter(lessonId = null, { scrollTop = 0, focusSelector = nu
   host.querySelectorAll('[data-learning-lesson]').forEach(button => {
     button.addEventListener('click', () => openLearningCenter(button.dataset.learningLesson));
   });
+  host.querySelector('[data-learning-home]')?.addEventListener('click', () => openLearningCenter());
   host.querySelector('[data-learning-open-view]')?.addEventListener('click', event => {
     closeLearningModal();
     switchView(event.currentTarget.dataset.learningOpenView);
@@ -3174,7 +3286,7 @@ window.__app = {
     applyQualityProfile();
     saveConfig(params);
     if (!renderer) {
-      location.reload();
+      void openCanvas2DStudio();
       return;
     }
     if (currentView) switchView(params.view);
@@ -3182,6 +3294,7 @@ window.__app = {
     refreshPanel();
     showSavedToast('Reduced mode on');
   },
+  openCanvas2DStudio() { return openCanvas2DStudio(); },
   retryWebGL() { location.reload(); },
   unlockReward(id) {
     learningProgress.unlock(id);
@@ -3242,7 +3355,7 @@ window.__app = {
   setCompareMode(m) {
     updateParam('compareMode', m, { overlay: true });
   },
-  switchView(v) { switchView(v); },
+  switchView(v) { return switchView(v); },
   setPalette(p) {
     updateParam('palette', p, { refresh: false });
     if (scene) {
@@ -3322,6 +3435,19 @@ window.__app = {
     refreshPanel();
     updateOverlays(params.view);
   },
+  toggleQuasiComparison() {
+    if (params.view !== 'quasicrystal') return;
+    if (!quasiComparison) quasiComparison = createQuasicrystalComparison(document.querySelector('main'), DATA.e8);
+    panel.quasiComparisonOpen = !panel.quasiComparisonOpen;
+    if (panel.quasiComparisonOpen) quasiComparison.show(params);
+    else quasiComparison.hide();
+    refreshPanel();
+    if (panel.quasiComparisonOpen && document.body.classList.contains('desktop-controls-open')) {
+      document.getElementById('desktop-controls-close')?.click();
+      quasiComparison.focusClose();
+    }
+  },
+  resetQuasiComparisonBaseline() { quasiComparison?.resetBaseline(); },
   setQuasiReach(reach) {
     params.autoModel = false;
     updateParam('quasiReach', Number(reach), { refresh: false });
@@ -3906,6 +4032,11 @@ window.__app = {
     }
     refreshPanel();
     showSavedToast(enabled ? 'Auto zoom on' : 'Auto zoom off');
+  },
+  toggleAmbientMotion() {
+    updateParam('showAmbient', !params.showAmbient, { refresh: false });
+    refreshPanel();
+    showSavedToast(params.showAmbient ? 'Ambient drift on' : 'Ambient drift off');
   },
   toggleAutoModel() {
     params.autoModel = !params.autoModel;
@@ -4605,11 +4736,11 @@ function updateTooltip() {
   const hit = intersects[0];
   const idx = hit.index;
   const data = hit.object.userData.tooltipData;
-  if (!data || idx == null || !data[idx]) {
+  const info = idx == null ? null : typeof data === 'function' ? data(idx) : data?.[idx];
+  if (!info) {
     tooltipEl.classList.remove('visible');
     return;
   }
-  const info = data[idx];
 
   // Size the content first, then position it within the canvas viewport.
   tooltipEl.innerHTML = info.html;
@@ -4700,6 +4831,7 @@ async function main() {
   // Try restoring from URL hash first, then localStorage
   const urlConfig = readUrlConfig();
   let restoredConfig = null;
+  let migratedLegacyAmbient = false;
   if (urlConfig) {
     applyConfig(params, urlConfig);
     restoredConfig = urlConfig;
@@ -4708,6 +4840,9 @@ async function main() {
     const saved = loadConfig();
     if (saved) {
       applyConfig(params, saved);
+      // Earlier releases silently saved an enabled ambient camera as a
+      // default. No panel control existed, so this was not a user choice.
+      migratedLegacyAmbient = saved.showAmbient === true && saved.ambientMotionExplicit !== true;
       restoredConfig = saved;
       setStatus('restored saved configuration');
     }
@@ -4715,6 +4850,7 @@ async function main() {
   await loadData();
   normalizeParams(params);
   applyReducedMotionAtStartup(params);
+  if (migratedLegacyAmbient) saveConfig(params, { immediate: true });
   cameraController.restore({
     theta: params.cameraRotation,
     phi: params.cameraPhi,
@@ -4740,7 +4876,7 @@ async function main() {
     params.reducedMode = true;
     params.mobileQuality = 'low';
     saveConfig(params);
-    showRenderFallback('Live WebGL could not start', 'Reduced mode is ready for this device. You can also retry after closing other apps.');
+    showRenderFallback('Live WebGL could not start', 'Open the Canvas2D Studio, or retry after graphics support returns.', { webglUnavailable: true });
     return;
   }
   buildTabs();
@@ -4780,9 +4916,28 @@ async function main() {
   // Bug fix 2026-06-24: previously hardcoded 'e8coxeter' here, which overwrote
   // the persisted view on reload. Now we honor the loaded params.view.
   switchView(params.view);
+  if (currentView?.ready) await currentView.ready;
   startAutoSave(() => params);
 
   animate();
+
+  // The default E8 scene draws without these interpretive highlight subsets.
+  // Fetch them after launch, then rebuild E8 only if it is still the active
+  // view; a failed optional file must not hold up the first frame.
+  if (!DATA.mckay_subsets) {
+    void loadDataFile('mckay_subsets').then(() => {
+      if (params.view === 'e8coxeter' && currentView) {
+        switchView('e8coxeter', { save: false, resetSelection: false });
+      } else {
+        refreshPanel();
+      }
+    }).catch(error => {
+      console.warn('[data-load] McKay highlights unavailable:', error);
+      runtimeErrors.push({ type: 'data-load', view: 'e8coxeter', message: error?.message || String(error), time: Date.now() });
+      if (runtimeErrors.length > 20) runtimeErrors.shift();
+      if (params.view === 'e8coxeter') showSavedToast('McKay highlights unavailable; E8 still works');
+    });
+  }
 
   // Keyboard
   window.addEventListener('keydown', (e) => {
@@ -4869,9 +5024,7 @@ function toggleFullscreen() {
   else document.exitFullscreen();
 }
 
-// Defer main() call so it runs AFTER all module blocks have registered their
-// window.__modules exports. Without this, main() runs synchronously after
-// main.js's block but BEFORE persistence.js/panel.js/etc. register themselves.
+// Defer startup until the document and bundled module have finished evaluating.
 if (typeof window !== 'undefined') {
   setTimeout(() => main().catch(err => {
     setStatus('ERROR: ' + err.message);

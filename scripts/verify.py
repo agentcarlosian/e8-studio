@@ -38,7 +38,7 @@ def fail(message: str) -> None:
 
 
 def check_build() -> None:
-    run([sys.executable, "scripts/build.py"])
+    run([sys.executable, "scripts/build_offline.py"])
 
 
 def check_web_build() -> None:
@@ -62,6 +62,7 @@ def check_web_build() -> None:
 
 def check_dependency_alignment() -> None:
     package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
     versions = {
         "three": package.get("dependencies", {}).get("three"),
         "chroma-js": package.get("dependencies", {}).get("chroma-js"),
@@ -73,14 +74,14 @@ def check_dependency_alignment() -> None:
         "chroma-js.js": f"https://cdn.jsdelivr.net/npm/chroma-js@{versions['chroma-js']}/+esm",
         "simplex-noise.js": f"https://cdn.jsdelivr.net/npm/simplex-noise@{versions['simplex-noise']}/+esm",
     }
-    sources = json.loads((ROOT / "vendor" / "sources.json").read_text(encoding="utf-8"))
-    if sources != expected_urls:
-        fail(f"Vendored dependency sources do not match package.json: {sources} != {expected_urls}")
+    for name, version in versions.items():
+        locked = lock.get("packages", {}).get(f"node_modules/{name}", {}).get("version")
+        if locked != version:
+            fail(f"package-lock.json has {name} {locked!r}; package.json pins {version!r}")
     direct_urls = {key: value for key, value in expected_urls.items() if key != "three.core.js"}
-    for path in [ROOT / "index.html", ROOT / "scripts" / "build.py", ROOT / "scripts" / "build_offline.py"]:
+    for path in [ROOT / "index.html", ROOT / "scripts" / "build.py"]:
         text = path.read_text(encoding="utf-8")
-        required_urls = expected_urls if path.name == "build_offline.py" else direct_urls
-        for url in required_urls.values():
+        for url in direct_urls.values():
             if url not in text:
                 fail(f"{path.relative_to(ROOT)} does not pin {url}")
 
@@ -91,8 +92,11 @@ def check_standalone_build() -> None:
     if not standalone.exists() or standalone.stat().st_size < 1_000_000:
         fail("Desktop standalone build is missing or unexpectedly small")
     text = standalone.read_text(encoding="utf-8")
-    if "__standaloneImportThree" not in text:
-        fail("Desktop standalone does not embed Three.js and its shared core")
+    if "window.INLINE_DATA = " not in text or "WebGLRenderer" not in text:
+        fail("Desktop standalone does not embed geometry data and Three.js")
+    if any(marker in text for marker in ('src="src/', 'href="src/', 'cdn.jsdelivr.net',
+                                        'manifest.webmanifest', 'serviceWorker')):
+        fail("Desktop standalone has a runtime asset or PWA dependency")
 
 
 def check_js_syntax() -> None:
@@ -105,7 +109,11 @@ def check_lifecycle_contracts() -> None:
     run(["node", "scripts/test_rank2_roots.mjs"])
     run(["node", "scripts/test_coxeter_tilings.mjs"])
     run(["node", "scripts/test_e8_quasicrystal.mjs"])
+    run(["node", "scripts/test_quasicrystal_comparison.mjs"])
+    run(["node", "scripts/test_coxeter_projection_alignment.mjs"])
+    run(["node", "scripts/test_fx_trail.mjs"])
     run(["node", "scripts/test_resource_scope.mjs"])
+    run(["node", "scripts/test_deferred_view.mjs"])
     run(["node", "scripts/test_frame_health.mjs"])
     run(["node", "scripts/test_recording_recovery.mjs"])
     run(["node", "scripts/test_export_delivery.mjs"])
@@ -125,6 +133,14 @@ def check_python_syntax() -> None:
     for path in sorted((ROOT / "scripts").glob("*.py")):
         source = path.read_text(encoding="utf-8")
         compile(source, str(path), "exec", ast.PyCF_ONLY_AST)
+
+
+def check_packaging_assets() -> None:
+    # Uses a temporary site and local Chromium; it does not rewrite shared dist.
+    run([sys.executable, "-B", "scripts/test_packaging_assets.py"])
+    run([sys.executable, "-B", "scripts/test_android_apk.py", "--self-test"])
+    run(["node", "scripts/test_electron_package.mjs", "--self-test"])
+    run([sys.executable, "-B", "scripts/test_desktop_candidate.py"])
 
 
 def load_json(name: str):
@@ -473,16 +489,19 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
         fail(f"{label} disabling ambient drift did not restore the base camera pose: {drift}")
 
     exports = page.evaluate(
-        r"""() => {
+        r"""async () => {
           const app = window.__app;
           const keys = ['view', 'shape', 'shapeTwist', 'shapeSpike', 'shapeJitter',
             'poly4d', 'polyProjectionVersion', 'dynkin', 'rootSystem', 'tilingSystem',
             'tilingDensity', 'showPetrie', 'fxMode', 'fxByView'];
           const saved = Object.fromEntries(keys.map(key => [key, structuredClone(app.params[key])]));
           const set = (key, value) => app.setParam(key, value, { save: false });
-          const select = (view, settings = {}) => {
+          const select = async (view, settings = {}) => {
             set('view', view);
             for (const [key, value] of Object.entries(settings)) set(key, value);
+            // HTTP builds load view-specific JSON on first selection. Await
+            // that boundary before asking the export facade for its geometry.
+            await app.switchView(view);
             return app.getGeometryJSON();
           };
           const lines = (text, prefix) => text?.split('\n').filter(line => line.startsWith(prefix)).length;
@@ -496,9 +515,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
             };
           };
           try {
-            // These synchronous selections exercise the exported facade against
-            // live scene params and restore them before the next render frame.
-            const cube = select('platonic', { shape: 'cube', shapeTwist: 0, shapeSpike: 0, shapeJitter: 0 });
+            const cube = await select('platonic', { shape: 'cube', shapeTwist: 0, shapeSpike: 0, shapeJitter: 0 });
             const cubeObj = app.getCurrentOBJ();
             const result = {
               cube: { kind: cube.kind, dimension: cube.dimension, vertices: cube.verts.length,
@@ -506,30 +523,33 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                 namedObjMatches: app.getOBJ('cube') === cubeObj, svg: svgInfo(app.getCurrentSVG()) },
             };
             for (const view of ['bloom', 'e8coxeter', 'raymarched']) {
-              const geometry = select(view);
+              const geometry = await select(view);
               result[view] = { kind: geometry.kind, dimension: geometry.dimension,
                 count: geometry.roots8d.length, objVertices: lines(app.getCurrentOBJ(), 'v ') };
             }
-            select('e8coxeter', { showPetrie: true });
+            await select('e8coxeter', { showPetrie: true });
             result.e8Svg = svgInfo(app.getCurrentSVG());
             result.legacyE8Svg = svgInfo(app.getE8Svg());
-            const dynkin = select('dynkin', { dynkin: 'E8' });
+            const dynkin = await select('dynkin', { dynkin: 'E8' });
             result.dynkin = { kind: dynkin.kind, rank: dynkin.rank, nodes: dynkin.nodes.length,
               edges: dynkin.edges.length, objVertices: lines(app.getCurrentOBJ(), 'v '),
               objEdges: lines(app.getCurrentOBJ(), 'l '), svg: svgInfo(app.getCurrentSVG()) };
-            const polytope = select('polytope', { poly4d: '600cell', polyProjectionVersion: 2 });
+            const polytope = await select('polytope', { poly4d: '600cell', polyProjectionVersion: 2 });
+            const polytopeObj = app.getCurrentOBJ();
             result.polytope = { kind: polytope.kind, dimension: polytope.dimension,
               vertices: polytope.verts.length, edges: polytope.edges.length,
-              obj: app.getCurrentOBJ(), svg: app.getCurrentSVG() };
-            const roots = select('rootlab', { rootSystem: 'G2' });
+              objVertices: lines(polytopeObj, 'v '), objHasFaces: lines(polytopeObj, 'f ') > 0,
+              svgValid: svgInfo(app.getCurrentSVG()).valid };
+            const roots = await select('rootlab', { rootSystem: 'G2' });
             result.rootlab = { kind: roots.kind, rank: roots.rank,
               count: roots.roots.length, coxeterNumber: roots.coxeterNumber };
-            const tiling = select('tiling', { tilingSystem: 'H2', tilingDensity: 5 });
+            const tiling = await select('tiling', { tilingSystem: 'H2', tilingDensity: 5 });
             result.tiling = { kind: tiling.kind, name: tiling.name, families: tiling.familyCount,
               tiles: tiling.tiles.length, edges: tiling.edges.length };
             return result;
           } finally {
             for (const [key, value] of Object.entries(saved)) set(key, value);
+            await app.switchView(saved.view);
           }
         }"""
     )
@@ -543,7 +563,7 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
                    "objVertices": 8, "objEdges": 7,
                    "svg": {"valid": True, "roots": 0, "circles": 8, "petrie": 0}},
         "polytope": {"kind": "4d-polytope", "dimension": 4, "vertices": 120,
-                     "edges": 720, "obj": None, "svg": None},
+                     "edges": 720, "objVertices": 120, "objHasFaces": True, "svgValid": True},
         "rootlab": {"kind": "rank-2-root-system", "rank": 2, "count": 12, "coxeterNumber": 6},
         "tiling": {"kind": "coxeter-multigrid-tiling", "name": "H2", "families": 5,
                    "tiles": 702, "edges": 1459},
@@ -551,7 +571,12 @@ def exercise_build_parity(page, page_errors: list[str], console_errors: list[str
     for view in ["bloom", "e8coxeter", "raymarched"]:
         expected[view] = {"kind": "e8-root-system", "dimension": 8, "count": 240, "objVertices": 240}
     if exports != expected:
-        fail(f"{label} geometry export integration diverged: {exports}")
+        differences = {
+            view: {"expected": expected.get(view), "actual": exports.get(view)}
+            for view in expected.keys() | exports.keys()
+            if expected.get(view) != exports.get(view)
+        }
+        fail(f"{label} geometry export integration diverged: {differences}")
     assert_clean_browser_errors(page_errors, console_errors, label)
 
 
@@ -1348,8 +1373,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         fail(f"Contextual Dynkin Learn contract failed: {dynkin_learn}")
     page.locator('.learning-center-launch').click()
     page.wait_for_selector(".learning-center-dialog", timeout=5000)
+    if not page.locator('.learning-home-hero').is_visible():
+        fail('Learning Center did not open its question-led home')
+    page.locator('.learning-home-actions button:not(.learning-home-primary)').click()
     if page.locator(".learning-center-content h2").text_content() != "Reading Dynkin diagrams":
-        fail("Dynkin did not open its mapped curriculum lesson")
+        fail("Continue with this view did not open the mapped Dynkin lesson")
     page.click("[data-modal-close]")
 
     page.evaluate("window.__app.switchView('e8coxeter')")
@@ -1383,6 +1411,14 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
         fail(f"Learning Center open performance budget exceeded: {learning_open_ms:.1f}ms > 500ms")
     page.wait_for_selector(".learning-center-dialog", timeout=5000)
     capture_visual_evidence(page, "learning-center-desktop")
+    home = page.evaluate("""() => ({
+      questions: document.querySelectorAll('.learning-home-question-grid button').length,
+      paths: document.querySelectorAll('.learning-home-path').length,
+      primary: document.querySelector('.learning-home-primary')?.dataset.learningLesson,
+    })""")
+    if home != {"questions": 3, "paths": 4, "primary": "why-five-solids"}:
+        fail(f"Learning Center home failed: {home}")
+    page.locator('.learning-home-question-grid [data-learning-lesson="meet-e8"]').click()
     learning_center = page.evaluate(
         """() => ({
           paths: document.querySelectorAll('.learning-path').length,
@@ -1410,8 +1446,11 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
       navigationMinHeight: Math.min(...[...document.querySelectorAll('.learning-lesson-nav button')].map(button => button.getBoundingClientRect().height)),
       navigationBeforeSources: !!(document.querySelector('.learning-lesson-nav')?.compareDocumentPosition(document.querySelector('.learning-more')) & Node.DOCUMENT_POSITION_FOLLOWING),
     })""")
-    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] != 4 or why_five["experimentExplanations"] != why_five["experimentSteps"] or not why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
+    if why_five["title"] != "Why exactly five regular solids?" or "less than 360°" not in why_five["answer"] or why_five["formula"] != "(p − 2)(q − 2) < 4" or why_five["cases"] != 5 or "hexagons" not in why_five["boundary"] or why_five["lessonDetails"] < 5 or why_five["experimentExplanations"] != why_five["experimentSteps"] or why_five["sourcesVisible"] or why_five["navigationLabels"] != ["← Previous", "Finish lesson", "Next →"] or why_five["navigationMinHeight"] < 56 or not why_five["navigationBeforeSources"]:
         fail(f"Why-only-five answer and proof failed: {why_five}")
+    page.locator('.learning-more-header').click()
+    if not page.locator('.learning-source-card').first.is_visible():
+        fail('Lesson sources did not open on request')
     page.evaluate("window.__app.resetView()")
     if page.locator("#learning-modal:not(.hidden)").count() or page.locator("#learning-experiment-coach").count():
         fail("Desktop Reset did not dismiss transient learning surfaces")
@@ -1445,6 +1484,7 @@ def smoke_dev(browser, base_url: str, *, viewport: dict[str, int] | None = None,
     )
     if completed_lesson != {"stored": True, "label": "✓ Done", "pressed": "true"}:
         fail(f"Learning Center completion persistence failed: {completed_lesson}")
+    page.locator('.learning-more-header').click()
     page.click('[data-learning-essay="e8_mckay"]')
     page.wait_for_selector('.essay-panel', timeout=5000)
     essay_reader = page.evaluate("""() => ({
@@ -1713,10 +1753,13 @@ td,th{{border:1px solid #2a2a3a;padding:8px;text-align:left}}
 
 
 def check_studio_ui() -> None:
+    run([sys.executable, "scripts/test_startup_recovery.py", "--built"])
+    run([sys.executable, "scripts/test_coxeter_stability.py"])
     run([sys.executable, "scripts/test_shape_controls.py"])
     run([sys.executable, "scripts/test_quick_start.py"])
     run([sys.executable, "scripts/test_studio_ui.py"])
     run([sys.executable, "scripts/test_learning_center.py"])
+    run([sys.executable, "scripts/test_gallery_presets.py"])
 
 
 def check_backgrounds() -> None:
@@ -1733,6 +1776,7 @@ def main() -> int:
         ("js syntax", check_js_syntax),
         ("lifecycle contracts", check_lifecycle_contracts),
         ("python syntax", check_python_syntax),
+        ("packaging assets", check_packaging_assets),
         ("data invariants", check_data_invariants),
         ("palette registry", check_palette_registry),
         ("browser helper self-test", check_browser_failure_helper),

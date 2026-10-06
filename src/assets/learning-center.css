@@ -164,3 +164,74 @@
   .learning-lesson-nav { gap: 5px; }
   .learning-lesson-nav-button { min-height: 56px; font-size: 11px; padding-inline: 4px; }
 }
+
+/* Learning home: orient a new reader before opening a long lesson. */
+.learning-dialog.learning-center-dialog.learning-home-dialog { overflow: auto; scrollbar-width: thin; }
+.learning-home { padding: clamp(22px, 3.7vw, 48px); }
+.learning-home-hero { position: relative; overflow: hidden; padding: clamp(24px, 4vw, 48px); border: 1px solid var(--line-hi); border-radius: 16px; background: radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 42%), linear-gradient(145deg, var(--bg-2), var(--bg-0)); }
+.learning-home-hero::after { content: ''; position: absolute; right: -62px; top: -106px; width: 330px; height: 330px; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 50%; box-shadow: 0 0 0 52px color-mix(in srgb, var(--accent) 5%, transparent), 0 0 0 104px color-mix(in srgb, var(--accent) 3%, transparent); pointer-events: none; }
+.learning-home-kicker, .learning-home-section-heading > span { color: var(--accent); font: 600 11px 'JetBrains Mono', monospace; letter-spacing: .1em; }
+.learning-home-hero h2 { position: relative; z-index: 1; max-width: 680px; margin: 19px 0 17px; font: 600 clamp(32px, 4.8vw, 58px)/1.08 'Inter', sans-serif; letter-spacing: -.045em; }
+.learning-home-hero p { position: relative; z-index: 1; max-width: 590px; margin: 0; color: var(--ink-1); font-size: 16px; line-height: 1.7; }
+.learning-home-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.learning-home-actions button { min-height: 48px; padding: 10px 17px; border: 1px solid var(--line-hi); border-radius: 7px; background: var(--bg-0); color: var(--ink-0); font: 600 13px 'Inter', sans-serif; cursor: pointer; }
+.learning-home-actions button span { margin-left: 10px; }
+.learning-home-actions .learning-home-primary { border-color: var(--accent); background: var(--accent); color: var(--bg-0); }
+.learning-home-progress { margin-top: 21px; color: var(--ink-2); font: 11px 'JetBrains Mono', monospace; }
+.learning-home-questions, .learning-home-paths { margin-top: 34px; }
+.learning-home-section-heading { margin-bottom: 15px; }
+.learning-home-section-heading h3 { margin: 7px 0 0; font: 600 clamp(21px, 2.6vw, 29px) 'Inter', sans-serif; letter-spacing: -.03em; }
+.learning-home-question-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.learning-home-question-grid button, .learning-home-path { border: 1px solid var(--line); border-radius: 11px; background: var(--bg-1); color: var(--ink-0); text-align: left; cursor: pointer; }
+.learning-home-question-grid button { min-height: 150px; padding: 18px; }
+.learning-home-question-grid button > span, .learning-home-path-number { color: var(--accent); font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .05em; }
+.learning-home-question-grid strong, .learning-home-question-grid small { display: block; }
+.learning-home-question-grid strong { margin-top: 17px; font: 600 17px/1.3 'Inter', sans-serif; }
+.learning-home-question-grid small { margin-top: 10px; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+.learning-home-path-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.learning-home-path { display: flex; gap: 15px; min-height: 118px; padding: 18px; }
+.learning-home-path-copy { display: grid; gap: 5px; }
+.learning-home-path strong { font-size: 15px; }
+.learning-home-path small { color: var(--ink-1); font-size: 12px; line-height: 1.5; }
+.learning-home-path em { color: var(--accent); font-size: 11px; font-style: normal; line-height: 1.5; }
+.learning-home :is(button):hover { border-color: var(--accent); }
+.learning-home :is(button):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Lesson reader: a clear question, one worked example, then a Studio action. */
+.learning-center-content > * { max-width: 740px; margin-left: auto; margin-right: auto; }
+.learning-lesson-hero { margin: 0 auto 26px; padding: 26px; border: 1px solid var(--line-hi); border-radius: 14px; background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 10%, var(--bg-1)), var(--bg-1) 62%); }
+.learning-home-back { min-height: 36px; margin: 0 0 22px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-0); color: var(--ink-1); font-size: 11px; cursor: pointer; }
+.learning-home-back:hover { color: var(--accent); border-color: var(--accent); }
+.learning-center-dialog .learning-lesson-hero h2 { margin: 13px 0 12px; font-size: clamp(29px, 3.4vw, 43px); }
+.learning-lesson-purpose { max-width: 650px; margin: 0 0 20px; color: var(--ink-1); font-size: 16px; line-height: 1.6; }
+.learning-section-nav { border: 1px solid var(--line); border-radius: 9px; padding: 4px; background: var(--bg-1); }
+.learning-section-nav button { text-align: center; }
+.learning-section-nav button span { display: block; color: var(--accent); font: 10px 'JetBrains Mono', monospace; }
+.learning-answer { padding: 25px; border: 1px solid var(--line-hi); border-radius: 12px; background: color-mix(in srgb, var(--accent) 7%, var(--bg-1)); }
+.learning-answer p { font-size: 18px; line-height: 1.72; }
+.learning-worked-example { margin-top: 24px; background: var(--bg-1); }
+.learning-concepts h3 { font-size: 17px; }
+.learning-more { padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-1); }
+.learning-more:not([open]) > .learning-more-body { display: none; }
+.learning-more-header { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; color: var(--ink-0); font-weight: 600; }
+.learning-more-header::-webkit-details-marker { display: none; }
+.learning-more-header::after { content: '+'; color: var(--accent); font-size: 20px; font-weight: 400; }
+.learning-more[open] .learning-more-header::after { content: '−'; }
+@media (max-width: 760px) {
+  .learning-dialog.learning-home-dialog { width: calc(100vw - 16px); height: calc(100dvh - 16px); }
+  .learning-home { padding: 16px; }
+  .learning-home-hero { padding: 22px; }
+  .learning-home-hero::after { opacity: .35; }
+  .learning-home-hero h2 { font-size: clamp(28px, 8vw, 42px); }
+  .learning-home-hero p { font-size: 14px; }
+  .learning-home-actions { display: grid; }
+  .learning-home-question-grid, .learning-home-path-grid { grid-template-columns: 1fr; }
+  .learning-home-question-grid button { min-height: 116px; }
+  .learning-home-questions, .learning-home-paths { margin-top: 27px; }
+  .learning-lesson-hero { padding: 20px; }
+  .learning-lesson-purpose { font-size: 14px; }
+  .learning-section-nav button { font-size: 10px; }
+  .learning-section-nav button span { font-size: 9px; }
+  .learning-answer { padding: 18px; }
+  .learning-answer p { font-size: 16px; }
+}

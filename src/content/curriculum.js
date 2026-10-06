@@ -111,7 +111,7 @@ export const LEARNING_PATHS = [
       },
       {
         id: 'six-hundred-cell', title: 'The 600-cell', view: 'polytope', estimatedMinutes: 8, prerequisites: ['into-four-dimensions'],
-        shortAnswer: 'The 600-cell is the regular 4D polytope {3,3,5}: 600 tetrahedral cells meet around 120 vertices. Its vertex coordinates can also be read as the 120 unit quaternions of the binary icosahedral group, which is why it repeatedly appears near exceptional symmetry.',
+        shortAnswer: 'The name counts its 600 tetrahedral cells, not its vertices. There are 120 vertices and 720 edges in the complete four-dimensional figure. A screen projection may overlap them, but rotation does not change those counts. Its vertex coordinates also have a deeper description as 120 unit quaternions of the binary icosahedral group.',
         keyIdeas: ['Its 120 vertices and 720 edges are intrinsic even when a projection overlaps them.', 'It is dual to the 120-cell and carries strong icosahedral symmetry.'],
         objectives: ['Identify the 600-cell’s basic counts.', 'Relate its vertices to binary icosahedral unit quaternions.'],
         activity: 'Compare vertex classes while rotating the 4D projection.',
@@ -168,7 +168,7 @@ export const LEARNING_PATHS = [
       },
       {
         id: 'e8-cut-project', title: 'Cut E8 into a quasicrystal', view: 'quasicrystal', estimatedMinutes: 10, prerequisites: ['coxeter-multigrids'],
-        shortAnswer: 'Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch, and a finite structure-factor calculation reveals its sharp diffraction peaks.',
+        shortAnswer: 'Split every E8 lattice point into a visible 2D Coxeter-plane coordinate and a hidden 6D coordinate. Keep only points whose hidden coordinate falls inside an acceptance window. Their visible projections form an ordered, non-periodic patch. The Studio samples finite-patch structure-factor intensity at selected reciprocal candidates; this does not measure diffraction peak sharpness.',
         keyIdeas: ['The six hidden coordinates decide which projected lattice points enter the pattern.', 'Moving the window changes local arrangements without turning the construction into random motion.'],
         visualEvidence: {
           columns: ['Reading', 'What it shows', 'What remains fixed'],
@@ -188,7 +188,7 @@ export const LEARNING_PATHS = [
           steps: [
             step('pattern', 'Read the accepted pattern', 'Open Pattern with points, local links, and the thirtyfold guide visible.', 'Why are some projected E8 lattice points absent?', 'Only points whose hidden six-dimensional coordinate lies inside the acceptance window are retained.', { view: 'quasicrystal', params: { quasiMode: 'pattern', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0, quasiShowPoints: true, quasiShowLinks: true, quasiShowGuide: true, autoRotate: false } }),
             step('window', 'Expose the hidden test', 'Switch to Window and move the phason slider slightly while watching points cross the boundary.', 'What changes when the acceptance window moves?', 'Some lattice points enter or leave the accepted set, producing a structured rearrangement in the visible patch.', { view: 'quasicrystal', params: { quasiMode: 'window', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0.38, quasiShowPoints: true, quasiShowLinks: false, quasiShowGuide: true, autoRotate: false } }),
-            step('diffraction', 'Look for long-range order', 'Switch to Diffraction and compare the strongest computed peaks with the thirtyfold guide.', 'Why can a non-periodic pattern still produce sharp peaks?', 'Coherent phases reinforce at a discrete Fourier module, so quasiperiodic order need not repeat by translation.', { view: 'quasicrystal', params: { quasiMode: 'diffraction', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0, quasiShowPoints: true, quasiShowLinks: false, quasiShowGuide: true, autoRotate: false } }),
+            step('diffraction', 'Look for long-range order', 'Switch to Diffraction and compare the strongest sampled intensities with the thirtyfold guide.', 'What can strong sampled intensities suggest about a non-periodic pattern?', 'Coherent phases can reinforce at selected reciprocal candidates, suggesting long-range order without a repeating translation. This finite sample does not establish peak width.', { view: 'quasicrystal', params: { quasiMode: 'diffraction', quasiReach: 8, quasiWindow: 1.42, quasiPhason: 0, quasiShowPoints: true, quasiShowLinks: false, quasiShowGuide: true, autoRotate: false } }),
           ],
           reflection: 'The hidden dimensions are operational: they select the visible points, while diffraction tests the order that survives without periodic repetition.',
         },

@@ -19,6 +19,45 @@ function cornerExplorerHtml() {
   return `<section class="learning-corner" aria-labelledby="corner-title"><span class="modal-kicker">Try a small calculation</span><h3 id="corner-title">Will this corner close?</h3><p>Choose a regular face and how many meet. A convex corner needs a total below 360°.</p><div class="learning-corner-controls"><label>Face shape<select data-corner-sides><option value="3">Triangle · 3 sides</option><option value="4" selected>Square · 4 sides</option><option value="5">Pentagon · 5 sides</option><option value="6">Hexagon · 6 sides</option><option value="7">Heptagon · 7 sides</option><option value="8">Octagon · 8 sides</option></select></label><label>Faces at a vertex<select data-corner-count>${[3, 4, 5, 6].map(n => `<option value="${n}">${n} faces</option>`).join('')}</select></label></div><div class="learning-corner-result"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="47" class="corner-track"/><circle cx="60" cy="60" r="47" class="corner-used" pathLength="360" transform="rotate(-90 60 60)"/><text x="60" y="58" text-anchor="middle" data-corner-degrees></text><text x="60" y="77" text-anchor="middle" class="corner-caption">of 360°</text></svg><div role="status" aria-live="polite" data-corner-result></div></div><small>The ring measures the angle budget; it is not a drawing of the folded solid. The five valid choices are listed below.</small></section>`;
 }
 
+export function renderLearningHome(learningProgress, activeView = 'e8coxeter') {
+  const summary = learningProgress.summary();
+  const currentLesson = learningProgress.recommendedLesson(activeView) || learningLessonById('meet-e8');
+  const pathCards = LEARNING_PATHS.map((path, index) => {
+    const complete = path.lessons.filter(lesson => learningProgress.lessonComplete(lesson.id)).length;
+    const next = path.lessons.find(lesson => !learningProgress.lessonComplete(lesson.id)) || path.lessons[0];
+    return `<button class="learning-home-path" data-learning-lesson="${svgEsc(next.id)}">
+      <span class="learning-home-path-number">0${index + 1}</span>
+      <span class="learning-home-path-copy"><strong>${svgEsc(path.title)}</strong><small>${svgEsc(path.description)}</small><em>${complete}/${path.lessons.length} lessons complete · ${svgEsc(next.title)} →</em></span>
+    </button>`;
+  }).join('');
+  return `
+    <button class="modal-close" data-modal-close aria-label="Close Learning Center">×</button>
+    <div class="learning-home">
+      <header class="learning-home-hero">
+        <div class="learning-home-kicker">E8 STUDIO · LEARNING CENTER</div>
+        <h2 id="learning-home-title">Start with a question.<br>Test it in the Studio.</h2>
+        <p>Build intuition with one idea at a time: read a short explanation, try a guided scene, then check what you noticed. Your progress stays on this device.</p>
+        <div class="learning-home-actions">
+          <button class="learning-home-primary" data-learning-lesson="why-five-solids">Begin with regular solids <span aria-hidden="true">↗</span></button>
+          <button data-learning-lesson="${svgEsc(currentLesson.id)}">Open this view's lesson <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="learning-home-progress" role="status">${summary.lessonsComplete} of ${summary.lessonsTotal} lessons complete</div>
+      </header>
+      <section class="learning-home-questions" aria-labelledby="learning-home-questions-title">
+        <div class="learning-home-section-heading"><span>CHOOSE A QUESTION</span><h3 id="learning-home-questions-title">What are you curious about?</h3></div>
+        <div class="learning-home-question-grid">
+          <button data-learning-lesson="why-five-solids"><span>01 · SHAPES</span><strong>Why are there exactly five regular solids?</strong><small>Start with one corner and an angle you can count.</small></button>
+          <button data-learning-lesson="meet-e8"><span>02 · E8</span><strong>What are the 240 dots?</strong><small>See what a two-dimensional projection shows and hides.</small></button>
+          <button data-learning-lesson="e8-cut-project"><span>03 · PATTERNS</span><strong>How can 8D make a 2D pattern?</strong><small>Use visible and hidden coordinates to select points.</small></button>
+        </div>
+      </section>
+      <section class="learning-home-paths" aria-labelledby="learning-home-paths-title">
+        <div class="learning-home-section-heading"><span>FOUR ROUTES</span><h3 id="learning-home-paths-title">Follow a path</h3></div>
+        <div class="learning-home-path-grid">${pathCards}</div>
+      </section>
+    </div>`;
+}
+
 // Presentation receives progress; the shell owns persistence and scene changes.
 export function renderLearningCenter(lesson, learningProgress) {
   const path = LEARNING_PATHS.find(item => item.id === lesson.pathId);
@@ -118,7 +157,7 @@ export function renderLearningCenter(lesson, learningProgress) {
   const nextStep = experimentState.nextStep;
   return `
     <button class="modal-close" data-modal-close aria-label="Close Learning Center">×</button>
-    <div class="learning-center-shell">
+    <div class="learning-center-shell" data-learning-current="${svgEsc(lesson.id)}">
       <details class="learning-library" open>
         <summary class="learning-library-toggle">Browse lessons <span>${learningSummary.lessonsTotal} lessons · ${LEARNING_PATHS.length} paths</span></summary>
       <aside class="learning-center-nav" aria-label="Learning paths">
@@ -137,11 +176,13 @@ export function renderLearningCenter(lesson, learningProgress) {
       </details>
       <article class="learning-center-content" aria-label="Lesson reader" tabindex="0">
         <header class="learning-lesson-hero" id="learning-read" tabindex="-1">
+          <button class="learning-home-back" data-learning-home>← All learning paths</button>
           <div class="learning-lesson-eyebrow">
             <div class="modal-kicker">${svgEsc(path?.title || 'Learning path')}</div>
             <span>Lesson ${pathLessonIndex + 1} of ${path?.lessons.length || 1}</span>
           </div>
           <h2 id="learning-lesson-title">${svgEsc(lesson.title)}</h2>
+          ${guide?.whyItMatters ? `<p class="learning-lesson-purpose">${svgEsc(guide.whyItMatters)}</p>` : ''}
           <div class="learning-lesson-status" aria-label="Lesson details">
             <span>${svgEsc(guide?.level || 'Explore')}</span>
             <span>${svgEsc(lessonViewLabel)}</span>
@@ -151,13 +192,13 @@ export function renderLearningCenter(lesson, learningProgress) {
           </div>
           <div class="learning-hero-action"><button class="learning-action-primary" data-learning-run-step="${svgEsc(nextStep?.id || '')}">${experimentState.completedCount ? 'Continue experiment' : 'Start guided experiment'} <span aria-hidden="true">↗</span></button><small>Read at your pace, then try ${experimentState.total} steps in the Studio.</small></div>
         </header>
-        <nav class="learning-section-nav" aria-label="In this lesson"><button data-learning-jump="learning-read">Understand</button><button data-learning-jump="learning-experiment-title">Experiment</button><button data-learning-jump="learning-check-title">Check</button><button data-learning-jump="learning-more-title">Resources</button></nav>
+        <nav class="learning-section-nav" aria-label="In this lesson"><button data-learning-jump="learning-read"><span>01</span> Understand</button><button data-learning-jump="learning-experiment-title"><span>02</span> Try it</button><button data-learning-jump="learning-check-title"><span>03</span> Check</button><button data-learning-jump="learning-more-title"><span>04</span> Sources</button></nav>
         <section class="learning-answer" aria-labelledby="learning-answer-title">
           <span id="learning-answer-title">The short answer</span>
           <p>${svgEsc(lesson.shortAnswer || lesson.claimNote)}</p>
           <ul>${(lesson.keyIdeas || lesson.objectives || []).map(idea => `<li>${svgEsc(idea)}</li>`).join('')}</ul>
         </section>
-        ${guide ? `<section class="learning-concepts"><h3>A little vocabulary</h3><dl>${guide.terms.map(([term, definition]) => `<div><dt>${svgEsc(term)}</dt><dd>${svgEsc(definition)}</dd></div>`).join('')}</dl></section><section class="learning-worked-example"><span class="modal-kicker">Make it concrete</span><h3>${svgEsc(guide.example.title)}</h3><p>${svgEsc(guide.example.body)}</p></section>` : ''}
+        ${guide ? `<section class="learning-worked-example"><span class="modal-kicker">MAKE IT CONCRETE</span><h3>${svgEsc(guide.example.title)}</h3><p>${svgEsc(guide.example.body)}</p></section><section class="learning-concepts"><h3>Words for what you just saw</h3><dl>${guide.terms.map(([term, definition]) => `<div><dt>${svgEsc(term)}</dt><dd>${svgEsc(definition)}</dd></div>`).join('')}</dl></section>` : ''}
         ${lesson.id === 'why-five-solids' ? cornerExplorerHtml() : ''}
         ${evidenceHtml}
         ${proofHtml}
@@ -191,8 +232,8 @@ export function renderLearningCenter(lesson, learningProgress) {
           <button type="button" class="learning-lesson-nav-button learning-lesson-nav-finish ${lessonComplete ? 'is-complete' : ''}" data-learning-complete="${svgEsc(lesson.id)}" aria-pressed="${lessonComplete}">${lessonComplete ? '✓ Complete' : 'Finish lesson'}</button>
           <button type="button" class="learning-lesson-nav-button learning-lesson-nav-next" ${next ? `data-learning-lesson="${svgEsc(next.id)}"` : 'disabled'} aria-label="${next ? `Next lesson: ${svgEsc(next.title)}` : 'Curriculum complete'}">Next →</button>
         </nav>
-        <section class="learning-more" aria-labelledby="learning-more-title">
-          <header id="learning-more-title" class="learning-more-header" tabindex="-1">Sources, readings, and lesson details</header>
+        <details class="learning-more">
+          <summary id="learning-more-title" class="learning-more-header">Sources, readings, and lesson details</summary>
           <div class="learning-more-body">
             <p class="modal-copy">${svgEsc(path?.description || '')}</p>
             <div class="learning-claim-note" data-claim-type="${svgEsc(lesson.claimType)}">
@@ -210,19 +251,34 @@ export function renderLearningCenter(lesson, learningProgress) {
             <h3>Connect the ideas</h3>
             <div class="learning-connection-grid">${connectionCards}</div>
           </div>
-        </section>
+        </details>
       </article>
     </div>
   `;
 }
 
-export function bindLearningCenterNavigation(host) {
+export function captureLearningCenterUiState(host) {
+  const library = host?.querySelector?.('.learning-library');
+  if (!library) return null;
+  return {
+    lessonId: host.querySelector('[data-learning-current]')?.dataset.learningCurrent || null,
+    query: host.querySelector('#learning-search')?.value || '',
+    libraryOpen: library.open,
+    libraryScrollTop: host.querySelector('.learning-center-nav')?.scrollTop || 0,
+    sourcesOpen: !!host.querySelector('.learning-more')?.open,
+    recallOpen: !!host.querySelector('.learning-recall details')?.open,
+  };
+}
+
+export function bindLearningCenterNavigation(host, savedState = null) {
   const library = host.querySelector('.learning-library');
   const narrow = window.matchMedia('(max-width: 760px)');
   const adapt = () => { library.open = !narrow.matches; };
   adapt();
+  if (savedState) library.open = savedState.libraryOpen;
   narrow.addEventListener('change', adapt);
   const input = host.querySelector('#learning-search');
+  if (savedState) input.value = savedState.query;
   const links = [...host.querySelectorAll('[data-learning-search]')];
   const paths = [...host.querySelectorAll('[data-learning-path]')];
   const filter = () => {
@@ -239,6 +295,18 @@ export function bindLearningCenterNavigation(host) {
   input.addEventListener('input', filter);
   host.querySelector('[data-learning-clear]').addEventListener('click', () => { input.value = ''; filter(); input.focus(); });
   filter();
+  if (savedState) {
+    const nav = host.querySelector('.learning-center-nav');
+    requestAnimationFrame(() => {
+      if (nav?.isConnected) nav.scrollTop = savedState.libraryScrollTop;
+    });
+    if (savedState.lessonId === host.querySelector('[data-learning-current]')?.dataset.learningCurrent) {
+      const sources = host.querySelector('.learning-more');
+      const recall = host.querySelector('.learning-recall details');
+      if (sources) sources.open = savedState.sourcesOpen;
+      if (recall) recall.open = savedState.recallOpen;
+    }
+  }
   const cornerSides = host.querySelector('[data-corner-sides]');
   const cornerCount = host.querySelector('[data-corner-count]');
   if (cornerSides && cornerCount) {
@@ -257,6 +325,7 @@ export function bindLearningCenterNavigation(host) {
   host.querySelectorAll('[data-learning-jump]').forEach(button => {
     button.addEventListener('click', () => {
       const target = host.querySelector(`#${button.dataset.learningJump}`);
+      if (target?.closest('details.learning-more')) target.closest('details.learning-more').open = true;
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start', behavior: 'instant' });
     });

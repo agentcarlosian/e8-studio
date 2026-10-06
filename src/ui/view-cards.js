@@ -23,8 +23,12 @@ export function renderViewCards(view) {
 export function renderExplorationInvite() {
   let seen = false;
   try { seen = localStorage.getItem('e8_quick_start_seen_v1') === 'true'; } catch {}
-  return seen ? '' : `<div class="exploration-invite">
-    <div><strong>A little guidance?</strong><p>Meet the geometry in three small steps.</p></div>
-    <button data-act="startQuickStart">Start exploring <span aria-hidden="true">↗</span></button>
+  return seen ? '' : `<div class="exploration-invite" role="group" aria-label="Choose a starting point">
+    <div class="exploration-invite-heading"><span>START HERE</span><strong>What would you like to do?</strong><p>Choose a path. You can switch views at any time.</p></div>
+    <div class="exploration-routes">
+      <button data-act="startQuickStart"><span><strong>Explore geometry</strong><small>A three-step tour of the Studio</small></span><span aria-hidden="true">↗</span></button>
+      <button data-act="openLearningCenter" data-arg="why-five-solids"><span><strong>Learn the ideas</strong><small>Start with the five regular solids</small></span><span aria-hidden="true">↗</span></button>
+      <button data-act="openPresets"><span><strong>Make a visual</strong><small>Choose a curated scene</small></span><span aria-hidden="true">↗</span></button>
+    </div>
   </div>`;
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -515,6 +516,22 @@ def main() -> int:
             check("settings button keeps compact canvas footprint", bool(settings_button) and 44 <= settings_button["width"] <= 56 and 44 <= settings_button["height"] <= 56 and settings_button_text == "", str({"box": settings_button, "text": settings_button_text}))
             page.get_by_role("button", name="Settings").click()
             check("settings button opens sheet", page.locator("#settings-sheet:not(.hidden)").count() == 1)
+            check("Settings dialog takes focus on open", page.evaluate("document.activeElement?.id === 'settings-close'"))
+            page.keyboard.press("Shift+Tab")
+            trapped_focus = page.evaluate("""() => ({
+                inside: document.getElementById('settings-sheet').contains(document.activeElement),
+                target: document.activeElement?.id || document.activeElement?.tagName,
+            })""")
+            check("Shift+Tab wraps inside Settings dialog", trapped_focus["inside"] and trapped_focus["target"] != "settings-close", str(trapped_focus))
+            page.keyboard.press("Tab")
+            check("Tab wraps back to Settings close button", page.evaluate("document.activeElement?.id === 'settings-close'"))
+            page.keyboard.press("Escape")
+            closed_focus = page.evaluate("""() => ({
+                hidden: document.getElementById('settings-sheet').classList.contains('hidden'),
+                focused: document.activeElement?.id,
+            })""")
+            check("Settings Escape closes and returns focus to opener", closed_focus == {"hidden": True, "focused": "settings-button"}, str(closed_focus))
+            page.get_by_role("button", name="Settings").click()
             section_nav_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             for name in ["View", "Visuals", "Motion", "Learn"]:
                 page.get_by_role("button", name=name, exact=True).click()
@@ -561,12 +578,24 @@ def main() -> int:
                 readerHidden: document.getElementById('learn-reader').classList.contains('hidden'),
                 recommended: document.getElementById('learn-recommended-card').innerText,
                 progress: document.getElementById('learn-progress-output').textContent.trim(),
+                lessonOrder: [...document.querySelectorAll('[data-learn-topic]')].map(button => button.dataset.learnTopic),
                 paths: [...document.querySelectorAll('[data-learn-path]')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
                 done: document.querySelector('.learn-done-action').getBoundingClientRect()
             })""")
             check("Learn opens as a navigable library", learn_library["libraryVisible"] and learn_library["readerHidden"] and "What am I looking at?" in learn_library["recommended"] and learn_library["progress"].endswith("/ 13") and len(learn_library["paths"]) == 4, str(learn_library))
+            canonical_order = [lesson["id"] for lesson in json.loads((ROOT / "data" / "curriculum.json").read_text(encoding="utf-8"))["lessons"]]
+            check("Mobile lessons follow the prerequisite-respecting curriculum order", learn_library["lessonOrder"] == canonical_order, str(learn_library["lessonOrder"]))
             check("Learn library uses readable touch targets", learn_library["done"]["height"] >= 44 and all(path["box"]["height"] >= 64 for path in learn_library["paths"]), str(learn_library))
-            page.locator('[data-learn-path="solid-foundations"]').click()
+            page.locator('[data-learn-path="solid-foundations"]').focus()
+            page.keyboard.press('Enter')
+            learn_path_focus = page.evaluate("""() => ({
+                expanded: document.querySelector('[data-learn-path="solid-foundations"]')?.getAttribute('aria-expanded'),
+                focusedPath: document.activeElement?.dataset.learnPath || null,
+                focusedTag: document.activeElement?.tagName || null,
+            })""")
+            check("Learn path keyboard expansion keeps focus on the disclosure", learn_path_focus == {
+                "expanded": "true", "focusedPath": "solid-foundations", "focusedTag": "BUTTON",
+            }, str(learn_path_focus))
             learn_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             mobile_lesson_select_ms = page.evaluate("""() => {
                 const started = performance.now();
@@ -586,9 +615,12 @@ def main() -> int:
                 nav: [...document.querySelectorAll('.learn-reader-bar button')].map(button => button.getBoundingClientRect()),
                 lessonNav: [...document.querySelectorAll('.mobile-learn-lesson-nav button')].map(button => ({ text: button.innerText, box: button.getBoundingClientRect() })),
                 activityCount: document.querySelectorAll('.mobile-learn-activity').length,
+                stepActions: document.querySelectorAll('[data-learn-step-index]').length,
                 explanationCount: document.querySelectorAll('.mobile-learn-activity .mobile-learn-takeaway').length,
                 hiddenLessonDetails: document.querySelectorAll('.mobile-learn-activity details').length,
                 vocabulary: document.querySelectorAll('.mobile-learn-vocabulary dt').length,
+                purpose: document.querySelector('.mobile-learn-purpose')?.textContent,
+                exampleBeforeWords: !!(document.querySelector('.mobile-learn-example')?.compareDocumentPosition(document.querySelector('.mobile-learn-vocabulary')) & Node.DOCUMENT_POSITION_FOLLOWING),
                 workedExample: !!document.querySelector('.mobile-learn-example p')?.textContent,
                 recall: !!document.querySelector('.mobile-learn-recall details'),
                 sourceLinks: document.querySelectorAll('.mobile-learn-sources a[href]').length,
@@ -602,10 +634,11 @@ def main() -> int:
                 readerOverflow: getComputedStyle(document.getElementById('learn-reader-scroll')).overflowY
             })""")
             check("Why-five opens in a dedicated reader", why_five["state"]["learnTopic"] == "why-five-solids" and why_five["sheetReader"] and why_five["libraryHidden"] and why_five["readerVisible"], str(why_five))
+            check("Lessons lead with purpose and a worked example", "simple corner rule" in (why_five["purpose"] or "") and why_five["exampleBeforeWords"], str(why_five))
             check("Lessons include shared vocabulary, examples, self-checks, and sources", why_five["vocabulary"] == 2 and why_five["workedExample"] and why_five["recall"] and why_five["sourceLinks"] >= 2, str(why_five))
             check("Why-five directly teaches the five cases", "less than 360°" in why_five["text"] and "3 triangles" in why_five["text"] and "Dodecahedron" in why_five["text"] and "3 hexagons" in why_five["text"] and "Flat tiling" in why_five["text"], why_five["text"])
             check("Lesson reader is readable and has persistent navigation", why_five["bodySize"] >= 16 and why_five["bodyLineHeight"] >= 24 and all(box["height"] >= 48 for box in why_five["nav"]), str(why_five))
-            check("Lesson activities expose every explanation without toggles", why_five["activityCount"] == 3 and why_five["explanationCount"] == 3 and why_five["hiddenLessonDetails"] == 0 and why_five["sourceNoteVisible"] and why_five["hiddenExplanationControls"] == 0 and "60° angular deficit" in why_five["text"] and "36° of angular deficit" in why_five["text"] and "exactly 360°" in why_five["text"], str(why_five))
+            check("Lesson activities expose every explanation and step action", why_five["activityCount"] == 3 and why_five["stepActions"] == 3 and why_five["explanationCount"] == 3 and why_five["hiddenLessonDetails"] == 0 and why_five["sourceNoteVisible"] and why_five["hiddenExplanationControls"] == 0 and "60° angular deficit" in why_five["text"] and "36° of angular deficit" in why_five["text"] and "exactly 360°" in why_five["text"], str(why_five))
             check("Primary lesson navigation replaces the old experiment controls", [item["text"] for item in why_five["lessonNav"]] == ["← Previous", "Finish lesson", "Next →"] and all(item["box"]["height"] >= 54 for item in why_five["lessonNav"]), str(why_five["lessonNav"]))
             check("Open in Studio is the large final lesson action", why_five["studioButton"]["text"] == "Open in Studio" and why_five["studioButton"]["box"]["height"] >= 54 and "learn-topic-studio" in why_five["studioButton"]["parent"], str(why_five["studioButton"]))
             check("Lesson reader owns the only nested scroll", why_five["sheetOverflow"] == "hidden" and why_five["readerOverflow"] in ["auto", "scroll"], str(why_five))
@@ -627,6 +660,10 @@ def main() -> int:
                 progress: window.__mobileApp.getLearningProgress()
             })""")
             check("Experiment returns to the same lesson with an explanation", returned["settingsVisible"] and returned["readerVisible"] and returned["coachHidden"] and "60° angular deficit" in returned["text"] and "triangles" in returned["progress"]["experiments"]["why-five-solids"]["completedSteps"], str(returned))
+            page.locator('[data-learn-step-index="0"]').click()
+            repeated_step = page.evaluate("() => ({visible:!document.getElementById('learn-coach').classList.contains('hidden'), text:document.getElementById('learn-coach').innerText})")
+            check("A completed mobile activity can be reopened", repeated_step["visible"] and "ACTIVITY 1 OF 3" in repeated_step["text"], str(repeated_step))
+            page.locator('[data-learn-coach-action="return"]').click()
             page.locator('[data-info-action="toggle-lesson-complete"]').click()
             page.locator('[data-info-action="close-learn-reader"]').click()
             back_to_library = page.evaluate("""() => ({
@@ -955,7 +992,7 @@ def main() -> int:
                 const chipBox = chip.getBoundingClientRect();
                 const labelBox = label.getBoundingClientRect();
                 return {
-                    text: chip.textContent.trim().replace(/\s+/g, ' '),
+                    text: chip.textContent.trim().replace(/\\s+/g, ' '),
                     chipRight: chipBox.right,
                     labelRight: labelBox.right,
                     width: chipBox.width,
@@ -2157,7 +2194,11 @@ def main() -> int:
             check("fast speed chip updates motion speed", abs(motion_speed_fast["state"]["rotationSpeed"] - 1.2) < 0.01 and motion_speed_fast["slider"] == "1.2" and motion_speed_fast["output"] == "Fast" and motion_speed_fast["active"] == ["fast"], str(motion_speed_fast))
             check("fast speed chip skips full control sync", motion_speed_fast["metrics"]["motionSpeedPresetSelectCount"] > motion_speed_before["motionSpeedPresetSelectCount"] and motion_speed_fast["metrics"]["motionSpeedPresetSyncSkipCount"] > motion_speed_before["motionSpeedPresetSyncSkipCount"] and motion_speed_fast["metrics"]["settingsControlSyncSkipCount"] > motion_speed_before["settingsControlSyncSkipCount"] and motion_speed_fast["metrics"]["controlSyncCount"] == motion_speed_before["controlSyncCount"] and motion_speed_fast["metrics"]["lastSettingsControlSyncSkip"] == "motion-speed-preset-fast" and motion_speed_fast["metrics"]["lastMotionSpeedPreset"] == "fast" and abs(motion_speed_fast["metrics"]["lastMotionSpeedPresetValue"] - 1.2) < 0.01, str(motion_speed_fast["metrics"]))
             check("fast speed chip suppresses hidden render", motion_speed_fast["metrics"]["renderSuppressedCount"] > motion_speed_before["renderSuppressedCount"] and motion_speed_fast["metrics"]["lastRenderSuppressedReason"] == "motion-speed-preset-fast", str(motion_speed_fast["metrics"]))
-            check("motion speed preset can flush", page.evaluate("() => window.__mobileApp.flushSave()"))
+            stored_speed = page.evaluate("""() => {
+                window.__mobileApp.flushSave();
+                return JSON.parse(localStorage.getItem('e8_mobile_v2_config') || '{}').rotationSpeed;
+            }""")
+            check("motion speed preset persists", stored_speed is not None and abs(stored_speed - 1.2) < 0.01, str(stored_speed))
             live_motion_before = page.evaluate("() => window.__mobileApp.getMetrics()")
             page.evaluate(
                 """() => {

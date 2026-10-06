@@ -14,7 +14,7 @@ const PERSISTABLE = new Set([
   'quasiShowPoints', 'quasiPointHalos', 'quasiShowLinks', 'quasiShowGuide',
   'opacity', 'pointScale', 'showVertices', 'showFaces', 'rotationSpeed',
   'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'showEdges', 'showRings', 'showPetrie',
-  'showAmbient', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
+  'showAmbient', 'ambientMotionExplicit', 'fxMode', 'fxByView', 'fxIntensity', 'autoFx', 'fxShiftInterval',
   'lightAmbient', 'lightKey', 'lightFill', 'lightAccent',
   // Pickup round 2 additions — all of these should persist across reloads
   'bgMode', 'bgIntensity', 'theme', 'layout',
@@ -61,7 +61,7 @@ const SHAREABLE = new Set([
   'quasiShowPoints', 'quasiPointHalos', 'quasiShowLinks', 'quasiShowGuide',
   'pointScale', 'showVertices', 'showFaces', 'showEdges', 'showRings', 'showPetrie',
   'rotationSpeed', 'autoRotate', 'cameraOrbit', 'autoZoom', 'autoModel', 'autoSliders',
-  'showAmbient', 'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',
+  'showAmbient', 'ambientMotionExplicit', 'cameraSpeed', 'cameraDistance', 'cameraRotation', 'cameraPhi',
   'cameraPath', 'cameraMode',
   'fxMode', 'fxIntensity', 'autoFx', 'fxShiftInterval',
   'bgMode', 'bgIntensity', 'bloomAmount', 'bloomAuto', 'bloomSpeed',
@@ -233,6 +233,9 @@ export function applyConfig(target, source) {
     const clean = sanitizeConfigValue(source[k]);
     if (clean !== undefined) target[k] = clean;
   }
+  // Older builds saved the ambient camera as an implicit on-by-default value.
+  // Only an explicit choice in a newer config should restore that motion.
+  if (source.showAmbient === true && source.ambientMotionExplicit !== true) target.showAmbient = false;
   return target;
 }
 

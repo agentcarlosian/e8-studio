@@ -30,6 +30,8 @@
 
 Click **Launch E8 Studio** and start exploring immediately. The hosted Studio runs entirely in the browser: no installation, account, sign-in, or upload is required. Your settings and learning progress stay in your browser.
 
+On a first visit, **Start here** offers three routes: a short geometry tour, a beginner lesson, or a curated visual. Choosing a route is optional and does not change the scene until you act.
+
 ### Nine interactive views
 
 | View | What it offers |
@@ -37,7 +39,7 @@ Click **Launch E8 Studio** and start exploring immediately. The hosted Studio ru
 | **Bloom** | Watch a Platonic source shape pass through 600-cell-inspired stages and bloom into the E8 Coxeter projection. Animate the transformation and combine it with palettes, depth, and effects. |
 | **Platonic** | Explore the five Platonic solids and four Kepler–Poinsot star polyhedra. Switch between wireframe and solid treatments, compare duals, and apply live twist, spike, and jitter deformations. |
 | **E8 Coxeter** | Examine all 240 E8 roots in the Coxeter plane. Reveal the eight rings, edges, Petrie orbit, coordinate axes, Weyl mirrors, Cartan neighbors, projection modes, and mathematical color groupings. |
-| **E8 Quasicrystal** | Cut the E8 lattice from eight dimensions into a two-dimensional quasiperiodic patch. Move its six-dimensional acceptance window and compare the visible pattern, hidden-space window, and computed diffraction peaks. |
+| **E8 Quasicrystal** | Cut the E8 lattice from eight dimensions into a two-dimensional quasiperiodic patch. Move its six-dimensional acceptance window and open a linked comparison of the visible pattern, a two-coordinate view of hidden space, and finite-patch diffraction peaks. The comparison marks points entering or leaving the selection. |
 | **4D Polytope** | Move through all six convex regular 4-polytopes—from the 5-cell through the 600-cell to the 120-cell. Rotate across six independent 4D planes and control the fourth-dimensional perspective depth. |
 | **E8 SDF** | See the roots as a raymarched, illuminated structure with smooth-union geometry, edge connections, ambient occlusion, reflections, and the animated “Living E8” extrusion effect. |
 | **Root Lab** | Generate the A₂, B₂, G₂, and H₂/I₂(5) rank-2 root systems from two simple roots. Reveal reflection mirrors, reflection chambers, root lengths, Cartan data, and a Coxeter orbit. |
@@ -88,14 +90,14 @@ The educational system is integrated with the visual controls instead of being a
 - Quizzes provide explanations rather than only marking an answer right or wrong.
 - A searchable glossary defines the mathematical language used throughout the Studio.
 - Root picking reveals 8D coordinates, opposite roots, and Cartan-neighbor structure.
-- The Learning Center offers a searchable, responsive reader for 13 lessons, with vocabulary, concrete examples, evidence tables, self-checks, and guided experiments. Test the angle rule with the interactive regular-solid corner calculator.
+- The Learning Center opens on a question-led home with four paths and a clear beginner starting point. Its searchable reader covers 13 lessons with worked examples, vocabulary, evidence tables, self-checks, and guided experiments. Test the angle rule with the interactive regular-solid corner calculator.
 - Jump between understanding, experiments, quizzes, and resources; return from a quiz to its lesson and continue the next unfinished experiment step.
 - Daily facts, biographies, a historical timeline, badges, and locally saved lesson and experiment progress reward deeper exploration.
 - Source links and claim labels distinguish established mathematics, historical context, interpretation, and app-designed visualization.
 
 ### Getting around
 
-- **First visit:** choose **Start exploring** for an optional three-step introduction to E8 rings, a Platonic solid, and visual styling. Reopen it from the header or Tools menu.
+- **First visit:** use **Start here** to choose a geometry tour, a beginner lesson, or a curated visual. The optional three-step tour is also available from **Guided tour** in the header or Tools menu.
 - **Mouse:** drag to orbit, scroll to zoom, and click supported roots or structures for details.
 - **Touch:** drag to orbit and pinch to zoom; the responsive control drawer keeps the render visible on smaller screens.
 - **Keyboard:** use `1–9` for views, `Space` to pause, `S` for PNG, `L` for the Learning Center, `G` for the glossary, `H` for presentation mode, and `Ctrl/⌘ + K` for commands.
@@ -133,9 +135,10 @@ Vite prints the local development URL. Development source should be opened throu
 ## Build targets
 
 ```bash
-npm run build:web          # Production GitHub Pages site → dist/web
+npm run build:web          # Desktop site and Canvas2D fallback → dist/web
+npm run build:offline      # Inline PWA/Electron page → dist/index.html
 npm run build:single       # Self-contained desktop HTML
-npm run build:mobile       # Mobile/Capacitor build
+npm run build:mobile       # Mobile smoke HTML + clean dist/mobile Capacitor input
 npm run build:share        # Desktop and mobile standalone files
 npm run electron:dist      # Desktop installers/packages
 npm run release:artifacts  # Versioned bundle and checksums
@@ -159,6 +162,10 @@ python scripts/verify.py
 python scripts/test_robustness.py
 python scripts/test_math.py
 npm run smoke:mobile-v2
+npm run test:deferred-view
+npm run test:quasicrystal-comparison
+python scripts/test_startup_recovery.py --built
+python -B scripts/test_packaging_assets.py
 ```
 
 GitHub Actions runs release checks on Linux and core build/test contracts on Windows. Dependency updates are monitored by Dependabot.
@@ -186,7 +193,8 @@ The hosted application is bundled with Vite. Standalone, Electron, and mobile ta
 
 ## Platform support
 
-- Modern desktop browsers with WebGL2
+- Modern desktop browsers with WebGL2 for the full visual Studio
+- A Canvas2D Studio route in hosted web builds when WebGL cannot start
 - Responsive touch-oriented desktop shell
 - Dedicated hybrid mobile interface with Canvas 2D scenes and ray-marched WebGL SDF
 - Electron on desktop platforms

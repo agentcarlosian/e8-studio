@@ -78,6 +78,7 @@ function renderCameraControls(params, caps) {
   html += '<div class="seg seg-wrap">';
   html += `<button class="${params.autoRotate ? 'on' : ''}" ${pressed(params.autoRotate)} data-act="toggleAutoRotate" title="Rotate the model itself in a continuous circular spin">Spin</button>`;
   html += `<button class="${params.autoZoom ? 'on' : ''}" ${pressed(params.autoZoom)} data-act="toggleAutoZoom" title="Travel through the full useful zoom range">Auto zoom</button>`;
+  html += `<button class="${params.showAmbient ? 'on' : ''}" ${pressed(!!params.showAmbient)} data-act="toggleAmbientMotion" title="Add subtle camera movement while idle">Ambient drift</button>`;
   html += `<button class="${params.autoModel ? 'on' : ''}" ${pressed(params.autoModel)} data-act="toggleAutoModel" title="Cycle through the Studio's visual showcase">Auto model</button>`;
   html += '</div>';
   html += slider('Spin speed', 'rotationSpeed', params.rotationSpeed ?? 0.003, 0.0005, 0.02, 0.0005, v => `${(v / 0.003).toFixed(1)}×`);
@@ -123,12 +124,12 @@ function renderViewSection(params, data, uiState = {}) {
   const caps = viewCapabilities(params.view);
   let html = '<div class="ps-section" data-section="view"><div class="ps-title">View</div>';
 
+  html += renderExplorationInvite();
   html += renderViewCards(params.view);
 
   // Gallery changes the whole scene, so keep it directly beneath the primary
   // view selector instead of burying it below camera and per-view controls.
   html += renderGalleryControls(params);
-  html += renderExplorationInvite();
 
   if (params.view === 'quasicrystal') {
     const patch = generateE8Quasicrystal(data.e8, {
@@ -144,6 +145,7 @@ function renderViewSection(params, data, uiState = {}) {
       html += `<button class="${params.quasiMode === mode ? 'on' : ''}" ${pressed(params.quasiMode === mode)} data-act="setQuasiMode" data-arg="${mode}" title="${modeLabels[mode]} view of the cut-and-project construction">${modeLabels[mode]}</button>`;
     }
     html += '</div>';
+    html += `<button class="quasi-compare-launch" data-act="toggleQuasiComparison" aria-pressed="${!!uiState.quasiComparisonOpen}">${uiState.quasiComparisonOpen ? 'Close linked comparison' : 'Compare pattern, window & diffraction'}</button>`;
     html += '<div class="ps-subtitle">Lattice reach</div><div class="seg">';
     for (const reach of QUASICRYSTAL_REACHES) {
       html += `<button class="${params.quasiReach === reach ? 'on' : ''}" ${pressed(params.quasiReach === reach)} data-act="setQuasiReach" data-arg="${reach}" title="Enumerate E8 lattice points through squared norm ${reach}">‖x‖² ≤ ${reach}</button>`;
@@ -234,10 +236,10 @@ function renderViewSection(params, data, uiState = {}) {
     // Label contextually so it isn't mistaken for a solid-renderer in E8 view.
     const shapeLabel = params.view === 'platonic' ? 'Platonic solid'
       : params.view === 'bloom' ? 'Source solid'
-      : 'McKay source';
+      : 'McKay-inspired highlight';
     const shapeHint = params.view === 'platonic' ? 'The Platonic solid to render'
       : params.view === 'bloom' ? 'The solid the bloom grows from'
-      : 'Highlights the E₈ roots corresponding to this solid (McKay correspondence)';
+      : 'An interpretive highlight inspired by the McKay correspondence';
     html += `<div class="ps-subtitle" title="${shapeHint}">${shapeLabel}</div>`;
     html += '<div class="shape-row">';
     for (const name of SHAPES) {
@@ -983,7 +985,7 @@ function renderLearnSection(params) {
         <div class="learn-fact-strip" aria-label="Key E8 facts">
           <div><strong>240</strong><span>roots</span></div>
           <div><strong>8</strong><span>rings</span></div>
-          <div><strong>30×</strong><span>symmetry</span></div>
+          <div><strong>30</strong><span>Coxeter order</span></div>
         </div>
         <p>The exceptional Lie algebra E<sub>8</sub> is shown through its 240 <b>root vectors</b>, projected from eight dimensions onto the <b>Coxeter plane</b>.</p>
         <p>Those roots land on <b>eight concentric rings</b>. The Petrie path traces a 30-step orbit; bright roots are an illustrative McKay-source highlight.</p>
@@ -1118,6 +1120,7 @@ export class ControlPanel {
     this.lastFx = params.fxMode;
     this.workspaceScroll = { scene: 0, style: 0, learn: 0 };
     this.paletteExpanded = false;
+    this.quasiComparisonOpen = false;
     this.openDisclosures = new Set();
     this.renderedWorkspace = null;
     this.render();
@@ -1225,17 +1228,19 @@ export class ControlPanel {
       : p.view === 'dynkin' ? p.dynkin
       : p.view === 'rootlab' ? p.rootSystem
       : p.view === 'tiling' ? p.tilingSystem
+      : p.view === 'quasicrystal' ? ({ pattern: 'pattern', window: 'hidden window', diffraction: 'diffraction' })[p.quasiMode] || 'pattern'
       : p.view === 'raymarched' ? '240 roots'
+      : p.view === 'e8coxeter' ? `${p.shape} highlight`
       : p.shape;
     const selectionLabel = String(selection || '').replaceAll('_', ' ');
     const paletteLabel = String(p.palette || '').replaceAll('_', ' ');
     el.innerHTML = `
       <div class="ps-status-row">
-        <span class="ps-status-key">${viewLabel}</span>
+        <span class="ps-status-key">${escapeHtml(viewLabel)}</span>
         <span class="ps-status-sep">·</span>
-        <span class="ps-status-key">${selectionLabel}</span>
+        <span class="ps-status-key">${escapeHtml(selectionLabel)}</span>
         <span class="ps-status-sep">·</span>
-        <span class="ps-status-key">${paletteLabel}</span>
+        <span class="ps-status-key">${escapeHtml(paletteLabel)}</span>
         <span class="ps-status-sep">·</span>
         <span class="ps-motion" id="ps-motion" title="Animation state — updates live"></span>
       </div>
@@ -1265,6 +1270,7 @@ const MOTION_STATES = {
   flux:     { label: '↕ flux',    cls: 'is-active' },
   rotate:   { label: '↻ rotate',  cls: 'is-active' },
   bloom:    { label: '▶ bloom',   cls: 'is-active' },
+  ambient:  { label: '≈ drift',    cls: 'is-active' },
   idle:     { label: '● idle',    cls: 'is-idle' },
 };
 export function updateMotionStatus(params) {
@@ -1281,6 +1287,7 @@ export function updateMotionStatus(params) {
   else if ((params.autoSliders || []).includes('e8MorphT')) key = 'flux';
   else if (params.autoRotate || params.e8AutoRotate || params.polyAutoRotate) key = 'rotate';
   else if (params.bloomAuto) key = 'bloom';
+  else if (params.showAmbient) key = 'ambient';
   else key = 'idle';
   // Only touch the DOM when the state actually changes (cheap guard so this
   // can sit in the 60fps animate loop without causing layout work).

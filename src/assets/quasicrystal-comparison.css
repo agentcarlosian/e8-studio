@@ -1,0 +1,51 @@
+.quasi-comparison {
+  position: absolute;
+  z-index: 16;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  width: min(810px, calc(100% - 40px));
+  margin: auto;
+  max-height: min(48dvh, 370px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-1) 96%, transparent);
+  box-shadow: 0 18px 48px #0009;
+  backdrop-filter: blur(12px);
+  color: var(--ink-0);
+}
+.quasi-comparison[hidden] { display: none; }
+.quasi-comparison-head, .quasi-comparison-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.quasi-comparison-head span { color: var(--accent); font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .06em; }
+.quasi-comparison-head h2 { margin: 3px 0 0; font: 600 19px 'Inter', sans-serif; letter-spacing: -.02em; }
+.quasi-comparison-head button { flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-0); background: var(--bg-0); font-size: 20px; cursor: pointer; }
+.quasi-comparison-intro, .quasi-comparison-scope { color: var(--ink-1); font-size: 11px; line-height: 1.5; }
+.quasi-comparison-intro { margin: 7px 0; }
+.quasi-comparison-stats { min-height: 18px; margin: 7px 0 11px; color: var(--accent); font: 500 10px/1.5 'JetBrains Mono', monospace; }
+.quasi-comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.quasi-comparison-grid button { min-width: 0; padding: 6px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--ink-0); cursor: pointer; }
+.quasi-comparison-grid button.active, .quasi-comparison-grid button:hover { border-color: var(--accent); }
+.quasi-comparison-grid canvas { display: block; width: 100%; height: 100px; border-radius: 4px; }
+.quasi-comparison-grid strong, .quasi-comparison-grid small { display: block; margin: 5px 3px 0; }
+.quasi-comparison-grid strong { font: 600 12px 'Inter', sans-serif; }
+.quasi-comparison-grid small { color: var(--ink-2); font-size: 10px; line-height: 1.4; }
+.quasi-comparison-foot { align-items: center; margin-top: 10px; color: var(--ink-1); font-size: 10px; }
+.quasi-comparison-foot i { display: inline-block; width: 8px; height: 8px; margin: 0 3px 0 8px; border-radius: 50%; }
+.quasi-comparison-foot .quasi-added { background: #6ce3d2; }
+.quasi-comparison-foot .quasi-removed { background: #fb825d; }
+.quasi-comparison-foot button { min-height: 34px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-0); color: var(--ink-0); font-size: 10px; cursor: pointer; }
+.quasi-comparison-foot button:hover { border-color: var(--accent); }
+.quasi-comparison-scope { margin: 8px 0 0; }
+.quasi-comparing #ov-bl, .quasi-comparing #ov-br { visibility: hidden; }
+.quasi-comparison button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 620px) {
+  .quasi-comparison { left: 10px; right: 10px; bottom: 10px; width: calc(100% - 20px); max-height: min(50dvh, 330px); padding: 10px; }
+  .quasi-comparison-head h2 { font-size: 15px; }
+  .quasi-comparison-grid { display: flex; overflow-x: auto; padding-bottom: 4px; }
+  .quasi-comparison-grid button { flex: 0 0 148px; }
+  .quasi-comparison-foot { align-items: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { .quasi-comparison { scroll-behavior: auto; } }

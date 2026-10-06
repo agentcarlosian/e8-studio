@@ -607,10 +607,6 @@ let LEARN_TOPIC_CYCLE = [];
 let curriculumPaths = [];
 let curriculumLessons = [];
 let learningProgress = loadLearningProgress();
-const MOBILE_LEARN_LESSON_ORDER = [
-  'meet-e8', 'coxeter-plane', 'roots-reflections', 'rank-two-reflections', 'coxeter-multigrids', 'e8-cut-project', 'six-hundred-cell',
-  'why-five-solids', 'into-four-dimensions', 'reading-dynkin', 'mckay-bridge', 'designed-bloom', 'distance-fields',
-];
 const LEGACY_LEARN_TOPIC_MAP = {
   e8: 'coxeter-plane', solids: 'why-five-solids', mckay: 'mckay-bridge',
   poly4d: 'into-four-dimensions', dynkin: 'reading-dynkin',
@@ -619,11 +615,8 @@ const LEGACY_LEARN_TOPIC_MAP = {
 function installMobileCurriculum(curriculum) {
   curriculumPaths = Array.isArray(curriculum?.paths) ? curriculum.paths : [];
   curriculumLessons = Array.isArray(curriculum?.lessons) ? [...curriculum.lessons] : [];
-  curriculumLessons.sort((a, b) => {
-    const ai = MOBILE_LEARN_LESSON_ORDER.indexOf(a.id);
-    const bi = MOBILE_LEARN_LESSON_ORDER.indexOf(b.id);
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-  });
+  // The generated curriculum order respects prerequisite edges. Keep one
+  // sequence for library, lesson numbering, and Next/Previous on both shells.
   LEARN_TOPICS = [
     { id: 'auto', label: 'Auto', name: 'Scene match' },
     ...curriculumLessons.map(lesson => ({
@@ -1181,6 +1174,7 @@ let learnLibraryScrollTop = 0;
 let learnSelectedPathId = null;
 let learnExperimentStepIndex = 0;
 let learnCoachState = null;
+let settingsReturnFocus = null;
 let settingsCanvasResizeDeferred = false;
 let lastTap = null;
 let nativeBackHandlerInstalled = false;
@@ -1632,6 +1626,28 @@ function bindEvents() {
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && isSettingsOpen()) {
+      const higherModal = [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
+        .find(element => element !== els.sheet && element.getClientRects().length > 0);
+      if (higherModal) return;
+      const focusable = [...els.sheet.querySelectorAll('button:not(:disabled), a[href], summary, input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+        .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+      if (focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!els.sheet.contains(document.activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus({ preventScroll: true });
+        } else if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      }
+      return;
+    }
     if (event.key === 'Escape' && handleBackNavigation()) event.preventDefault();
   });
 
@@ -1768,6 +1784,11 @@ function bindEvents() {
     const learnPath = event.target.closest('[data-learn-path]')?.dataset.learnPath;
     if (learnPath) {
       toggleLearnPath(learnPath);
+      return;
+    }
+    const learnStepIndex = event.target.closest('[data-learn-step-index]')?.dataset.learnStepIndex;
+    if (learnStepIndex !== undefined) {
+      openLearnExperiment(Number(learnStepIndex));
       return;
     }
     const infoAction = event.target.closest('[data-info-action]')?.dataset.infoAction;
@@ -5077,12 +5098,7 @@ function activeLearnTopicId() {
 
 function renderLearnTopics() {
   if (!els.learnTopicGrid) return false;
-  const preferredPathOrder = ['coxeter-geometry', 'solid-foundations', 'exceptional-bridges', 'rendering-mathematics'];
-  const orderedPaths = [...curriculumPaths].sort((a, b) => {
-    const ai = preferredPathOrder.indexOf(a.id);
-    const bi = preferredPathOrder.indexOf(b.id);
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
-  });
+  const orderedPaths = curriculumPaths;
   if (learnSelectedPathId == null) {
     learnSelectedPathId = curriculumLessons.find(lesson => lesson.id === sceneLearnTopicId())?.pathId || orderedPaths[0]?.id || null;
   }
@@ -5167,7 +5183,7 @@ function syncLearnPanel() {
     const started = !!learningProgress.lessons?.[recommendedId] || state.learnTopic === recommendedId;
     els.learnRecommendedCard.innerHTML = `<span class="mobile-learn-kicker">${started ? 'Continue learning' : 'Start here'}</span>
       <h3>${escapeHtml(recommended.title)}</h3>
-      <p>${escapeHtml(recommended.shortAnswer)}</p>
+      <p>${escapeHtml(recommended.lesson?.guide?.whyItMatters || recommended.shortAnswer)}</p>
       <button type="button" data-info-action="open-context-lesson">${started ? 'Continue' : 'Start lesson'} →</button>`;
   }
   renderLearnTopics();
@@ -5192,6 +5208,7 @@ function syncLearnPanel() {
       <p>${escapeHtml(step.instruction)}</p>
       <div class="mobile-learn-question"><span>Question</span><p>${escapeHtml(step.question)}</p></div>
       <div class="mobile-learn-takeaway"><span>Explanation</span><p>${escapeHtml(step.takeaway)}</p></div>
+      <button type="button" class="mobile-learn-step-action" data-learn-step-index="${stepIndex}" aria-label="Run activity ${stepIndex + 1}: ${escapeHtml(step.title)}">Run this step in Studio →</button>
     </article>`;
   }).join('');
   const index = Math.max(0, curriculumLessons.findIndex(lesson => lesson.id === activeId));
@@ -5209,13 +5226,14 @@ function syncLearnPanel() {
   </section>` : '';
   const ideasHtml = (record.keyIdeas || []).slice(0, 3).map((idea, index) => `<article><span>${index + 1}</span><div><h4>${index === 0 ? 'Start with the rule' : index === 1 ? 'Connect it to the picture' : 'Keep this distinction'}</h4><p>${escapeHtml(idea)}</p></div></article>`).join('');
   const guide = record.lesson?.guide;
-  const guideHtml = guide ? `<section class="mobile-learn-section mobile-learn-vocabulary"><h4>A little vocabulary</h4><dl>${guide.terms.map(([term, definition]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(definition)}</dd></div>`).join('')}</dl></section><section class="mobile-learn-section mobile-learn-example"><span class="mobile-learn-kicker">Make it concrete</span><h4>${escapeHtml(guide.example.title)}</h4><p>${escapeHtml(guide.example.body)}</p></section><aside class="mobile-learn-distinction"><strong>Keep this distinction</strong><p>${escapeHtml(guide.misconception)}</p></aside>` : '';
+  const guideHtml = guide ? `<section class="mobile-learn-section mobile-learn-example"><span class="mobile-learn-kicker">Make it concrete</span><h4>${escapeHtml(guide.example.title)}</h4><p>${escapeHtml(guide.example.body)}</p></section><section class="mobile-learn-section mobile-learn-vocabulary"><h4>Words for what you just saw</h4><dl>${guide.terms.map(([term, definition]) => `<div><dt>${escapeHtml(term)}</dt><dd>${escapeHtml(definition)}</dd></div>`).join('')}</dl></section><aside class="mobile-learn-distinction"><strong>Keep this distinction</strong><p>${escapeHtml(guide.misconception)}</p></aside>` : '';
   const recallHtml = guide ? `<section class="mobile-learn-section mobile-learn-recall"><h4>Check your understanding</h4><p>${escapeHtml(guide.check.question)}</p><details><summary>Reveal answer</summary><p>${escapeHtml(guide.check.answer)}</p></details></section>` : '';
   if (els.learnReaderProgress) els.learnReaderProgress.textContent = `Lesson ${index + 1} of ${curriculumLessons.length}`;
   els.learnTopicCard.innerHTML = `
     <header class="mobile-learn-lesson-head">
       <span class="mobile-learn-kicker">${escapeHtml(record.pathTitle)} · ${record.estimatedMinutes} min</span>
       <h3 id="learn-reader-title" class="mobile-learn-title" tabindex="-1">${escapeHtml(record.title)}</h3>
+      ${guide?.whyItMatters ? `<p class="mobile-learn-purpose">${escapeHtml(guide.whyItMatters)}</p>` : ''}
     </header>
     <section class="mobile-learn-answer"><span>The direct answer</span><p>${escapeHtml(record.shortAnswer)}</p></section>
     ${ideasHtml ? `<section class="mobile-learn-section"><h4>Build the idea</h4><div class="mobile-learn-ideas">${ideasHtml}</div></section>` : ''}
@@ -5288,8 +5306,14 @@ function closeLearnReader() {
 
 function toggleLearnPath(pathId) {
   if (!curriculumPaths.some(path => path.id === pathId)) return false;
+  const hadFocus = document.activeElement?.closest?.('[data-learn-path]')?.dataset.learnPath === pathId;
   learnSelectedPathId = learnSelectedPathId === pathId ? '' : pathId;
   renderLearnTopics();
+  // The path list is rebuilt above. Keep keyboard focus on the replacement
+  // disclosure button so Enter/Space and subsequent Tab navigation stay local.
+  if (hadFocus) {
+    els.learnTopicGrid?.querySelector(`[data-learn-path="${CSS.escape(pathId)}"]`)?.focus({ preventScroll: true });
+  }
   markInteraction(`learn-path-${pathId}`);
   return true;
 }
@@ -5314,13 +5338,18 @@ function dismissLearnCoach() {
   return visible;
 }
 
-function openLearnExperiment() {
+function openLearnExperiment(stepIndex = learnExperimentStepIndex) {
   const lessonId = activeLearnTopicId();
   const record = learnTopicRecord(lessonId);
-  const step = record.lesson?.experiment?.steps?.[learnExperimentStepIndex];
+  const steps = record.lesson?.experiment?.steps || [];
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= steps.length) return false;
+  learnExperimentStepIndex = stepIndex;
+  const step = steps[stepIndex];
   if (!step) return false;
   applyMobileExperimentStep(lessonId, step.id);
-  showLearnCoach(lessonId, learnExperimentStepIndex);
+  // Applying a completed step can refresh the reader and advance its default
+  // next-step pointer. Keep this explicitly selected step in the coach.
+  showLearnCoach(lessonId, stepIndex);
   closeSettings('learn-open-experiment');
   return true;
 }
@@ -5614,6 +5643,9 @@ function openSettings(section = null) {
     ? (activeSettingsSection() || 'view')
     : (SETTINGS_SECTIONS.has(section) ? section : 'view');
   const wasOpen = isSettingsOpen();
+  if (!wasOpen) {
+    settingsReturnFocus = document.activeElement === document.body ? els.settingsButton : document.activeElement;
+  }
   closeQualityPopover();
   cancelQueuedRenderForSettings('settings-open');
   if (wasOpen) {
@@ -5629,6 +5661,7 @@ function openSettings(section = null) {
   applySettingsSection(target);
   pauseMobileTourForSettings('settings-open');
   syncMotionLoop();
+  if (!wasOpen) els.close.focus({ preventScroll: true });
 }
 
 function activeSettingsSection() {
@@ -5671,6 +5704,14 @@ function closeSettings(interactionType = null) {
   flushDeferredSettingsRender();
   resumeMobileTourAfterSettings(interactionType || 'settings-close');
   syncMotionLoop();
+  if (wasOpen) {
+    const target = interactionType === 'learn-open-experiment'
+      ? els.learnCoach?.querySelector('[data-learn-coach-action="return"]')
+      : settingsReturnFocus;
+    settingsReturnFocus = null;
+    (target?.isConnected && target.getClientRects().length ? target : els.settingsButton)
+      ?.focus({ preventScroll: true });
+  }
   return wasOpen;
 }
 
