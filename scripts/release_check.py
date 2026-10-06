@@ -62,7 +62,11 @@ def check_release_artifacts() -> None:
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if manifest.get("schemaVersion") != 1 or manifest.get("version") != package.get("version") or manifest.get("revision") != revision:
         fail("release manifest does not identify the current version and revision")
-    required = {"dist/e8-studio.html", "dist/e8-studio-mobile-v2.html", "dist/index.html", "dist/manifest.webmanifest", "dist/sw.js"}
+    required = {
+        "dist/e8-studio.html", "dist/e8-studio-mobile-v2.html", "dist/index.html",
+        "dist/manifest.webmanifest", "dist/sw.js", "dist/icon.svg",
+        "dist/icon-192.png", "dist/icon-512.png",
+    }
     records = {record.get("path"): record for record in manifest.get("artifacts", [])}
     if set(records) != required:
         fail(f"release manifest artifact set differs: {set(records) ^ required}")

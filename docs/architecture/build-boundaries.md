@@ -25,15 +25,20 @@ offline and share outputs compile the same ESM graph through
 `scripts/bundle_desktop.mjs`, inline seven view datasets, and embed the resulting
 single script and styles. Deferred view imports remain asynchronous at the API
 boundary but need no external chunk request. The offline page precaches only
-itself, its manifest, and icon. Electron packages `dist/index.html` without a
-`dist/vendor` dependency. The share file can be copied outside the repository
+itself, its manifest, and the committed SVG and 192/512 PNG icons. Electron
+packages `dist/index.html` without a `dist/vendor` dependency. The share file
+can be copied outside the repository
 and opened directly through `file://` without redirecting to `dist/`.
+When changing `assets/pwa-icon.svg`, regenerate both `assets/pwa-icon-*.png`
+from it with `scripts/gen_pwa_icons.py` after an offline build; the regular
+build copies the committed icons without starting a browser.
 
 `npm run mobile:build` syncs only `dist/mobile/` into Capacitor. The mobile
 builder replaces that directory with one inlined `index.html`; unrelated
 `dist/` files such as release manifests, share files, and web assets stay out
 of the Android package. The optional PWA uses a cache name derived from its
-built HTML and local assets. Online navigations fetch fresh HTML, and offline
+built HTML, local assets, and registration scope, so two installs on one origin
+keep separate offline caches. Online navigations fetch fresh HTML, and offline
 navigations use the cached page. `python -B scripts/test_packaging_assets.py`
 checks the staging contract and a two-build PWA update in local Chromium as
 part of the normal verifier. After `npm run build:mobile`,
