@@ -56,7 +56,7 @@
     "smoke:phone": "python scripts/smoke_phone_launch.py",
     "smoke:mobile-v2": "python scripts/smoke_mobile_v2.py",
     "electron:dev": "npm run build:offline && electron electron/main.js",
-    "electron:dist": "npm run build:offline && electron-builder --config electron-builder.yml",
+    "electron:dist": "npm run build:offline && electron-builder --config electron-builder.yml --publish never",
     "mobile:build": "npm run build:mobile && npx cap sync android",
     "mobile:open:android": "npx cap open android",
     "android:debug": "npm run mobile:build && npx cap run android",
