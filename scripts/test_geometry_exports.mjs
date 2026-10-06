@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createGeometryExporters } from '../src/services/geometry-export.js';
 import { polytopeFaces } from '../src/math/polytope-faces.js';
+import { createPolytope4DView } from '../src/views/polytope4d.view.js';
 const data = Object.fromEntries(['e8','e8_math','platonic','polytopes4d','dynkin','mckay_subsets'].map(name => [name, JSON.parse(fs.readFileSync(new URL(`../data/${name}.json`, import.meta.url)))]));
 const make = params => createGeometryExporters(data, { shape: 'cube', palette: 'gold', ...params });
 const cube = make({ view: 'platonic' });
@@ -53,6 +54,31 @@ for (const [name, count] of Object.entries({ '5cell': 10, tesseract: 24, '16cell
   assert.ok(exporter.geometryForView().verts.every(v => v.length === 4));
   assert.equal(exporter.objForCurrentView([[NaN, 0, 0]]), null);
 }
+// The 4D depth and Extrude sliders can combine to move vertices onto the
+// perspective camera plane. Exercise live buffers as well as export coordinates
+// at the former singularities, including a rotation that moves X onto W.
+globalThis.window = { devicePixelRatio: 1 };
+for (const poly4d of Object.keys(data.polytopes4d)) {
+  const params = { poly4d, morph4d: 0, e8MorphT: 0, polyRotXW: 0,
+    polyAutoRotate: false, showFaces: true, showVertices: true, pointScale: 1, fxMode: 'none' };
+  const view = createPolytope4DView({ data, palette: 'gold', scale: 1, context: { params } });
+  for (const [morph4d, e8MorphT, polyRotXW] of [
+    [-2, 0, 0], [0, 0, 0], [2, 1, 0], [1.25, 1, 0], [1.45, 1, 0], [1.4, 0, 0.1],
+  ]) {
+    Object.assign(params, { morph4d, e8MorphT, polyRotXW });
+    view.update(0, 0, params);
+    const projected = view.getProjectedVertices().flat();
+    const vertexBuffer = view.group.userData.vPoints.geometry.attributes.position.array;
+    const edgeBuffer = view.group.userData.edgeLines.geometry.attributes.position.array;
+    for (const values of [projected, vertexBuffer, edgeBuffer]) {
+      assert.ok(Array.from(values).every(Number.isFinite), `${poly4d}: nonfinite 4D projection at depth ${morph4d} + ${e8MorphT} Extrude`);
+      assert.ok(Math.max(...Array.from(values, Math.abs)) < 30, `${poly4d}: unbounded 4D projection at depth ${morph4d} + ${e8MorphT} Extrude`);
+    }
+    assert.deepEqual(projected, Array.from(vertexBuffer), `${poly4d}: export and live vertex buffers differ`);
+  }
+  view.dispose();
+}
+delete globalThis.window;
 assert.equal(make({ view: 'rootlab', rootSystem: 'G2' }).geometryForView().rootCount, 12);
 assert.equal(make({ view: 'tiling', tilingSystem: 'G2', tilingDensity: 4 }).geometryForView().name, 'G2');
 assert.equal(make({ view: 'platonic', shape: 'not-a-shape' }).objForCurrentView(), null);
