@@ -102,6 +102,19 @@ camera.restore(snapshot, null, null, null);
 assert.equal(camera.theta, 2);
 assert.equal(camera.distance, 3);
 assert.equal(camera.clampDistance(Number.NaN), 6);
+camera.thetaTarget = 1.2;
+camera.phiTarget = 0.8;
+camera.distanceTarget = 4.5;
+camera.thetaVelocity = 3;
+camera.phiVelocity = -2;
+camera.settleAtTarget(null, null, null);
+assert.equal(camera.theta, 1.2);
+assert.equal(camera.phi, 0.8);
+assert.equal(camera.distance, 4.5);
+assert.equal(camera.thetaVelocity, 0);
+assert.equal(camera.phiVelocity, 0);
+camera.applyDamping(1 / 60, null, null, null);
+assert.equal(camera.theta, 1.2, 'settled camera does not drift on the next frame');
 
 for (const view of ['e8coxeter', 'raymarched', 'bloom', 'platonic', 'polytope', 'quasicrystal', 'rootlab', 'tiling', 'dynkin']) {
   const { near, far } = autoZoomBounds(view);

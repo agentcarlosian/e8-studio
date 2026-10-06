@@ -993,6 +993,14 @@ function initThree() {
     saveConfig(params);
   };
 
+  const settleCoxeterDrag = () => {
+    const planar = params.view === 'e8coxeter'
+      && ['coxeter', 'petrie'].includes(params.e8ViewMode || 'coxeter');
+    const manual = (params.cameraPath || 'manual') === 'manual'
+      && !params.cameraOrbit && !params.autoZoom;
+    if (planar && manual) cameraController.settleAtTarget(camera, camTarget, params);
+  };
+
   // Multi-touch support: track active pointers and compute pinch distance
   const activePointers = new Map(); // pointerId -> {x, y}
   // Track the down position so a quick tap (no drag) can be detected as a
@@ -1053,11 +1061,12 @@ function initThree() {
   canvas.addEventListener('pointerup', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    activePointers.delete(e.pointerId);
+    const endedPointer = activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
     if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
       canvas.releasePointerCapture(e.pointerId);
     }
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
     // Click detection: if the pointer barely moved and was held briefly,
     // treat as a click on the 3D scene (not a drag). Single-pointer only.
@@ -1082,15 +1091,17 @@ function initThree() {
   canvas.addEventListener('pointerleave', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    if (e && e.pointerId != null) activePointers.delete(e.pointerId);
+    const endedPointer = e?.pointerId != null && activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
   });
   canvas.addEventListener('pointercancel', (e) => {
     isDragging = false;
     isDraggingLocal = false;
-    if (e && e.pointerId != null) activePointers.delete(e.pointerId);
+    const endedPointer = e?.pointerId != null && activePointers.delete(e.pointerId);
     canvas._pinchBase = null;
+    if (endedPointer && activePointers.size === 0) settleCoxeterDrag();
     persistManualCameraTarget();
   });
   canvas.addEventListener('pointermove', (e) => {

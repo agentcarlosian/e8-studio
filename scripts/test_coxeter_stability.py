@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 
 from playwright.sync_api import sync_playwright
 
@@ -70,6 +71,26 @@ def main() -> None:
                     page.wait_for_timeout(180)
                 assert len(set(frames)) == 1, "Coxeter canvas changed in its still state"
 
+                # A manual drag must rotate the Coxeter projection while the
+                # pointer is down, then stop at the final pose on release.
+                before_drag = page.evaluate("() => window.__app.camera.position.toArray()")
+                box = page.locator("#canvas").bounding_box()
+                start_x = box["x"] + box["width"] * 0.45
+                start_y = box["y"] + box["height"] * 0.5
+                page.mouse.move(start_x, start_y)
+                page.mouse.down()
+                page.mouse.move(start_x + 140, start_y + 30, steps=7)
+                page.mouse.up()
+                released = page.evaluate("() => window.__app.camera.position.toArray()")
+                assert math.dist(before_drag, released) > 0.2, "drag did not rotate the camera"
+                page.wait_for_timeout(200)
+                after_release = page.evaluate("() => window.__app.camera.position.toArray()")
+                assert math.dist(released, after_release) < 1e-8, "camera kept rotating after Coxeter drag release"
+                stopped_frames = [page.locator("#canvas").screenshot()]
+                page.wait_for_timeout(250)
+                stopped_frames.append(page.locator("#canvas").screenshot())
+                assert stopped_frames[0] == stopped_frames[1], "Coxeter canvas shimmered after drag release"
+
                 button = page.locator('[data-act="toggleAmbientMotion"]')
                 assert button.get_attribute("aria-pressed") == "false"
                 button.click()
@@ -104,7 +125,7 @@ def main() -> None:
                         assert linked.evaluate("() => window.__app.params.ambientMotionExplicit === true"), \
                             "public setting did not mark ambient motion as an explicit choice"
                     linked.close()
-                print("Coxeter stability passed: legacy motion migrated, still canvas, explicit opt-in, saved choice, and view reset.")
+                print("Coxeter stability passed: still idle canvas, drag stops on release, explicit drift opt-in, saved choice, and view reset.")
             finally:
                 browser.close()
     finally:

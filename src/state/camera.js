@@ -78,6 +78,16 @@ export class CameraController {
     this.phiVelocity = 0;
   }
 
+  settleAtTarget(camera, target, params) {
+    // End a manual gesture at its last pointer pose without integrating the
+    // stored flick velocity or easing through subpixel positions afterward.
+    this.theta = this.thetaTarget;
+    this.phi = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.phiTarget));
+    this.distance = this.clampDistance(this.distanceTarget);
+    this.syncTargets();
+    this.updateCamera(camera, target, params);
+  }
+
   applyDamping(dt, camera, target, params) {
     const damping = 0.12;
     const velocityScale = Math.pow(0.90, Math.max(1, dt * 60));
