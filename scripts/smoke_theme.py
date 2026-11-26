@@ -1,3 +1,4 @@
+import os
 """Smoke-test: cycle every theme + layout, verify the page survives."""
 import sys, json, threading, time
 from functools import partial
@@ -13,7 +14,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 time.sleep(0.3)
 
 from playwright.sync_api import sync_playwright
-chrome = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
+chrome = os.environ.get('E8_CHROME_PATH') or None
 THEMES = ['dark-gold', 'paper-ink', 'neon-cyber', 'pure-dark', 'solarized']
 LAYOUTS = ['default', 'compact', 'wide-canvas', 'presentation']
 

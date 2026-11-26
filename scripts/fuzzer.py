@@ -1,3 +1,4 @@
+import os
 """Random fuzz testing: generate random sequences of UI actions, look for
 crashes, console errors, or state corruption.
 
@@ -28,7 +29,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 time.sleep(0.3)
 
 from playwright.sync_api import sync_playwright
-chrome = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
+chrome = os.environ.get('E8_CHROME_PATH') or None
 
 # Action definitions live in fuzz_actions.py — imported above.
 

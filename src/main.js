@@ -1260,20 +1260,25 @@ function updateOverlays(viewId) {
     return;
   }
 
+  const escHud = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const safeShape = escHud(params.shape);
+  const safeDynkin = escHud(params.dynkin);
+  const safePoly4d = escHud(params.poly4d);
+
   if (viewId === 'platonic') {
     // Round 9: stellations aren't in DATA.platonic / DATA.mckay, so guard for
     // them and show a star-polyhedron overlay instead of crashing on undefined.
-    const isStellation = params.shape.startsWith('stellated_') || params.shape.startsWith('great_');
+    const isStellation = typeof params.shape === 'string' && (params.shape.startsWith('stellated_') || params.shape.startsWith('great_'));
     if (isStellation) {
       const vcount = PLATONIC_VERTEX_COUNTS[params.shape] || 12;
-      tl.innerHTML = `<b>${params.shape.toUpperCase()}</b><br>${vcount} verts · 30 edges · Kepler–Poinsot`;
+      tl.innerHTML = `<b>${safeShape.toUpperCase()}</b><br>${vcount} verts · 30 edges · Kepler–Poinsot`;
       tr.innerHTML = `★ star polyhedron<br>H₃ symmetry (120)`;
       bl.innerHTML = `drag = rotate<br>scroll = zoom`;
       br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>★ regular star solid`;
     } else {
       const s = DATA.platonic[params.shape];
       const m = DATA.mckay[params.shape];
-      tl.innerHTML = `<b>${params.shape.toUpperCase()}</b><br>${s.verts.length} verts · ${s.edges.length} edges`;
+      tl.innerHTML = `<b>${safeShape.toUpperCase()}</b><br>${s.verts.length} verts · ${s.edges.length} edges`;
       tr.innerHTML = `McKay → <b>${m.roots}</b><br>symmetry ${m.symmetry}`;
       bl.innerHTML = `drag = rotate<br>scroll = zoom`;
       br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>→ <b>${m.roots}</b>`;
@@ -1283,7 +1288,7 @@ function updateOverlays(viewId) {
     tl.innerHTML = `<b>${d.name} Dynkin</b><br>${d.nodes.length} nodes · ${d.edges.length} edges`;
     tr.innerHTML = `Cartan data<br><b>simple-root graph</b>`;
     bl.innerHTML = `Node size = degree`;
-    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>root system: <b>${params.dynkin}</b>`;
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>root system: <b>${safeDynkin}</b>`;
   } else if (viewId === 'rootlab') {
     const rootSystem = generateRank2RootSystem(params.rootSystem);
     const matrix = rootSystem.cartanMatrix.map(row => `[${row.join(',')}]`).join(' ');
@@ -1310,10 +1315,10 @@ function updateOverlays(viewId) {
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br><b>cut-and-project set</b>`;
   } else if (viewId === 'polytope') {
     const p = DATA.polytopes4d[params.poly4d];
-    tl.innerHTML = `<b>${params.poly4d.toUpperCase()}</b><br>${p.verts.length} verts · ${p.edges.length} edges`;
+    tl.innerHTML = `<b>${safePoly4d.toUpperCase()}</b><br>${p.verts.length} verts · ${p.edges.length} edges`;
     tr.innerHTML = `w-depth = ${params.morph4d.toFixed(2)}<br>4D perspective`;
     bl.innerHTML = `2-axis 4D rotation<br>w-slider = depth`;
-    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>4D polytope: <b>${params.poly4d}</b>`;
+    br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>4D polytope: <b>${safePoly4d}</b>`;
   } else if (viewId === 'sixhundred') {
     const c = DATA.polytopes4d['600cell'];
     tl.innerHTML = `<b>600-CELL</b><br>120 verts · 720 edges`;
@@ -1328,7 +1333,7 @@ function updateOverlays(viewId) {
   } else if (viewId === 'bloom') {
     const t = params.bloomAmount;
     const phase = t < 0.10 ? 'shape' : t < 0.50 ? '600-cell-inspired' : t < 0.75 ? 'two H₄ visual layers' : 'E8 Coxeter plane';
-    tl.innerHTML = `<b>BLOOM</b><br>${params.shape} → E8`;
+    tl.innerHTML = `<b>BLOOM</b><br>${safeShape} → E8`;
     tr.innerHTML = `t = ${t.toFixed(3)}<br>phase: ${phase}`;
     bl.innerHTML = `slider = time<br>auto = play continuously`;
     br.innerHTML = `view ${idx + 1} / ${visibleViews.length}<br>→ <b>E₈</b>`;

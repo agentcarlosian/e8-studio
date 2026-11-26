@@ -34,7 +34,8 @@ function isAppFileUrl(url) {
 function openExternalHttp(url) {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    const isLoopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+    if (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && isLoopback)) {
       shell.openExternal(url).catch(() => {});
       return true;
     }
@@ -106,7 +107,10 @@ function createWindow() {
 // Native Save handler for the renderer's window.e8desktop.saveBlob(). The
 // renderer sends the export bytes; we show the OS Save dialog and write the
 // file. Returns the chosen path, or null if the user cancelled.
-ipcMain.handle('e8:save-blob', async (_evt, { bytes, defaultName }) => {
+ipcMain.handle('e8:save-blob', async (evt, { bytes, defaultName }) => {
+  if (!evt.senderFrame || !isAppFileUrl(evt.senderFrame.url)) {
+    throw new Error('Unauthorized export sender');
+  }
   const buffer = bytesToBuffer(bytes);
   if (buffer.length <= 0) throw new Error('Cannot save an empty export');
   if (buffer.length > MAX_SAVE_BYTES) throw new Error('Export is too large to save safely');
