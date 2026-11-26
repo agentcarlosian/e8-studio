@@ -215,22 +215,54 @@ export function startAutoSave(getParams) {
 // could carry markup. This is the chokepoint every load path funnels through
 // (readUrlConfig, loadConfig, and the paste importer all call applyConfig).
 const SAFE_STRING = /^[\w .:+/\-]{0,80}$/;
+const OBJECT_KEYS = new Set(['cameraBookmarks', 'fxByView']);
+const STRING_ARRAY_KEYS = new Set(['autoSliders']);
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-function sanitizeConfigValue(v) {
+function sanitizeNestedObject(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || depth > 3) return undefined;
+  const out = Object.create(null);
+  let count = 0;
+  for (const k of Object.keys(obj)) {
+    if (FORBIDDEN_KEYS.has(k) || !SAFE_STRING.test(k)) continue;
+    if (++count > 64) break;
+    const val = obj[k];
+    if (typeof val === 'string') {
+      if (SAFE_STRING.test(val)) out[k] = val;
+    } else if (typeof val === 'number') {
+      if (Number.isFinite(val)) out[k] = val;
+    } else if (typeof val === 'boolean') {
+      out[k] = val;
+    } else if (Array.isArray(val) && val.length <= 16 && val.every(n => typeof n === 'number' && Number.isFinite(n))) {
+      out[k] = val.slice();
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const nested = sanitizeNestedObject(val, depth + 1);
+      if (nested !== undefined) out[k] = nested;
+    }
+  }
+  return Object.assign({}, out);
+}
+
+function sanitizeConfigValue(key, v) {
+  if (OBJECT_KEYS.has(key)) {
+    return sanitizeNestedObject(v, 0);
+  }
+  if (STRING_ARRAY_KEYS.has(key)) {
+    if (!Array.isArray(v)) return undefined;
+    return v.filter(item => typeof item === 'string' && SAFE_STRING.test(item)).slice(0, 32);
+  }
   if (typeof v === 'string') return SAFE_STRING.test(v) ? v : undefined;
   if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
   if (typeof v === 'boolean') return v;
-  // Arrays/objects (e.g. cameraBookmarks) are never used as HTML; pass through.
-  if (v && typeof v === 'object') return v;
   return undefined;
 }
 
 /** Apply a saved config to a params object, preserving non-persistent fields. */
 export function applyConfig(target, source) {
-  if (!source) return target;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return target;
   for (const k of Object.keys(source)) {
-    if (!PERSISTABLE.has(k)) continue;
-    const clean = sanitizeConfigValue(source[k]);
+    if (FORBIDDEN_KEYS.has(k) || !PERSISTABLE.has(k)) continue;
+    const clean = sanitizeConfigValue(k, source[k]);
     if (clean !== undefined) target[k] = clean;
   }
   // Older builds saved the ambient camera as an implicit on-by-default value.

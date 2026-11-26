@@ -1,3 +1,4 @@
+import os
 """Bug-hunt: cycle every feature combination, capture console errors and
 unexpected state changes. Designed to surface real regressions from the
 pickup rounds (Tracks 1a/1b/1c/1d/4).
@@ -42,7 +43,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 time.sleep(0.3)
 
 from playwright.sync_api import sync_playwright
-chrome = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
+chrome = os.environ.get('E8_CHROME_PATH') or None
 
 errors_total = []
 warnings_total = []

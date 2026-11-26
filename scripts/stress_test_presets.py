@@ -1,3 +1,4 @@
+import os
 """Deep test: cycle each preset, take screenshot, sample pixels, check for issues.
 
 For each preset:
@@ -22,7 +23,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 time.sleep(0.3)
 
 from playwright.sync_api import sync_playwright
-chrome = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
+chrome = os.environ.get('E8_CHROME_PATH') or None
 
 PRESETS = [
     'coxeter-rings', 'subset-diff', 'sdf-metal', 'platonic-bloom',
@@ -30,7 +31,7 @@ PRESETS = [
     'aurora-borealis', 'deep-space', 'cosmic-dawn', 'mandala-meditation',
     'plasma-storm', 'tron-grid', 'milky-meditation',
 ]
-shot_dir = Path(r"C:\Users\Ian\e8_studio\smoke_shots\presets_round2")
+shot_dir = Path(__file__).resolve().parents[1] / "smoke_shots" / "presets_round2"
 shot_dir.mkdir(parents=True, exist_ok=True)
 
 with sync_playwright() as p:

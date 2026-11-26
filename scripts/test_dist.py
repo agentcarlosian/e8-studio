@@ -1,8 +1,10 @@
+from pathlib import Path
+import os
 """Test the dist via http (not file://)."""
 import time
 from playwright.sync_api import sync_playwright
 
-chrome_path = r'C:\Users\Ian\AppData\Local\ms-playwright\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe'
+chrome_path = os.environ.get('E8_CHROME_PATH') or None
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, executable_path=chrome_path, args=['--no-sandbox', '--disable-gpu'])
     page = browser.new_page(viewport={'width': 1400, 'height': 900})
@@ -12,7 +14,7 @@ with sync_playwright() as p:
     time.sleep(8)
     page.evaluate("document.getElementById('welcome-card')?.classList.add('hidden')")
     time.sleep(0.5)
-    page.screenshot(path=r'C:\Users\Ian\e8_studio\smoke_shots\dist_via_http.png')
+    page.screenshot(path=str(Path(__file__).resolve().parents[1] / "smoke_shots" / "dist_via_http.png"))
     state = page.evaluate("""() => ({
         appExists: !!window.__app,
         view: window.__app?.params?.view,
